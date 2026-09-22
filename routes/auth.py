@@ -11,13 +11,27 @@ bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 @bp.post("/login")
 def login():
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["email", "password"])
+    
+    # Accept either 'email' or 'username' identifier in request payload
+    identifier = (data.get("email") or data.get("username") or "").strip()
+    if not identifier:
+        return jsonify({"success": False, "error": "Missing required field: email or username"}), 400
+    password = str(data.get("password") or "")
+    if not password:
+        return jsonify({"success": False, "error": "Missing required field: password"}), 400
 
-    identifier = data["email"].strip()
-    password = str(data["password"])
     selected_role = data.get("role")  # optional, from the login page's role tabs
 
+    # 1. Primary lookup by email
     user = User.query.filter(User.email.ilike(identifier)).first()
+
+    # 2. Allow username "admin" to resolve to the administrator account
+    if not user and identifier.lower() == "admin":
+        user = User.query.filter(
+            db.or_(User.email.ilike("admin@campus.edu"), User.email.ilike("admin"), User.role == "admin")
+        ).first()
+
+    # 3. Lookup student or faculty by code / PRN
     if not user:
         from models import Student, Faculty
         student = Student.query.filter(

@@ -44,6 +44,45 @@ def _get_or_create_user(email, name, role, password=DEMO_PASSWORD, phone=None):
     return user
 
 
+def ensure_default_admin():
+    """Idempotently ensures the default administrator account exists.
+
+    Default Admin credentials:
+      Username: admin (or email: admin@campus.edu)
+      Password: admin (stored securely using Flask password hashing)
+      Role: admin
+    """
+    admin_user = User.query.filter(
+        db.or_(User.email.ilike("admin@campus.edu"), User.email.ilike("admin"))
+    ).first()
+
+    if not admin_user:
+        admin_user = User(
+            email="admin@campus.edu",
+            full_name="System Administrator",
+            role="admin",
+            phone="9876500000",
+            is_active=True,
+        )
+        admin_user.set_password("admin")
+        db.session.add(admin_user)
+        db.session.commit()
+    else:
+        changed = False
+        if admin_user.role != "admin":
+            admin_user.role = "admin"
+            changed = True
+        if not admin_user.is_active:
+            admin_user.is_active = True
+            changed = True
+        if not admin_user.check_password("admin"):
+            admin_user.set_password("admin")
+            changed = True
+        if changed:
+            db.session.commit()
+    return admin_user
+
+
 def run_seed():
     print("Beginning database seed...")
     cse = _get_or_create_department("Computer Science & Engineering", "CSE")
@@ -69,7 +108,7 @@ def run_seed():
     db.session.flush()
 
     # --- Admin -----------------------------------------------------------
-    _get_or_create_user("admin@campus.edu", "Admin Controller", "admin", phone="9876500000")
+    ensure_default_admin()
 
     # --- Students --------------------------------------------------------
     students_data = [
@@ -238,8 +277,11 @@ def run_seed():
 
     db.session.commit()
     print("Seed complete.")
-    print(f"Demo login password for all seeded accounts: {DEMO_PASSWORD}")
-    print("  admin:   admin@campus.edu")
+    print("Default Admin Account:")
+    print("  Username: admin (or admin@campus.edu)")
+    print("  Password: admin")
+    print(f"Demo login password for seeded accounts: {DEMO_PASSWORD}")
+    print("  admin:   admin / admin@campus.edu (password: admin)")
     print("  faculty: anita.sen@campus.edu")
     print("  student: rahul@campus.edu")
 

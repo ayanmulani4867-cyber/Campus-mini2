@@ -74,6 +74,26 @@ def create_app(config_name=None):
             "databaseConfigured": db_configured,
         }
 
+    # Automatically ensure default administrator account exists on first request / deployment
+    @app.before_request
+    def _auto_ensure_admin():
+        if getattr(app, "_admin_ensured", False):
+            return
+        app._admin_ensured = True
+        try:
+            from seed import ensure_default_admin
+            ensure_default_admin()
+        except Exception as e:
+            app.logger.debug("Auto admin initialization deferred: %s", e)
+
+    # Flask CLI command for manual or scripted admin provisioning
+    @app.cli.command("create-admin")
+    def create_admin():
+        """Ensure default administrator exists with full permissions."""
+        from seed import ensure_default_admin
+        admin = ensure_default_admin()
+        print(f"Default admin confirmed: username=admin, email={admin.email}, role={admin.role}")
+
     # Static asset convenience routes (handles relative paths like href="css/style.css")
     @app.get("/css/<path:filename>")
     def serve_css(filename):
