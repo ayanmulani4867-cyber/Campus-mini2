@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <a href="index.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+    <div class="topbar-actions">
+      <a href="index.html" class="btn btn-outline btn-sm">Back to Home</a>
+    </div>
+  </header>
+
+  <!-- Login Form Section -->
+  <section class="form-section">
+    <div class="form-box">
+      <div class="form-header">
+        <h2>Portal Login</h2>
+        <p>Sign in to access your college workspace</p>
+      </div>
+
+      <!-- Role Selector Tabs -->
+      <div class="role-tabs">
+        <div class="role-tab active" data-role="student">🎒 Student</div>
+        <div class="role-tab" data-role="faculty">👨‍🏫 Faculty</div>
+        <div class="role-tab" data-role="admin">🏛️ Admin</div>
+      </div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="loginId">College Email or ID</label>
+          <input type="text" id="loginId" class="form-input" placeholder="e.g. @campus.edu or STU2024001">
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <div class="password-box">
+            <input type="password" id="loginPassword" class="form-input" placeholder="Enter password">
+            <span class="toggle-pass" data-target="loginPassword">Show</span>
+          </div>
+        </div>
+
+        <p class="error-msg" id="loginError"></p>
+
+        <button type="submit" class="btn btn-filled full-width">Sign In to Workspace</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

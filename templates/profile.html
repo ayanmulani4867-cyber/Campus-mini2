@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Profile - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>User Profile & Identity</h2>
+          <p>Manage personal information and academic credentials</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" id="editProfileBtn">Edit Profile</button>
+        </div>
+      </div>
+
+      <div class="profile-grid">
+        
+        <!-- Left: Avatar & Identity Card -->
+        <div class="profile-card">
+          <div class="profile-avatar-wrap">
+            <img src="images/profile-placeholder.png" alt="Profile Avatar" class="profile-pic" id="profilePic">
+          </div>
+          <h3 class="profile-name" id="profileName">John Snow</h3>
+          <div class="profile-role-tag">
+            <span class="badge badge-primary" id="profileRoleTag">Student</span>
+          </div>
+
+          <div class="profile-details-list">
+            <div class="profile-detail-row">
+              <span class="profile-detail-label">Account Status</span>
+              <span class="badge badge-success">Verified</span>
+            </div>
+            <div class="profile-detail-row">
+              <span class="profile-detail-label">Member Since</span>
+              <span class="profile-detail-val">July 2023</span>
+            </div>
+            <div class="profile-detail-row">
+              <span class="profile-detail-label">Portal Access</span>
+              <span class="profile-detail-val">Full Privileges</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Information Details & Edit Form -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>Detailed Credentials</h3>
+            <span class="badge badge-info">ID Card Verified</span>
+          </div>
+
+          <!-- Display Mode -->
+          <div id="profileDetails" class="item-list">
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="info-label">Unique Identity ID</span>
+                <h4 id="pId">STU2024001</h4>
+              </div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="info-label">Official Email Address</span>
+                <h4 id="pEmail">rahul@campus.edu</h4>
+              </div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="info-label">Phone Number</span>
+                <h4 id="pPhone">-</h4>
+              </div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="info-label">Department / Faculty</span>
+                <h4 id="pDept">Computer Science</h4>
+              </div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="info-label" id="pExtraLabel">Academic Year</span>
+                <h4 id="pExtra">3rd Year (6th Semester)</h4>
+              </div>
+            </div>
+          </div>
+
+          <!-- Edit Mode Form (Hidden by default) -->
+          <div id="profileEditForm" style="display: none;">
+            <div class="form-group">
+              <label for="editName">Full Name</label>
+              <input type="text" id="editName" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="editEmail">Official Email</label>
+              <input type="email" id="editEmail" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="editPhone">Phone Number</label>
+              <input type="tel" id="editPhone" class="form-input" maxlength="15">
+            </div>
+
+            <div class="form-group">
+              <label for="editDept">Department</label>
+              <input type="text" id="editDept" class="form-input">
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Results - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <!-- Role Switcher for Demo -->
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- ==========================================
+           1. STUDENT VIEW: My Results
+           ========================================== -->
+      <div id="studentResultView" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h2>My Academic Results</h2>
+            <p>Semester-wise grade report, credit scores and performance summary</p>
+          </div>
+          <div class="page-actions">
+            <select class="form-select" id="studentSemSelect" style="width: auto; padding: 6px 12px; font-weight: 600;">
+              <option value="sem6">Semester 6 (Latest)</option>
+              <option value="sem5">Semester 5</option>
+              <option value="sem4">Semester 4</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨️ Print Result</button>
+          </div>
+        </div>
+
+        <!-- Student Summary Cards -->
+        <div class="card-grid" style="margin-bottom: 20px;">
+          <div class="stat-card stat-green">
+            <div class="stat-card-header">Current SGPA</div>
+            <div class="stat-card-value">8.85</div>
+            <div class="stat-card-desc">Semester 6 Grade Point Average</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-card-header">Cumulative CGPA</div>
+            <div class="stat-card-value">8.72</div>
+            <div class="stat-card-desc">Overall Academic Score</div>
+          </div>
+
+          <div class="stat-card stat-amber">
+            <div class="stat-card-header">Total Credits</div>
+            <div class="stat-card-value">22 / 22</div>
+            <div class="stat-card-desc">Credits Cleared</div>
+          </div>
+
+          <div class="stat-card stat-purple">
+            <div class="stat-card-header">Result Status</div>
+            <div class="stat-card-value" style="color: var(--success); font-size: 20px;">PASSED</div>
+            <div class="stat-card-desc">First Class with Distinction</div>
+          </div>
+        </div>
+
+        <!-- Student Marks Table -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>Subject-Wise Grade Card (Semester 6)</h3>
+            <span class="badge badge-success">Official Published</span>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="studentResultsTable">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Subject Name</th>
+                  <th>Internal (30)</th>
+                  <th>End-Sem (70)</th>
+                  <th>Total (100)</th>
+                  <th>Grade</th>
+                  <th>Credits</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="studentResultsTableBody">
+                <tr>
+                  <td><strong>CS601</strong></td>
+                  <td>Database Management Systems</td>
+                  <td>27</td>
+                  <td>61</td>
+                  <td><strong>88</strong></td>
+                  <td><span class="badge badge-success">A+</span></td>
+                  <td>4</td>
+                  <td><span class="badge badge-success">Pass</span></td>
+                </tr>
+                <tr>
+                  <td><strong>CS602</strong></td>
+                  <td>Computer Networks & Security</td>
+                  <td>25</td>
+                  <td>58</td>
+                  <td><strong>83</strong></td>
+                  <td><span class="badge badge-primary">A</span></td>
+                  <td>4</td>
+                  <td><span class="badge badge-success">Pass</span></td>
+                </tr>
+                <tr>
+                  <td><strong>CS603</strong></td>
+                  <td>Design & Analysis of Algorithms</td>
+                  <td>28</td>
+                  <td>64</td>
+                  <td><strong>92</strong></td>
+                  <td><span class="badge badge-success">O (Outstanding)</span></td>
+                  <td>4</td>
+                  <td><span class="badge badge-success">Pass</span></td>
+                </tr>
+                <tr>
+                  <td><strong>CS604</strong></td>
+                  <td>Software Engineering & Agile</td>
+                  <td>24</td>
+                  <td>55</td>
+                  <td><strong>79</strong></td>
+                  <td><span class="badge badge-info">B+</span></td>
+                  <td>3</td>
+                  <td><span class="badge badge-success">Pass</span></td>
+                </tr>
+                <tr>
+                  <td><strong>CS691</strong></td>
+                  <td>Database Practical Lab</td>
+                  <td>28</td>
+                  <td>67</td>
+                  <td><strong>95</strong></td>
+                  <td><span class="badge badge-success">O (Outstanding)</span></td>
+                  <td>2</td>
+                  <td><span class="badge badge-success">Pass</span></td>
+                </tr>
+                <tr>
+                  <td><strong>CS692</strong></td>
+                  <td>Network Socket Lab</td>
+                  <td>26</td>
+                  <td>62</td>
+                  <td><strong>88</strong></td>
+                  <td><span class="badge badge-success">A+</span></td>
+                  <td>2</td>
+                  <td><span class="badge badge-success">Pass</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           2. FACULTY VIEW: Enter Marks
+           ========================================== -->
+      <div id="facultyResultView" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h2>Enter Student Marks & Grades</h2>
+            <p>Input and evaluate examination scores for assigned courses</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary btn-sm" onclick="alert('All entered marks saved successfully!')">💾 Save All Marks</button>
+          </div>
+        </div>
+
+        <!-- Faculty Filter Bar -->
+        <div class="card" style="margin-bottom: 20px; padding: 16px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Select Course</label>
+              <select class="form-select" id="facultyResultCourseSelect">
+                <option value="CS601">CS601 - Database Management Systems</option>
+                <option value="CS691">CS691 - Database Practical Lab</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Select Division / Class</label>
+              <select class="form-select" id="facultyResultDivisionSelect">
+                <option value="A" selected>Division A</option>
+                <option value="B">Division B</option>
+                <option value="C">Division C</option>
+                <option value="D">Division D</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Assessment Type</label>
+              <select class="form-select" id="facultyResultAssessmentType">
+                <option value="End-Semester Examination (100 Marks)">End-Semester Examination (100 Marks)</option>
+                <option value="Mid-Semester Test (30 Marks)">Mid-Semester Test (30 Marks)</option>
+                <option value="Lab Practical Evaluation">Lab Practical Evaluation</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Marks Entry Table -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>Student Marks Entry Sheet (CS601)</h3>
+            <span class="badge badge-primary">6 Students</span>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="facultyMarksTable">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Student Name</th>
+                  <th>Marks (Out of 100)</th>
+                  <th>Assigned Grade</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="facultyMarksTableBody">
+                <tr>
+                  <td><strong>STU2024001</strong></td>
+                  <td>John Snow</td>
+                  <td><input type="number" class="form-input" value="88" style="width: 90px; padding: 6px;" min="0" max="100"></td>
+                  <td>
+                    <select class="form-select" style="width: 110px; padding: 6px;">
+                      <option selected>A+ (85-89)</option>
+                      <option>O (90-100)</option>
+                      <option>A (80-84)</option>
+                      <option>B+ (70-79)</option>
+                      <option>F (Fail)</option>
+                    </select>
+                  </td>
+                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for John Snow!')">Save</button></td>
+                </tr>
+
+                <tr>
+                  <td><strong>STU2024002</strong></td>
+                  <td>Priya Patel</td>
+                  <td><input type="number" class="form-input" value="92" style="width: 90px; padding: 6px;" min="0" max="100"></td>
+                  <td>
+                    <select class="form-select" style="width: 110px; padding: 6px;">
+                      <option>A+ (85-89)</option>
+                      <option selected>O (90-100)</option>
+                      <option>A (80-84)</option>
+                      <option>B+ (70-79)</option>
+                      <option>F (Fail)</option>
+                    </select>
+                  </td>
+                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Priya Patel!')">Save</button></td>
+                </tr>
+
+                <tr>
+                  <td><strong>STU2024003</strong></td>
+                  <td>Aman Verma</td>
+                  <td><input type="number" class="form-input" value="74" style="width: 90px; padding: 6px;" min="0" max="100"></td>
+                  <td>
+                    <select class="form-select" style="width: 110px; padding: 6px;">
+                      <option>A+ (85-89)</option>
+                      <option>O (90-100)</option>
+                      <option>A (80-84)</option>
+                      <option selected>B+ (70-79)</option>
+                      <option>F (Fail)</option>
+                    </select>
+                  </td>
+                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Aman Verma!')">Save</button></td>
+                </tr>
+
+                <tr>
+                  <td><strong>STU2024004</strong></td>
+                  <td>Sneha Roy</td>
+                  <td><input type="number" class="form-input" value="81" style="width: 90px; padding: 6px;" min="0" max="100"></td>
+                  <td>
+                    <select class="form-select" style="width: 110px; padding: 6px;">
+                      <option>A+ (85-89)</option>
+                      <option>O (90-100)</option>
+                      <option selected>A (80-84)</option>
+                      <option>B+ (70-79)</option>
+                      <option>F (Fail)</option>
+                    </select>
+                  </td>
+                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Sneha Roy!')">Save</button></td>
+                </tr>
+
+                <tr>
+                  <td><strong>STU2024005</strong></td>
+                  <td>Vikram Aditya</td>
+                  <td><input type="number" class="form-input" value="68" style="width: 90px; padding: 6px;" min="0" max="100"></td>
+                  <td>
+                    <select class="form-select" style="width: 110px; padding: 6px;">
+                      <option>A+ (85-89)</option>
+                      <option>O (90-100)</option>
+                      <option>A (80-84)</option>
+                      <option>B+ (70-79)</option>
+                      <option selected>B (60-69)</option>
+                      <option>F (Fail)</option>
+                    </select>
+                  </td>
+                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Vikram Aditya!')">Save</button></td>
+                </tr>
+
+                <tr>
+                  <td><strong>STU2024006</strong></td>
+                  <td>Ananya Das</td>
+                  <td><input type="number" class="form-input" value="86" style="width: 90px; padding: 6px;" min="0" max="100"></td>
+                  <td>
+                    <select class="form-select" style="width: 110px; padding: 6px;">
+                      <option selected>A+ (85-89)</option>
+                      <option>O (90-100)</option>
+                      <option>A (80-84)</option>
+                      <option>B+ (70-79)</option>
+                      <option>F (Fail)</option>
+                    </select>
+                  </td>
+                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Ananya Das!')">Save</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==========================================
+           3. ADMIN VIEW: Result Control
+           ========================================== -->
+      <div id="adminResultView" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h2>Result Publication Control</h2>
+            <p>Manage, review, publish or unpublish examination results campus-wide</p>
+          </div>
+          <div class="page-actions">
+            <span class="badge badge-success">Session: Spring 2026</span>
+          </div>
+        </div>
+
+        <!-- Admin Result Stats -->
+        <div class="card-grid" style="margin-bottom: 20px;">
+          <div class="stat-card stat-green">
+            <div class="stat-card-header">Published Results</div>
+            <div class="stat-card-value">12 Batches</div>
+            <div class="stat-card-desc">Visible to Students</div>
+          </div>
+
+          <div class="stat-card stat-amber">
+            <div class="stat-card-header">Pending Verification</div>
+            <div class="stat-card-value">2 Batches</div>
+            <div class="stat-card-desc">Marks Under Review</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-card-header">Total Evaluated</div>
+            <div class="stat-card-value">1,180</div>
+            <div class="stat-card-desc">Student Scorecards</div>
+          </div>
+
+          <div class="stat-card stat-purple">
+            <div class="stat-card-header">Passing Rate</div>
+            <div class="stat-card-value">94.8%</div>
+            <div class="stat-card-desc">Across all departments</div>
+          </div>
+        </div>
+
+        <!-- Admin Result Management Table -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>Departmental Result Status</h3>
+            <span class="badge badge-info">Controller of Exams</span>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="adminBatchResultsTable">
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th>Semester / Course</th>
+                  <th>Batch</th>
+                  <th>Total Students</th>
+                  <th>Faculty In-Charge</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="adminBatchResultsTableBody">
+                <tr>
+                  <td><strong>Computer Science</strong></td>
+                  <td>Semester 6 - B.Tech CSE</td>
+                  <td>2023-2027</td>
+                  <td>120</td>
+                  <td>P B Patil</td>
+                  <td><span class="badge badge-success result-status-badge">Published</span></td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" onclick="alert('Viewing detailed result scorecard...')">View</button>
+                    <button class="btn btn-warning btn-sm pub-toggle-btn" onclick="togglePublish(this)">Unpublish</button>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td><strong>Computer Science</strong></td>
+                  <td>Semester 4 - B.Tech CSE</td>
+                  <td>2024-2028</td>
+                  <td>125</td>
+                  <td>Prof. Rajesh Verma</td>
+                  <td><span class="badge badge-success result-status-badge">Published</span></td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" onclick="alert('Viewing detailed result scorecard...')">View</button>
+                    <button class="btn btn-warning btn-sm pub-toggle-btn" onclick="togglePublish(this)">Unpublish</button>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td><strong>Electronics & Comm.</strong></td>
+                  <td>Semester 6 - B.Tech ECE</td>
+                  <td>2023-2027</td>
+                  <td>90</td>
+                  <td>Dr. S. Nair</td>
+                  <td><span class="badge badge-warning result-status-badge">Unpublished</span></td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" onclick="alert('Viewing detailed result scorecard...')">View</button>
+                    <button class="btn btn-success btn-sm pub-toggle-btn" onclick="togglePublish(this)">Publish</button>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td><strong>Mechanical Engg.</strong></td>
+                  <td>Semester 6 - B.Tech ME</td>
+                  <td>2023-2027</td>
+                  <td>85</td>
+                  <td>Prof. T. Bose</td>
+                  <td><span class="badge badge-success result-status-badge">Published</span></td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" onclick="alert('Viewing detailed result scorecard...')">View</button>
+                    <button class="btn btn-warning btn-sm pub-toggle-btn" onclick="togglePublish(this)">Unpublish</button>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td><strong>Civil Engineering</strong></td>
+                  <td>Semester 6 - B.Tech CE</td>
+                  <td>2023-2027</td>
+                  <td>70</td>
+                  <td>Dr. M. Kulkarni</td>
+                  <td><span class="badge badge-warning result-status-badge">Unpublished</span></td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" onclick="alert('Viewing detailed result scorecard...')">View</button>
+                    <button class="btn btn-success btn-sm pub-toggle-btn" onclick="togglePublish(this)">Publish</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Student Marks & Results Publication Control -->
+        <div class="card" style="margin-top: 20px;">
+          <div class="card-header-row">
+            <h3>Student Examination Scorecards & Marks</h3>
+            <span class="badge badge-info" id="adminResultCountBadge">Live Records</span>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="adminStudentResultsTable">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Student Name</th>
+                  <th>Course</th>
+                  <th>Internal (30)</th>
+                  <th>End-Sem (70)</th>
+                  <th>Total (100)</th>
+                  <th>Grade</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="adminResultsTableBody">
+                <!-- Dynamically loaded from /api/results -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

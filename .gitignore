@@ -1,0 +1,52 @@
+# Python
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment Variables & Secrets
+.env
+.env.local
+*.env
+
+# Local Storage & Uploads
+uploads/
+uploads/materials/*
+!uploads/materials/.gitkeep
+
+# Node & Frontend Build
+node_modules/
+dist/
+build/
+.cache/
+
+# IDE & OS Metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker (not used for production deployment)
+Dockerfile
+docker-compose.yml
+docker-compose.yaml
+.dockerignore
+
+# Scratch and Temporary Logs
+scratch/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+instance/
+*.zip

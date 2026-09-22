@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Portal Settings & Security</h2>
+          <p>Manage account preferences, password credentials and notifications</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        
+        <!-- Left: Password & Security -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>🔒 Security & Password</h3>
+          </div>
+
+          <form id="changePassForm">
+            <div class="form-group">
+              <label for="currentPass">Current Password</label>
+              <div class="password-box">
+                <input type="password" id="currentPass" class="form-input" placeholder="Enter current password">
+                <span class="toggle-pass" data-target="currentPass">Show</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="newPass">New Password</label>
+              <div class="password-box">
+                <input type="password" id="newPass" class="form-input" placeholder="Minimum 6 characters">
+                <span class="toggle-pass" data-target="newPass">Show</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="confirmNewPass">Confirm New Password</label>
+              <div class="password-box">
+                <input type="password" id="confirmNewPass" class="form-input" placeholder="Repeat new password">
+                <span class="toggle-pass" data-target="confirmNewPass">Show</span>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary full-width">Update Password</button>
+          </form>
+        </div>
+
+        <!-- Right: Notifications & Preferences -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>🔔 Notification Preferences</h3>
+          </div>
+
+          <div class="item-list">
+            <div class="list-item">
+              <div class="list-item-main">
+                <h4>Exam Schedule & Result Alerts</h4>
+                <p>Receive notifications when mid-term or end-term marks are posted</p>
+              </div>
+              <input type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <h4>Notice Board Circulars</h4>
+                <p>Instant alerts for urgent campus holiday or administrative notices</p>
+              </div>
+              <input type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <h4>Attendance Shortage Warning</h4>
+                <p>Email alert whenever subject attendance falls below 75% threshold</p>
+              </div>
+              <input type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <h4>Study Material Uploads</h4>
+                <p>Notifications when course instructor uploads new lecture slides</p>
+              </div>
+              <input type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+            </div>
+          </div>
+
+          <button class="btn btn-secondary full-width" style="margin-top: 20px;" onclick="alert('Notification preferences saved successfully (Demo)!')">Save Preferences</button>
+        </div>
+
+      </div>
+
+      <!-- About & System Status Card -->
+      <div class="card" style="margin-top: 24px;">
+        <div class="card-header-row">
+          <h3>ℹ️ About Campus Connect Project</h3>
+          <span class="badge badge-primary">Mini Project Phase 2 (50%)</span>
+        </div>
+        <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
+          Campus Connect is a comprehensive college management frontend portal built using pure <strong>HTML5, CSS3, and Vanilla JavaScript</strong>.
+          It provides multi-role functionality for Students, Faculty, and Administrators with responsive design, instant client-side state handling,
+          interactive roll-call attendance, and dynamic dashboards.
+        </p>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

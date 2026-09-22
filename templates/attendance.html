@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Academic Attendance Record</h2>
+          <p>Real-time attendance tracking and classroom roll-call session</p>
+        </div>
+        <div class="page-actions">
+          <span class="badge badge-success" id="presentCountDisplay">Overall: 85% Attendance</span>
+        </div>
+      </div>
+
+      <!-- Student Attendance Overview Cards -->
+      <div class="card-grid" style="margin-bottom: 24px;">
+        <div class="stat-card stat-green">
+          <div class="stat-card-header"><span class="stat-card-title">Overall Attendance</span><span class="stat-card-icon">📈</span></div>
+          <div class="stat-card-value">85.4%</div>
+          <div class="stat-card-desc">106 of 124 Total Lectures</div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill progress-green" style="width: 85%;"></div></div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Classes Attended</span><span class="stat-card-icon">✅</span></div>
+          <div class="stat-card-value">106</div>
+          <div class="stat-card-desc">Present sessions</div>
+        </div>
+
+        <div class="stat-card stat-amber">
+          <div class="stat-card-header"><span class="stat-card-title">Classes Missed</span><span class="stat-card-icon">⚠️</span></div>
+          <div class="stat-card-value">18</div>
+          <div class="stat-card-desc">Excused & Unexcused</div>
+        </div>
+
+        <div class="stat-card stat-purple">
+          <div class="stat-card-header"><span class="stat-card-title">Eligibility Criteria</span><span class="stat-card-icon">🎯</span></div>
+          <div class="stat-card-value">Eligible</div>
+          <div class="stat-card-desc">Above 75% Board Threshold</div>
+        </div>
+      </div>
+
+      <!-- Subject-Wise Breakdown Table -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header-row">
+          <h3>Subject-Wise Attendance Summary</h3>
+          <span class="badge badge-info">Semester 6</span>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Course Name</th>
+                <th>Instructor</th>
+                <th>Held</th>
+                <th>Attended</th>
+                <th>Percentage</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody data-role="attendance-summary-body">
+              <tr>
+                <td><strong>CS601</strong></td>
+                <td>Database Management Systems</td>
+                <td>P B Patil</td>
+                <td>28</td>
+                <td>25</td>
+                <td><strong>89.2%</strong></td>
+                <td><span class="badge badge-success">Good</span></td>
+              </tr>
+              <tr>
+                <td><strong>CS602</strong></td>
+                <td>Computer Networks & Security</td>
+                <td>Prof. Rajesh Verma</td>
+                <td>26</td>
+                <td>21</td>
+                <td><strong>80.7%</strong></td>
+                <td><span class="badge badge-success">Good</span></td>
+              </tr>
+              <tr>
+                <td><strong>CS603</strong></td>
+                <td>Design & Analysis of Algorithms</td>
+                <td>Dr. Sneha Mukherjee</td>
+                <td>30</td>
+                <td>27</td>
+                <td><strong>90.0%</strong></td>
+                <td><span class="badge badge-success">Excellent</span></td>
+              </tr>
+              <tr>
+                <td><strong>CS604</strong></td>
+                <td>Software Engineering & Agile</td>
+                <td>Prof. K. Raman</td>
+                <td>24</td>
+                <td>19</td>
+                <td><strong>79.1%</strong></td>
+                <td><span class="badge badge-warning">Shortage Warning</span></td>
+              </tr>
+              <tr>
+                <td><strong>CS691</strong></td>
+                <td>Database Practical Lab</td>
+                <td>P B Patil</td>
+                <td>16</td>
+                <td>14</td>
+                <td><strong>87.5%</strong></td>
+                <td><span class="badge badge-success">Good</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Interactive Faculty Roll-Call Section -->
+      <div class="card" id="facultyRollCallCard" style="display: none;">
+        <div class="card-header-row">
+          <div>
+            <h3>Interactive Classroom Roll-Call</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Select course and division to mark daily attendance</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <select class="form-select" id="facultyRollCourseSelect" style="width: auto; font-size: 13px; font-weight: 600;">
+              <option value="CS601">CS601 - Database Management Systems</option>
+              <option value="CS691">CS691 - Database Practical Lab</option>
+            </select>
+            <select class="form-select" id="facultyRollDivisionSelect" style="width: auto; font-size: 13px; font-weight: 600;">
+              <option value="A" selected>Division A</option>
+              <option value="B">Division B</option>
+              <option value="C">Division C</option>
+              <option value="D">Division D</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="saveAttendanceBtn" onclick="saveFacultyAttendance()">Save Attendance</button>
+          </div>
+        </div>
+
+        <div id="rollCallStatusBanner"></div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student ID / PRN</th>
+                <th>Student Name</th>
+                <th>Department</th>
+                <th>Division</th>
+                <th>Mark Status (Click to Toggle)</th>
+              </tr>
+            </thead>
+            <tbody id="rollCallTableBody">
+              <!-- Populated dynamically via API -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Events - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Campus Events & Activities</h2>
+          <p>Discover workshops, competitions, cultural festivals and seminars</p>
+        </div>
+        <div class="page-actions">
+          <span class="badge badge-primary">Semester 6 Calendar</span>
+        </div>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="filter-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="globalSearchInput" placeholder="Search event by name, venue or speaker...">
+        </div>
+        <button class="btn btn-primary btn-sm filter-btn active" data-filter="all">All Events</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="workshop">Workshops</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="sports">Sports</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="cultural">Cultural</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="seminar">Seminars</button>
+      </div>
+
+      <!-- Events Grid -->
+      <div class="grid-3">
+        
+        <!-- Event 1 -->
+        <div class="card filterable-item" data-category="workshop">
+          <div class="card-header-row">
+            <span class="badge badge-success">Workshop</span>
+            <span class="badge badge-info">Mar 02, 2026</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Web & Cloud Computing BootCamp</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">
+            A hands-on session exploring modern web architectures, API design principles, and cloud deployments.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); margin-bottom: 16px;">
+            <div>📍 <strong>Venue:</strong> Seminar Hall B</div>
+            <div>⏰ <strong>Time:</strong> 10:00 AM - 04:00 PM</div>
+          </div>
+          <button class="btn btn-primary btn-sm full-width" onclick="this.classList.replace('btn-primary', 'btn-success'); this.textContent = '✓ Registered';">Register Now</button>
+        </div>
+
+        <!-- Event 2 -->
+        <div class="card filterable-item" data-category="sports">
+          <div class="card-header-row">
+            <span class="badge badge-warning">Sports</span>
+            <span class="badge badge-info">Mar 08, 2026</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Annual Inter-Department Football Cup</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">
+            Annual championship matches between engineering departments. Open for student spectators and team cheerers.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); margin-bottom: 16px;">
+            <div>📍 <strong>Venue:</strong> Main College Sports Ground</div>
+            <div>⏰ <strong>Time:</strong> 02:30 PM Onwards</div>
+          </div>
+          <button class="btn btn-secondary btn-sm full-width" onclick="alert('Fixture details downloaded (Demo).');">View Fixtures</button>
+        </div>
+
+        <!-- Event 3 -->
+        <div class="card filterable-item" data-category="seminar">
+          <div class="card-header-row">
+            <span class="badge badge-info">Seminar</span>
+            <span class="badge badge-info">Mar 14, 2026</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Industry Expert Talk on AI & Robotics</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">
+            Keynote speech by invited researchers discussing next-generation automation and autonomous systems.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); margin-bottom: 16px;">
+            <div>📍 <strong>Venue:</strong> Auditorium Block</div>
+            <div>⏰ <strong>Time:</strong> 11:00 AM - 01:00 PM</div>
+          </div>
+          <button class="btn btn-primary btn-sm full-width" onclick="this.classList.replace('btn-primary', 'btn-success'); this.textContent = '✓ Seat Reserved';">Reserve Seat</button>
+        </div>
+
+        <!-- Event 4 -->
+        <div class="card filterable-item" data-category="cultural">
+          <div class="card-header-row">
+            <span class="badge badge-danger">Cultural</span>
+            <span class="badge badge-info">Mar 22, 2026</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">TechWave Cultural Evening & Music Fest</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">
+            Annual college evening featuring student musical bands, stage plays, dance competitions, and food stalls.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); margin-bottom: 16px;">
+            <div>📍 <strong>Venue:</strong> Open Air Amphitheatre</div>
+            <div>⏰ <strong>Time:</strong> 05:00 PM - 09:30 PM</div>
+          </div>
+          <button class="btn btn-secondary btn-sm full-width" onclick="alert('Free entry for all registered students with college ID.')">Event Pass Info</button>
+        </div>
+
+        <!-- Event 5 -->
+        <div class="card filterable-item" data-category="workshop">
+          <div class="card-header-row">
+            <span class="badge badge-success">Workshop</span>
+            <span class="badge badge-info">Mar 28, 2026</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Git, GitHub & Open-Source Masterclass</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">
+            Practical branch management, merge conflict resolution, pull request workflows, and contributing to open-source.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); margin-bottom: 16px;">
+            <div>📍 <strong>Venue:</strong> Computer Lab 3</div>
+            <div>⏰ <strong>Time:</strong> 01:30 PM - 04:30 PM</div>
+          </div>
+          <button class="btn btn-primary btn-sm full-width" onclick="this.classList.replace('btn-primary', 'btn-success'); this.textContent = '✓ Registered';">Register Now</button>
+        </div>
+
+        <!-- Event 6 -->
+        <div class="card filterable-item" data-category="seminar">
+          <div class="card-header-row">
+            <span class="badge badge-info">Seminar</span>
+            <span class="badge badge-info">Apr 04, 2026</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Higher Studies & Research Opportunities</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">
+            Guidance seminar on GATE, GRE, Masters abroad, and international research fellowships for engineering graduates.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); margin-bottom: 16px;">
+            <div>📍 <strong>Venue:</strong> Seminar Hall A</div>
+            <div>⏰ <strong>Time:</strong> 03:00 PM - 05:00 PM</div>
+          </div>
+          <button class="btn btn-primary btn-sm full-width" onclick="this.classList.replace('btn-primary', 'btn-success'); this.textContent = '✓ Seat Reserved';">Reserve Seat</button>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

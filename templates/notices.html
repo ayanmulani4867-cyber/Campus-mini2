@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notice Board - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Campus Notice Board</h2>
+          <p>Official announcements, circulars and academic notifications</p>
+        </div>
+        <div class="page-actions" id="noticesPageActions">
+          <button class="btn btn-primary btn-sm" id="postNoticeBtn" onclick="openModal('newNoticeModal')">+ Post Notice</button>
+        </div>
+      </div>
+
+      <!-- Search & Category Filters -->
+      <div class="filter-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="globalSearchInput" placeholder="Search notice title, keyword or publisher...">
+        </div>
+        <button class="btn btn-primary btn-sm filter-btn active" data-filter="all">All Notices</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="exam">Examinations</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="academic">Academic</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="event">Campus Events</button>
+      </div>
+
+      <!-- Notices List -->
+      <div class="item-list">
+        
+        <!-- Notice 1 -->
+        <div class="card filterable-item" data-category="exam">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-danger">Urgent Notice</span>
+              <span class="badge badge-primary" style="margin-left: 4px;">Examinations</span>
+            </div>
+            <span class="list-item-date">Published: Feb 24, 2026</span>
+          </div>
+          <h3 style="font-size: 18px; margin-bottom: 8px;">Mid-Semester Theory & Practical Examination Schedule</h3>
+          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            The Mid-Term examinations for all B.Tech 2nd, 3rd, and 4th-year students will officially commence from March 15th, 2026.
+            Students must carry their college identity cards to the examination halls. The detailed timetable is available for download on the notice board.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
+            <span>Issued by: Controller of Examinations</span>
+            <button class="btn btn-secondary btn-sm" onclick="alert('Downloading Schedule PDF (Demo)...')">📥 Download Timetable</button>
+          </div>
+        </div>
+
+        <!-- Notice 2 -->
+        <div class="card filterable-item" data-category="academic">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-primary">Academic</span>
+              <span class="badge badge-info" style="margin-left: 4px;">Project Deliverables</span>
+            </div>
+            <span class="list-item-date">Published: Feb 22, 2026</span>
+          </div>
+          <h3 style="font-size: 18px; margin-bottom: 8px;">Submission Deadline for 50% Mini-Project Milestone</h3>
+          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            All 3rd-year engineering groups must submit their intermediate project report and functional UI walkthrough
+            to their respective project mentors before Friday, 5:00 PM. No further extensions will be granted.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
+            <span>Issued by: Department of Computer Science</span>
+            <button class="btn btn-secondary btn-sm" onclick="alert('Submission portal active for enrolled groups.')">ℹ️ Guidelines</button>
+          </div>
+        </div>
+
+        <!-- Notice 3 -->
+        <div class="card filterable-item" data-category="event">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-success">Event</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">Annual Fest</span>
+            </div>
+            <span class="list-item-date">Published: Feb 20, 2026</span>
+          </div>
+          <h3 style="font-size: 18px; margin-bottom: 8px;">Auditions Open for Annual Cultural Fest 'TechWave 2026'</h3>
+          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            Auditions for music, dance, drama, and debate societies will take place this weekend in the Main Auditorium.
+            Interested students may register their names with the student activity council coordinators.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
+            <span>Issued by: Student Affairs Committee</span>
+            <a href="events.html" class="btn btn-secondary btn-sm">Explore Events</a>
+          </div>
+        </div>
+
+        <!-- Notice 4 -->
+        <div class="card filterable-item" data-category="academic">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-info">Library</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">General</span>
+            </div>
+            <span class="list-item-date">Published: Feb 18, 2026</span>
+          </div>
+          <h3 style="font-size: 18px; margin-bottom: 8px;">Extended Digital Library & Reading Room Hours</h3>
+          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
+            In view of upcoming semester tests, the central library will remain operational from 8:00 AM to 10:00 PM on all working days and Saturdays.
+            Free access to IEEE and ACM digital portals is enabled on the campus Wi-Fi network.
+          </p>
+          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
+            <span>Issued by: Chief Librarian</span>
+            <span class="badge badge-success">Active Service</span>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Post Notice Modal -->
+  <div class="modal-overlay" id="newNoticeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Publish New Notice</h3>
+        <span class="modal-close" onclick="closeModal('newNoticeModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="noticeModalError"></div>
+        <div class="form-group">
+          <label>Notice Title</label>
+          <input type="text" class="form-input" id="modalNoticeTitle" placeholder="e.g. Schedule for Lab Practical Exam">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select class="form-select" id="modalNoticeCat">
+            <option value="exam">Examinations</option>
+            <option value="academic">Academic</option>
+            <option value="event">Campus Events</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Notice Details</label>
+          <textarea class="form-input" id="modalNoticeBody" rows="4" placeholder="Enter complete announcement text..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('newNoticeModal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="submitPublishNoticeBtn">Publish Notice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

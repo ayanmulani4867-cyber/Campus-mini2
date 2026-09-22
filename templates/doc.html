@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download Campus Connect 50% Presentation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .download-box {
+      background-color: #ffffff;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .icon {
+      font-size: 54px;
+      margin-bottom: 15px;
+    }
+    h2 {
+      color: #1e3a8a;
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    p {
+      color: #555;
+      font-size: 14.5px;
+      margin-bottom: 25px;
+      line-height: 1.5;
+    }
+    .btn-download {
+      display: inline-block;
+      background-color: #2563eb;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+    }
+    .btn-download:hover {
+      background-color: #1d4ed8;
+      transform: translateY(-2px);
+    }
+    .btn-deck {
+      display: block;
+      margin-top: 15px;
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .btn-deck:hover {
+      text-decoration: underline;
+    }
+    .path-info {
+      margin-top: 25px;
+      padding: 12px;
+      background-color: #f1f5f9;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #475569;
+      word-break: break-all;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="download-box">
+    <div class="icon">📊</div>
+    <h2>Campus Connect Presentation</h2>
+    <p>Mini Project (50% Frontend Milestone) — 8 Slides with system roles, tech stack, actual project screenshots & development roadmap.</p>
+    
+    <a id="downloadLink" href="Campus_Connect_50_Presentation.pptx" download="Campus_Connect_50_Presentation.pptx" class="btn-download">
+      📥 Click to Download (.PPTX)
+    </a>
+
+    <a href="index.html" class="btn-deck">
+      🏠 Back to Campus Connect Portal
+    </a>
+
+    <div class="path-info">
+      <strong>Saved File Location:</strong><br>
+      <code>CampusConnect/Campus_Connect_50_Presentation.pptx</code>
+    </div>
+  </div>
+
+  <script>
+    // Auto trigger download when page opens
+    window.addEventListener('DOMContentLoaded', function() {
+      const dl = document.getElementById('downloadLink');
+      if (dl) {
+        setTimeout(() => {
+          dl.click();
+        }, 500);
+      }
+    });
+  </script>
+</body>
+</html>

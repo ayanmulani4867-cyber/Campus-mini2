@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Directory - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="admin">Admin</option>
+          <option value="faculty">Faculty</option>
+          <option value="student">Student</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">Admin Controller</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Campus User Directory (Admin Management)</h2>
+          <p>Centralized database of registered students, faculty members and staff</p>
+        </div>
+        <div class="page-actions" id="usersPageActions">
+          <button class="btn btn-primary btn-sm" id="addUserBtn" onclick="openModal('addUserModal')">+ Add Member</button>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="card-grid" style="margin-bottom: 24px;">
+        <div class="stat-card stat-green">
+          <div class="stat-card-header"><span class="stat-card-title">Enrolled Students</span><span class="stat-card-icon">🎓</span></div>
+          <div class="stat-card-value" id="statTotalStudents">1,250</div>
+          <div class="stat-card-desc">Undergraduate & Postgrad</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Teaching Faculty</span><span class="stat-card-icon">👨‍🏫</span></div>
+          <div class="stat-card-value" id="statTotalFaculty">85</div>
+          <div class="stat-card-desc">Permanent & Visiting</div>
+        </div>
+
+        <div class="stat-card stat-amber">
+          <div class="stat-card-header"><span class="stat-card-title">Engineering Depts</span><span class="stat-card-icon">🏛️</span></div>
+          <div class="stat-card-value">6</div>
+          <div class="stat-card-desc">CSE, ECE, ME, CE, EEE, IT</div>
+        </div>
+
+        <div class="stat-card stat-purple">
+          <div class="stat-card-header"><span class="stat-card-title">Directory Health</span><span class="stat-card-icon">⚡</span></div>
+          <div class="stat-card-value">100%</div>
+          <div class="stat-card-desc">All records synced</div>
+        </div>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="filter-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="globalSearchInput" placeholder="Search by name, ID or department...">
+        </div>
+        <button class="btn btn-primary btn-sm filter-btn active" data-filter="all">All Members</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="student">Students Only</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="faculty">Faculty Only</button>
+      </div>
+
+      <!-- User Directory Table -->
+      <div class="table-container">
+        <table class="data-table" id="usersDirectoryTable">
+          <thead>
+            <tr>
+              <th>Member ID / PRN</th>
+              <th>Full Name</th>
+              <th>Role</th>
+              <th>Department</th>
+              <th>Class / Designation</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <!-- Populated dynamically via API -->
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Add Member Modal -->
+  <div class="modal-overlay" id="addUserModal">
+    <div class="modal-box" style="max-width: 580px; max-height: 92vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3>Enroll New Campus Member</h3>
+        <span class="modal-close" onclick="closeModal('addUserModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="addUserErrorContainer"></div>
+        <div class="form-group">
+          <label>Member Type *</label>
+          <select class="form-select" id="newMemberType" onchange="toggleMemberTypeFields()">
+            <option value="Student">Student</option>
+            <option value="Faculty Member">Faculty Member</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" class="form-input" id="newMemberName" placeholder="e.g. Rahul Sharma" required>
+          </div>
+          <div class="form-group">
+            <label>College Email / Login ID *</label>
+            <input type="email" class="form-input" id="newMemberEmail" placeholder="e.g. rahul@campus.edu" required>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Phone Number * <span style="font-size: 11px; color: var(--accent);">(initial password)</span></label>
+            <input type="tel" class="form-input" id="newMemberPhone" placeholder="e.g. 9876543210" maxlength="15" required>
+          </div>
+          <div class="form-group">
+            <label>Department *</label>
+            <select class="form-select" id="newMemberDept" onchange="updateDepartmentCourses()">
+              <option value="Computer Science & Engineering">Computer Science & Engineering</option>
+              <option value="Electronics & Communication">Electronics & Communication</option>
+              <option value="Mechanical Engineering">Mechanical Engineering</option>
+              <option value="Civil Engineering">Civil Engineering</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ================= STUDENT SPECIFIC FIELDS ================= -->
+        <div id="studentSpecificFields">
+          <div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 8px;">
+              🎓 Academic & Class Assignment
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label>Academic Year *</label>
+                <select class="form-select" id="newStudentYear" onchange="syncStudentYearSem()">
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year" selected>3rd Year</option>
+                  <option value="4th Year">4th Year</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label>Semester *</label>
+                <select class="form-select" id="newStudentSem">
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                  <option value="3">Semester 3</option>
+                  <option value="4">Semester 4</option>
+                  <option value="5">Semester 5</option>
+                  <option value="6" selected>Semester 6</option>
+                  <option value="7">Semester 7</option>
+                  <option value="8">Semester 8</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label>Division / Section *</label>
+              <select class="form-select" id="newStudentDivision">
+                <option value="A" selected>Division A</option>
+                <option value="B">Division B</option>
+                <option value="C">Division C</option>
+                <option value="D">Division D</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Student ID / PRN <span style="font-size: 11px; color: var(--text-muted);">(Optional - auto-generated if blank)</span></label>
+              <input type="text" class="form-input" id="newStudentID" placeholder="e.g. STU2026010 or PRN2026010">
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= FACULTY SPECIFIC FIELDS ================= -->
+        <div id="facultySpecificFields" style="display: none;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Designation *</label>
+              <select class="form-select" id="newFacultyDesignation">
+                <option value="Assistant Professor">Assistant Professor</option>
+                <option value="Associate Professor" selected>Associate Professor</option>
+                <option value="Professor">Professor</option>
+                <option value="Head of Department">Head of Department (HOD)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Faculty ID <span style="font-size: 11px; color: var(--text-muted);">(Optional)</span></label>
+              <input type="text" class="form-input" id="newFacultyID" placeholder="e.g. FAC2026001">
+            </div>
+          </div>
+
+          <!-- Relational Teaching Assignments Builder -->
+          <div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase;">
+                📚 Teaching Assignments (Multi-Subject & Multi-Division)
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addFacultyAssignmentRow()" style="font-size: 11px; padding: 3px 8px;">+ Add Subject / Class</button>
+            </div>
+            <div id="facultyAssignmentsContainer">
+              <!-- Assignment rows dynamically added here -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('addUserModal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="submitEnrollMemberBtn">Enroll Member</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Member Modal -->
+  <div class="modal-overlay" id="editUserModal">
+    <div class="modal-box" style="max-width: 580px; max-height: 92vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 id="editModalHeading">Edit Member Details</h3>
+        <span class="modal-close" onclick="closeModal('editUserModal')">&times;</span>
+      </div>
+      <div class="modal-body" id="editModalBody">
+        <!-- Loaded dynamically -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('editUserModal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="saveEditMemberBtn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

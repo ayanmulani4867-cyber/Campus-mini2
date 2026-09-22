@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courses - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Courses & Academic Curriculum</h2>
+          <p>Explore enrolled subjects, syllabus schedules and course progress</p>
+        </div>
+        <div class="page-actions">
+          <span class="badge badge-primary">Spring 2026</span>
+        </div>
+      </div>
+
+      <!-- Search & Filter Bar -->
+      <div class="filter-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="globalSearchInput" placeholder="Search course title, code or instructor...">
+        </div>
+        <button class="btn btn-primary btn-sm filter-btn active" data-filter="all">All Courses</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="core">Core Theory</button>
+        <button class="btn btn-secondary btn-sm filter-btn" data-filter="lab">Practical Labs</button>
+      </div>
+
+      <!-- Courses Grid -->
+      <div class="grid-3" id="coursesContainer">
+        
+        <!-- Course 1 -->
+        <div class="card filterable-item" data-category="core">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-primary">CS601</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">4 Credits</span>
+            </div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Database Management Systems</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: P B Patil • Room 304</p>
+          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>Syllabus Coverage</span>
+            <strong>80%</strong>
+          </div>
+          <div class="progress-bar-bg" style="margin-bottom: 16px;">
+            <div class="progress-bar-fill progress-green" style="width: 80%;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
+            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
+          </div>
+        </div>
+
+        <!-- Course 2 -->
+        <div class="card filterable-item" data-category="core">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-primary">CS602</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">4 Credits</span>
+            </div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Computer Networks & Security</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Prof. Rajesh Verma • Room 202</p>
+          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>Syllabus Coverage</span>
+            <strong>65%</strong>
+          </div>
+          <div class="progress-bar-bg" style="margin-bottom: 16px;">
+            <div class="progress-bar-fill progress-amber" style="width: 65%;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
+            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
+          </div>
+        </div>
+
+        <!-- Course 3 -->
+        <div class="card filterable-item" data-category="core">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-primary">CS603</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">4 Credits</span>
+            </div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Design & Analysis of Algorithms</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Dr. Sneha Mukherjee • Room 301</p>
+          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>Syllabus Coverage</span>
+            <strong>75%</strong>
+          </div>
+          <div class="progress-bar-bg" style="margin-bottom: 16px;">
+            <div class="progress-bar-fill progress-green" style="width: 75%;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
+            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
+          </div>
+        </div>
+
+        <!-- Course 4 -->
+        <div class="card filterable-item" data-category="core">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-primary">CS604</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">3 Credits</span>
+            </div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Software Engineering & Agile</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Prof. K. Raman • Room 105</p>
+          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>Syllabus Coverage</span>
+            <strong>90%</strong>
+          </div>
+          <div class="progress-bar-bg" style="margin-bottom: 16px;">
+            <div class="progress-bar-fill progress-green" style="width: 90%;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
+            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
+          </div>
+        </div>
+
+        <!-- Course 5 -->
+        <div class="card filterable-item" data-category="lab">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-info">CS691</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">2 Credits</span>
+            </div>
+            <span class="badge badge-success">Lab</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Database & SQL Practical Lab</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: P B Patil • Lab Block 2</p>
+          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>Syllabus Coverage</span>
+            <strong>85%</strong>
+          </div>
+          <div class="progress-bar-bg" style="margin-bottom: 16px;">
+            <div class="progress-bar-fill progress-green" style="width: 85%;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
+            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
+          </div>
+        </div>
+
+        <!-- Course 6 -->
+        <div class="card filterable-item" data-category="lab">
+          <div class="card-header-row">
+            <div>
+              <span class="badge badge-info">CS692</span>
+              <span class="badge badge-secondary" style="margin-left: 4px;">2 Credits</span>
+            </div>
+            <span class="badge badge-success">Lab</span>
+          </div>
+          <h3 style="font-size: 17px; margin-bottom: 6px;">Network Socket Programming Lab</h3>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Prof. Rajesh Verma • Lab Block 4</p>
+          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>Syllabus Coverage</span>
+            <strong>70%</strong>
+          </div>
+          <div class="progress-bar-bg" style="margin-bottom: 16px;">
+            <div class="progress-bar-fill progress-green" style="width: 70%;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
+            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

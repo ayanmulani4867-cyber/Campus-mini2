@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Connect - College Portal</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <a href="index.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+      <span class="logo-badge">College Portal</span>
+    </div>
+
+    <div class="topbar-actions">
+      <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <span class="hero-pill">College Management System</span>
+    <h2>Welcome to Campus Connect</h2>
+    <p>
+      A simple web portal for college students, faculty, and administration to check attendance,
+      course details, class notes, campus notices, and upcoming events in one place.
+    </p>
+
+    <div class="hero-btns">
+      <a href="login.html" class="btn btn-filled">Login to Portal</a>
+    </div>
+
+    <!-- Quick Stats Strip -->
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="stat-number">1,200+</div>
+        <div class="stat-label">Students</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">65+</div>
+        <div class="stat-label">Faculty Members</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">6</div>
+        <div class="stat-label">Departments</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">40+</div>
+        <div class="stat-label">Courses</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Three Roles Section -->
+  <section class="home-section">
+    <div class="section-title">
+      <h3>Select Your Role</h3>
+      <p>Campus Connect provides separate views for students, teachers, and admins</p>
+    </div>
+
+    <div class="grid-3">
+      <!-- Student Role Card -->
+      <div class="role-card">
+        <span class="role-badge-tag tag-student">Student</span>
+        <div style="font-size: 32px; margin-bottom: 8px;">🎒</div>
+        <h4>Student Portal</h4>
+        <p>Check your subject-wise attendance percentage, view enrolled courses, download lecture notes, and see recent
+          notices.</p>
+        <a href="login.html" class="btn btn-secondary btn-sm full-width"
+          onclick="sessionStorage.setItem('campus_role', 'student')">Enter as Student</a>
+      </div>
+
+      <!-- Faculty Role Card -->
+      <div class="role-card">
+        <span class="role-badge-tag tag-faculty">Faculty</span>
+        <div style="font-size: 32px; margin-bottom: 8px;">👨‍🏫</div>
+        <h4>Faculty Portal</h4>
+        <p>Mark daily classroom attendance, view teaching schedule, upload study materials for your subjects, and post
+          notices.</p>
+        <a href="login.html" class="btn btn-secondary btn-sm full-width"
+          onclick="sessionStorage.setItem('campus_role', 'faculty')">Enter as Faculty</a>
+      </div>
+
+      <!-- Admin Role Card -->
+      <div class="role-card">
+        <span class="role-badge-tag tag-admin">Admin</span>
+        <div style="font-size: 32px; margin-bottom: 8px;">🏛️</div>
+        <h4>Admin Portal</h4>
+        <p>View overall college statistics, manage student and faculty directories, publish campus notices, and manage
+          course lists.</p>
+        <a href="login.html" class="btn btn-secondary btn-sm full-width"
+          onclick="sessionStorage.setItem('campus_role', 'admin')">Enter as Admin</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="home-section" style="padding-top: 0;">
+    <div class="section-title">
+      <h3>Main Features</h3>
+      <p>Key modules included in this mini-project</p>
+    </div>
+
+    <div class="grid-4">
+      <div class="feature-card">
+        <div class="feature-icon">📅</div>
+        <h4>Attendance System</h4>
+        <p>Track student attendance percentage with shortage warnings and digital roll-call marking.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📚</div>
+        <h4>Course Details</h4>
+        <p>View subject syllabus coverage, course codes, credits, and assigned instructors.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📢</div>
+        <h4>Notice Board</h4>
+        <p>Get circulars and announcements for examinations, holidays, and academic submissions.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <h4>Study Materials</h4>
+        <p>Download lecture slides, lab manuals, and previous semester question papers.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+
+</html>

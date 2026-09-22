@@ -1,0 +1,53 @@
+name: Campus Connect CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: campus_connect_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Python syntax and compilation check
+        run: |
+          python -m compileall .
+
+      - name: Run Backend Multi-Tab Auth & RBAC Isolation Tests
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/campus_connect_test
+          SECRET_KEY: ci-test-secret-key
+          FLASK_ENV: development
+        run: |
+          python tests/test_auth_sessions.py

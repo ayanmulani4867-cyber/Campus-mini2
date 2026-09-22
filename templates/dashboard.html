@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <!-- Role Switcher for Viva Demo -->
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">A</div>
+        <span id="topbarUserName">John Snow</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      
+      <!-- Welcome Banner -->
+      <div class="welcome-banner">
+        <div class="welcome-text">
+          <h3 id="welcomeMsg">Welcome, Student!</h3>
+          <p id="welcomeSub">Spring Semester 2026 • Campus Connect Portal</p>
+        </div>
+        <div class="welcome-meta">
+          <div>
+            <strong>Role:</strong>
+            <span id="welcomeRole">Student</span>
+          </div>
+          <div>
+            <strong>Status:</strong>
+            <span class="badge badge-success">Active</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Role Stats Grid -->
+      <div class="card-grid" id="dashboardWidgets">
+        <!-- Injected via JavaScript based on Active Role -->
+      </div>
+
+      <!-- Recent Notices & Events -->
+      <div class="grid-2" style="margin-bottom: 20px;">
+        
+        <!-- Notices -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>📢 Recent Notices</h3>
+            <a href="notices.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div class="item-list">
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="badge badge-danger" style="margin-bottom: 3px;">Important</span>
+                <h4>Mid-Semester Exam Timetable Released</h4>
+                <p>Theory examinations will begin from March 15, 2026.</p>
+              </div>
+              <div class="list-item-date">Feb 24, 2026</div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="badge badge-primary" style="margin-bottom: 3px;">Academic</span>
+                <h4>Mini Project 50% Submission Due</h4>
+                <p>Submit your intermediate project report to your mentor by Friday.</p>
+              </div>
+              <div class="list-item-date">Feb 22, 2026</div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="badge badge-info" style="margin-bottom: 3px;">Library</span>
+                <h4>Library Reading Room Timings Extended</h4>
+                <p>Library will stay open till 9:00 PM on weekdays during exams.</p>
+              </div>
+              <div class="list-item-date">Feb 18, 2026</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Events -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>🎉 Upcoming Events</h3>
+            <a href="events.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div class="item-list">
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="badge badge-success" style="margin-bottom: 3px;">Workshop</span>
+                <h4>Web Development & Cloud Hands-On</h4>
+                <p>Seminar Hall B • 10:00 AM to 03:00 PM</p>
+              </div>
+              <div class="list-item-date">Mar 02, 2026</div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="badge badge-warning" style="margin-bottom: 3px;">Sports</span>
+                <h4>Inter-Branch Football Tournament</h4>
+                <p>Main College Ground • Preliminary Matches</p>
+              </div>
+              <div class="list-item-date">Mar 08, 2026</div>
+            </div>
+
+            <div class="list-item">
+              <div class="list-item-main">
+                <span class="badge badge-info" style="margin-bottom: 3px;">Seminar</span>
+                <h4>Technical Seminar on Machine Learning</h4>
+                <p>Auditorium • Guest Speaker from Industry</p>
+              </div>
+              <div class="list-item-date">Mar 14, 2026</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Quick Shortcuts -->
+      <div class="card">
+        <div class="card-header-row">
+          <h3>⚡ Quick Links</h3>
+        </div>
+        <div id="dashboardQuickLinks" style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <a href="courses.html" class="btn btn-secondary btn-sm">📚 View Courses</a>
+          <a href="materials.html" class="btn btn-secondary btn-sm">📁 Study Notes</a>
+          <a href="notices.html" class="btn btn-secondary btn-sm">📢 Notice Board</a>
+          <a href="settings.html" class="btn btn-secondary btn-sm">⚙️ Settings</a>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>
