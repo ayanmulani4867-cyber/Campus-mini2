@@ -18,6 +18,7 @@ from extensions import db
 from models import (
     Department, Course, User, Student, Faculty, FacultyAssignment, Enrollment,
     Notice, Event, StudyMaterial, LeaveRequest, Assignment,
+    AttendanceSession, AttendanceRecord, Result,
 )
 
 DEMO_PASSWORD = "campus@123"
@@ -273,6 +274,71 @@ def run_seed():
                 end_date=date.today() + timedelta(days=7),
                 reason="Attending National Student Technology Symposium as a college representative.",
                 status="pending",
+            ))
+
+    # --- Sample Campus Events -----------------------------------------------
+    if not Event.query.first():
+        from datetime import date, timedelta
+        db.session.add(Event(
+            title="Annual Tech Odyssey & Innovation Expo 2026",
+            description="Inter-college technical competition featuring hackathons, paper presentations, and robotics arena.",
+            category="Technical",
+            event_date=date.today() + timedelta(days=20),
+            location="Main Auditorium & Advanced Labs",
+            created_by_id=admin_user.id,
+        ))
+        db.session.add(Event(
+            title="Spring Cultural Fest 'Vibrance 2026'",
+            description="University-wide cultural festival showcasing music, dance, theater, and fine arts exhibitions.",
+            category="Cultural",
+            event_date=date.today() + timedelta(days=35),
+            location="Open Air Amphitheatre",
+            created_by_id=admin_user.id,
+        ))
+
+    # --- Sample Attendance Session & Records ---------------------------------
+    if not AttendanceSession.query.first():
+        from datetime import date
+        cs601_course = courses.get("CS601")
+        if cs601_course and fac1:
+            session = AttendanceSession(
+                course_id=cs601_course.id,
+                marked_by_id=fac1.id,
+                division="A",
+                session_date=date.today(),
+            )
+            db.session.add(session)
+            db.session.flush()
+
+            # Mark attendance for enrolled Div A students
+            stu_rahul = students.get("STU2024001")
+            stu_priya = students.get("STU2024002")
+            if stu_rahul:
+                db.session.add(AttendanceRecord(
+                    session_id=session.id,
+                    student_id=stu_rahul.id,
+                    status="present",
+                ))
+            if stu_priya:
+                db.session.add(AttendanceRecord(
+                    session_id=session.id,
+                    student_id=stu_priya.id,
+                    status="present",
+                ))
+
+    # --- Sample Exam Results ------------------------------------------------
+    if not Result.query.first():
+        stu_rahul = students.get("STU2024001")
+        cs601_course = courses.get("CS601")
+        if stu_rahul and cs601_course:
+            db.session.add(Result(
+                student_id=stu_rahul.id,
+                course_id=cs601_course.id,
+                entered_by_id=fac1.id if fac1 else None,
+                internal_marks=27.5,
+                end_sem_marks=63.0,
+                assessment_type="Semester Exam",
+                is_published=True,
             ))
 
     db.session.commit()
