@@ -29,6 +29,12 @@ def create_app(config_name=None):
     )
     app.config.from_object(config_class)
 
+    # Dynamically resolve and normalize DATABASE_URL from environment at runtime
+    env_db = os.environ.get("DATABASE_URL")
+    if env_db:
+        from config import _normalize_db_url
+        app.config["SQLALCHEMY_DATABASE_URI"] = _normalize_db_url(env_db)
+
     if not app.config.get("SQLALCHEMY_DATABASE_URI"):
         app.logger.warning(
             "DATABASE_URL is not set. The app will start, but database operations will fail."
