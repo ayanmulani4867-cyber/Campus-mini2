@@ -119,11 +119,11 @@ def logout():
         if user_session:
             user_session.is_active = False
             db.session.commit()
-
-    user_id = session.get("user_id")
-    if user_id:
-        UserSession.query.filter_by(user_id=user_id, is_active=True).update({"is_active": False})
-        db.session.commit()
+    else:
+        user_id = session.get("user_id")
+        if user_id:
+            UserSession.query.filter_by(user_id=user_id, is_active=True).update({"is_active": False})
+            db.session.commit()
 
     session.clear()
     resp = jsonify({"success": True})

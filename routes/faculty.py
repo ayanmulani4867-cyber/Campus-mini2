@@ -16,10 +16,18 @@ def _next_faculty_code():
 
 
 @bp.get("")
-@roles_required("admin")
+@roles_required("admin", "faculty")
 def list_faculty():
-    """User Directory faculty list is restricted to Administrators."""
+    """Faculty list optionally filtered by department."""
     q = Faculty.query
+    dept_param = request.args.get("department_id") or request.args.get("department")
+    if dept_param:
+        dept = Department.resolve(dept_param)
+        if dept:
+            q = q.filter_by(department_id=dept.id)
+        elif dept_param.isdigit():
+            q = q.filter_by(department_id=int(dept_param))
+
     search = request.args.get("q")
     if search:
         like = f"%{search}%"

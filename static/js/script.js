@@ -739,7 +739,7 @@ function initDashboard(user, role) {
       container.innerHTML =
         '<div class="stat-card stat-green"><div class="stat-card-header">Total Students</div><div class="stat-card-value">' + d.totalStudents + '</div><div class="stat-card-desc">Active Enrolled</div></div>' +
         '<div class="stat-card"><div class="stat-card-header">Faculty Members</div><div class="stat-card-value">' + d.facultyMembers + '</div><div class="stat-card-desc">Across departments</div></div>' +
-        '<div class="stat-card stat-amber"><div class="stat-card-header">Active Courses</div><div class="stat-card-value">' + d.activeCourses + '</div><div class="stat-card-desc">Current semester</div></div>' +
+        '<div class="stat-card stat-amber"><div class="stat-card-header">Course Offerings</div><div class="stat-card-value">' + (d.activeCourses || 0) + ' Active</div><div class="stat-card-desc">' + (d.totalCourses || 0) + ' Total • ' + (d.inactiveCourses || 0) + ' Inactive • ' + (d.departmentsWithCourses || 0) + ' Depts</div></div>' +
         '<div class="stat-card stat-purple"><div class="stat-card-header">System Health</div><div class="stat-card-value">' + d.systemHealth + '%</div><div class="stat-card-desc">Portal Running Smoothly</div></div>';
     }
   }).catch(function () {
@@ -777,46 +777,608 @@ function initDashboard(user, role) {
 }
 
 // ---- Courses module ----------------------------------------------------------------
+var _allCoursesCache = [];
+var _allDepartmentsCache = [];
+var _currentCourseViewMode = "auto";
+
 function initCourses(role) {
   var container = document.getElementById("coursesContainer");
-  if (!container) return;
+  var tableContainer = document.getElementById("adminCoursesTableContainer");
+  var addBtn = document.getElementById("openAddCourseBtn");
+  var statsBar = document.getElementById("adminCourseStatsBar");
+  var statusFilter = document.getElementById("courseStatusFilter");
+  var pageTitle = document.getElementById("coursesPageTitle");
+  var pageSub = document.getElementById("coursesPageSub");
 
+  if (!container && !tableContainer) return;
+
+  var isAdmin = (role === "admin");
+
+  if (addBtn) addBtn.style.display = isAdmin ? "inline-flex" : "none";
+  if (statsBar) statsBar.style.display = isAdmin ? "grid" : "none";
+  if (statusFilter) statusFilter.style.display = isAdmin ? "inline-block" : "none";
+
+  if (pageTitle) {
+    pageTitle.textContent = isAdmin ? "Course Administration & Curriculum" : "Courses & Academic Curriculum";
+  }
+  if (pageSub) {
+    pageSub.textContent = isAdmin
+      ? "Manage institutional course offerings, assign departments & instructors, and track syllabus coverage"
+      : "Explore enrolled subjects, syllabus schedules and course progress";
+  }
+
+  // Load Departments for filters and modals
+  api("/api/departments").then(function (res) {
+    _allDepartmentsCache = res.data || [];
+    populateDeptDropdowns(_allDepartmentsCache);
+  }).catch(function () {});
+
+  // Bind Search and Filter events
+  var searchInput = document.getElementById("courseSearchInput");
+  var deptFilter = document.getElementById("courseDeptFilter");
+  var semFilter = document.getElementById("courseSemFilter");
+  var catFilter = document.getElementById("courseCategoryFilter");
+
+  if (searchInput && !searchInput._bound) {
+    searchInput._bound = true;
+    searchInput.addEventListener("input", function () { filterAndRenderCourses(); });
+  }
+  if (deptFilter && !deptFilter._bound) {
+    deptFilter._bound = true;
+    deptFilter.addEventListener("change", filterAndRenderCourses);
+  }
+  if (semFilter && !semFilter._bound) {
+    semFilter._bound = true;
+    semFilter.addEventListener("change", filterAndRenderCourses);
+  }
+  if (catFilter && !catFilter._bound) {
+    catFilter._bound = true;
+    catFilter.addEventListener("change", filterAndRenderCourses);
+  }
+  if (statusFilter && !statusFilter._bound) {
+    statusFilter._bound = true;
+    statusFilter.addEventListener("change", filterAndRenderCourses);
+  }
+
+  loadCoursesList();
+}
+
+function loadCoursesList() {
   api("/api/courses").then(function (res) {
-    var courses = res.data || [];
-    if (!courses.length) {
-      container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align:center; color: var(--text-muted); padding: 32px;">No courses found for your department / semester.</div>';
+    _allCoursesCache = res.data || [];
+    updateAdminCourseStats(_allCoursesCache);
+    filterAndRenderCourses();
+  }).catch(function (err) {
+    var container = document.getElementById("coursesContainer");
+    if (container) {
+      container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align:center; color: var(--text-muted); padding: 32px;">Could not load courses: ' + escapeHtml(err.message || "Network error") + '</div>';
+    }
+  });
+}
+
+function updateAdminCourseStats(courses) {
+  var statTotal = document.getElementById("statTotalCourses");
+  var statActive = document.getElementById("statActiveCourses");
+  var statInactive = document.getElementById("statInactiveCourses");
+  var statDepts = document.getElementById("statDeptCourses");
+
+  if (!statTotal) return;
+
+  var total = courses.length;
+  var active = courses.filter(function (c) { return (c.status || "active").toLowerCase() === "active"; }).length;
+  var inactive = total - active;
+  var depts = {};
+  courses.forEach(function (c) {
+    if (c.departmentId) depts[c.departmentId] = true;
+    else if (c.department) depts[c.department] = true;
+  });
+  var deptCount = Object.keys(depts).length;
+
+  statTotal.textContent = total;
+  statActive.textContent = active;
+  statInactive.textContent = inactive;
+  statDepts.textContent = deptCount;
+}
+
+function populateDeptDropdowns(depts) {
+  var filterSelect = document.getElementById("courseDeptFilter");
+  var addSelect = document.getElementById("addCourseDept");
+  var editSelect = document.getElementById("editCourseDept");
+
+  var optionsHtml = '<option value="">Select Department...</option>' +
+    depts.map(function (d) {
+      return '<option value="' + escapeHtml(d.id) + '">' + escapeHtml(d.name) + ' (' + escapeHtml(d.code) + ')</option>';
+    }).join("");
+
+  if (addSelect) {
+    var addVal = addSelect.value;
+    addSelect.innerHTML = optionsHtml;
+    if (addVal) addSelect.value = addVal;
+  }
+  if (editSelect) {
+    var editVal = editSelect.value;
+    editSelect.innerHTML = optionsHtml;
+    if (editVal) editSelect.value = editVal;
+  }
+
+  if (filterSelect) {
+    var curVal = filterSelect.value || "all";
+    filterSelect.innerHTML = '<option value="all">All Departments</option>' +
+      depts.map(function (d) {
+        return '<option value="' + escapeHtml(d.id) + '">' + escapeHtml(d.name) + '</option>';
+      }).join("");
+    filterSelect.value = curVal;
+  }
+}
+
+function onDepartmentChanged(deptSelectId, instSelectId, selectedInstId) {
+  var deptSelect = document.getElementById(deptSelectId);
+  var instSelect = document.getElementById(instSelectId);
+  if (!deptSelect || !instSelect) return;
+
+  var deptId = deptSelect.value;
+  if (!deptId) {
+    instSelect.innerHTML = '<option value="">Select Department first...</option>';
+    return;
+  }
+
+  instSelect.innerHTML = '<option value="">Loading faculty...</option>';
+
+  api("/api/faculty?department_id=" + encodeURIComponent(deptId)).then(function (res) {
+    var faculty = res.data || [];
+    if (!faculty.length) {
+      instSelect.innerHTML = '<option value="">-- No Faculty Assigned in Dept --</option>';
       return;
     }
-    container.innerHTML = courses.map(function (c) {
-      var cat = c.isLab ? "lab" : "core";
-      var coverage = c.syllabusCoverage || 80;
-      var divText = c.assignedDivisions && c.assignedDivisions.length ? (' • Div: ' + c.assignedDivisions.join(', ')) : '';
-      return '<div class="card filterable-item" data-category="' + cat + '">' +
-        '<div class="card-header-row">' +
-          '<div>' +
-            '<span class="badge badge-primary">' + escapeHtml(c.code) + '</span>' +
-            '<span class="badge badge-secondary" style="margin-left: 4px;">' + (c.credits || 4) + ' Credits</span>' +
-          '</div>' +
-          '<span class="badge badge-success">Active</span>' +
-        '</div>' +
-        '<h3 style="font-size: 17px; margin-bottom: 6px;">' + escapeHtml(c.title) + '</h3>' +
-        '<p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">' +
-          'Instructor: ' + escapeHtml(c.instructor || 'Faculty Assigned') + ' • Sem ' + (c.semester || '-') + divText +
-        '</p>' +
-        '<div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">' +
-          '<span>Syllabus Coverage</span>' +
-          '<strong>' + coverage + '%</strong>' +
-        '</div>' +
-        '<div class="progress-bar-bg" style="margin-bottom: 16px;">' +
-          '<div class="progress-bar-fill progress-green" style="width: ' + coverage + '%;"></div>' +
-        '</div>' +
-        '<div style="display: flex; gap: 8px;">' +
-          '<a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>' +
-          '<a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>' +
-        '</div>' +
-      '</div>';
-    }).join("");
-  }).catch(function () {});
+    var html = '<option value="">-- Unassigned --</option>' +
+      faculty.map(function (f) {
+        var isSel = (selectedInstId && (String(selectedInstId) === String(f.facultyId) || String(selectedInstId) === String(f.id) || String(selectedInstId) === String(f.facultyCode)));
+        return '<option value="' + escapeHtml(f.facultyId || f.facultyCode) + '" ' + (isSel ? 'selected' : '') + '>' +
+          escapeHtml(f.name) + ' (' + escapeHtml(f.facultyCode) + ')' +
+          '</option>';
+      }).join("");
+    instSelect.innerHTML = html;
+  }).catch(function () {
+    instSelect.innerHTML = '<option value="">-- Unassigned --</option>';
+  });
+}
+
+function onSemesterChanged(semSelectId, yearSelectId) {
+  var semSelect = document.getElementById(semSelectId);
+  var yearSelect = document.getElementById(yearSelectId);
+  if (!semSelect || !yearSelect) return;
+
+  var sem = parseInt(semSelect.value, 10) || 1;
+  var yr = Math.ceil(sem / 2);
+  var yrLabel = yr === 1 ? "1st Year" : yr === 2 ? "2nd Year" : yr === 3 ? "3rd Year" : "4th Year";
+  yearSelect.value = yrLabel;
+}
+
+function setCourseViewMode(mode) {
+  _currentCourseViewMode = mode;
+  filterAndRenderCourses();
+}
+
+function filterAndRenderCourses() {
+  var role = getActiveRole();
+  var isAdmin = (role === "admin");
+
+  var searchVal = (document.getElementById("courseSearchInput") ? document.getElementById("courseSearchInput").value : "").toLowerCase().trim();
+  var deptVal = (document.getElementById("courseDeptFilter") ? document.getElementById("courseDeptFilter").value : "all");
+  var semVal = (document.getElementById("courseSemFilter") ? document.getElementById("courseSemFilter").value : "all");
+  var catVal = (document.getElementById("courseCategoryFilter") ? document.getElementById("courseCategoryFilter").value : "all");
+  var statusVal = (document.getElementById("courseStatusFilter") ? document.getElementById("courseStatusFilter").value : "all");
+
+  var filtered = _allCoursesCache.filter(function (c) {
+    if (searchVal) {
+      var match = (c.code && c.code.toLowerCase().indexOf(searchVal) !== -1) ||
+                  (c.title && c.title.toLowerCase().indexOf(searchVal) !== -1) ||
+                  (c.department && c.department.toLowerCase().indexOf(searchVal) !== -1) ||
+                  (c.instructor && c.instructor.toLowerCase().indexOf(searchVal) !== -1);
+      if (!match) return false;
+    }
+    if (deptVal && deptVal !== "all") {
+      if (String(c.departmentId) !== String(deptVal) && String(c.department) !== String(deptVal)) return false;
+    }
+    if (semVal && semVal !== "all") {
+      if (String(c.semester) !== String(semVal)) return false;
+    }
+    if (catVal && catVal !== "all") {
+      var cleanCat = (c.category || "").toLowerCase();
+      if (catVal === "lab" && cleanCat !== "lab" && cleanCat !== "laboratory" && cleanCat !== "practical") return false;
+      if (catVal !== "lab" && cleanCat !== catVal.toLowerCase()) return false;
+    }
+    if (statusVal && statusVal !== "all") {
+      if ((c.status || "active").toLowerCase() !== statusVal.toLowerCase()) return false;
+    }
+    return true;
+  });
+
+  var tableContainer = document.getElementById("adminCoursesTableContainer");
+  var tableBody = document.getElementById("adminCoursesTableBody");
+  var gridContainer = document.getElementById("coursesContainer");
+
+  var showTable = (_currentCourseViewMode === "table") || (_currentCourseViewMode === "auto" && isAdmin);
+
+  if (showTable) {
+    if (tableContainer) tableContainer.style.display = "block";
+    if (gridContainer) gridContainer.style.display = "none";
+
+    if (tableBody) {
+      if (!filtered.length) {
+        tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 28px; color: var(--text-muted);">No courses match the current filters.</td></tr>';
+      } else {
+        tableBody.innerHTML = filtered.map(function (c) {
+          var statusBadge = (c.status || "active").toLowerCase() === "active"
+            ? '<span class="badge badge-success">Active</span>'
+            : '<span class="badge badge-secondary" style="opacity: 0.8;">Inactive</span>';
+          var coverage = c.syllabusCoverage !== undefined ? c.syllabusCoverage : 0;
+          var toggleAction = (c.status || "active").toLowerCase() === "active" ? "Deactivate" : "Activate";
+
+          return '<tr id="course-row-' + escapeHtml(c.id) + '">' +
+            '<td><strong class="badge badge-primary" style="font-size: 12px;">' + escapeHtml(c.code) + '</strong></td>' +
+            '<td><strong>' + escapeHtml(c.title) + '</strong><br><small style="color: var(--text-muted);">' + escapeHtml(c.category || "Core") + '</small></td>' +
+            '<td>' + escapeHtml(c.department || "-") + '</td>' +
+            '<td>Sem ' + (c.semester || "-") + '</td>' +
+            '<td>' + (c.credits || 3) + '</td>' +
+            '<td>' + escapeHtml(c.instructor || "Unassigned") + '</td>' +
+            '<td>' + escapeHtml(c.room || "-") + '</td>' +
+            '<td>' +
+              '<div style="font-size: 11px; margin-bottom: 2px;">' + coverage + '%</div>' +
+              '<div class="progress-bar-bg" style="height: 6px; width: 70px;"><div class="progress-bar-fill progress-green" style="width: ' + coverage + '%;"></div></div>' +
+            '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td style="text-align: right; white-space: nowrap;">' +
+              '<button class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 4px;" onclick="openCourseDetailsModal(\'' + escapeHtml(c.id) + '\')">View</button>' +
+              (isAdmin ? '<button class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 4px;" onclick="openEditCourseModal(\'' + escapeHtml(c.id) + '\')">Edit</button>' : '') +
+              (isAdmin ? '<button class="btn btn-secondary btn-sm" style="padding: 4px 8px; margin-right: 4px;" onclick="toggleCourseStatus(\'' + escapeHtml(c.id) + '\', \'' + escapeHtml(c.status || "active") + '\')">' + toggleAction + '</button>' : '') +
+              (isAdmin ? '<button class="btn btn-danger btn-sm" style="padding: 4px 8px;" onclick="deleteCourse(\'' + escapeHtml(c.id) + '\')">Delete</button>' : '') +
+            '</td>' +
+          '</tr>';
+        }).join("");
+      }
+    }
+  } else {
+    if (tableContainer) tableContainer.style.display = "none";
+    if (gridContainer) gridContainer.style.display = "grid";
+
+    if (gridContainer) {
+      if (!filtered.length) {
+        gridContainer.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align:center; color: var(--text-muted); padding: 32px;">No courses found matching your criteria.</div>';
+      } else {
+        gridContainer.innerHTML = filtered.map(function (c) {
+          var cat = (c.category || "core").toLowerCase();
+          var coverage = c.syllabusCoverage !== undefined ? c.syllabusCoverage : 80;
+          var divText = c.assignedDivisions && c.assignedDivisions.length ? (' • Div: ' + c.assignedDivisions.join(', ')) : (c.division ? (' • Div: ' + c.division) : '');
+          var statusBadge = (c.status || "active").toLowerCase() === "active"
+            ? '<span class="badge badge-success">Active</span>'
+            : '<span class="badge badge-secondary">Inactive</span>';
+
+          return '<div class="card filterable-item" data-category="' + escapeHtml(cat) + '">' +
+            '<div class="card-header-row">' +
+              '<div>' +
+                '<span class="badge badge-primary">' + escapeHtml(c.code) + '</span>' +
+                '<span class="badge badge-secondary" style="margin-left: 4px;">' + (c.credits || 3) + ' Credits</span>' +
+              '</div>' +
+              statusBadge +
+            '</div>' +
+            '<h3 style="font-size: 17px; margin-bottom: 6px;">' + escapeHtml(c.title) + '</h3>' +
+            '<p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">' +
+              'Instructor: ' + escapeHtml(c.instructor || 'Faculty Assigned') + ' • Sem ' + (c.semester || '-') + divText +
+            '</p>' +
+            '<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">' +
+              '<span>Syllabus Coverage</span>' +
+              '<strong>' + coverage + '%</strong>' +
+            '</div>' +
+            '<div class="progress-bar-bg" style="margin-bottom: 16px;">' +
+              '<div class="progress-bar-fill progress-green" style="width: ' + coverage + '%;"></div>' +
+            '</div>' +
+            '<div style="display: flex; gap: 8px;">' +
+              '<button class="btn btn-secondary btn-sm full-width" onclick="openCourseDetailsModal(\'' + escapeHtml(c.id) + '\')">View Details</button>' +
+              (isAdmin ? '<button class="btn btn-secondary btn-sm full-width" onclick="openEditCourseModal(\'' + escapeHtml(c.id) + '\')">Edit</button>' : '<a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>') +
+            '</div>' +
+          '</div>';
+        }).join("");
+      }
+    }
+  }
+}
+
+// Add Course Modal handlers
+function openAddCourseModal() {
+  if (getActiveRole() !== "admin") {
+    showToast("Access Denied", "Only administrators can create courses.", "warning");
+    return;
+  }
+  var errEl = document.getElementById("addCourseErrorMsg");
+  if (errEl) errEl.style.display = "none";
+
+  var codeEl = document.getElementById("addCourseCode");
+  var titleEl = document.getElementById("addCourseTitle");
+  var creditsEl = document.getElementById("addCourseCredits");
+  var roomEl = document.getElementById("addCourseRoom");
+  var covEl = document.getElementById("addCourseCoverage");
+  var semEl = document.getElementById("addCourseSemester");
+  var yrEl = document.getElementById("addCourseYear");
+  var divEl = document.getElementById("addCourseDivision");
+  var statusEl = document.getElementById("addCourseStatus");
+  var catEl = document.getElementById("addCourseCategory");
+
+  if (codeEl) codeEl.value = "";
+  if (titleEl) titleEl.value = "";
+  if (creditsEl) creditsEl.value = "4";
+  if (roomEl) roomEl.value = "";
+  if (covEl) covEl.value = "0";
+  if (semEl) semEl.value = "6";
+  if (yrEl) yrEl.value = "3rd Year";
+  if (divEl) divEl.value = "All";
+  if (statusEl) statusEl.value = "active";
+  if (catEl) catEl.value = "core";
+
+  populateDeptDropdowns(_allDepartmentsCache);
+  var instEl = document.getElementById("addCourseInstructor");
+  if (instEl) instEl.innerHTML = '<option value="">Select Department first...</option>';
+
+  openModal("addCourseModal");
+}
+
+function submitCreateCourse() {
+  var errEl = document.getElementById("addCourseErrorMsg");
+  var btn = document.getElementById("btnSubmitAddCourse");
+
+  var code = (document.getElementById("addCourseCode") ? document.getElementById("addCourseCode").value : "").trim().toUpperCase();
+  var title = (document.getElementById("addCourseTitle") ? document.getElementById("addCourseTitle").value : "").trim();
+  var dept = (document.getElementById("addCourseDept") ? document.getElementById("addCourseDept").value : "");
+  var credits = parseInt(document.getElementById("addCourseCredits") ? document.getElementById("addCourseCredits").value : "3", 10);
+  var category = (document.getElementById("addCourseCategory") ? document.getElementById("addCourseCategory").value : "core");
+  var semester = parseInt(document.getElementById("addCourseSemester") ? document.getElementById("addCourseSemester").value : "1", 10);
+  var year = (document.getElementById("addCourseYear") ? document.getElementById("addCourseYear").value : "1st Year");
+  var division = (document.getElementById("addCourseDivision") ? document.getElementById("addCourseDivision").value : "All");
+  var room = (document.getElementById("addCourseRoom") ? document.getElementById("addCourseRoom").value : "").trim();
+  var coverage = parseInt(document.getElementById("addCourseCoverage") ? document.getElementById("addCourseCoverage").value : "0", 10);
+  var instructor = (document.getElementById("addCourseInstructor") ? document.getElementById("addCourseInstructor").value : "");
+  var status = (document.getElementById("addCourseStatus") ? document.getElementById("addCourseStatus").value : "active");
+
+  function showError(msg) {
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = "block";
+    } else {
+      showToast("Validation Error", msg, "danger");
+    }
+  }
+
+  if (!code) return showError("Course code is required.");
+  if (!title) return showError("Course title is required.");
+  if (!dept) return showError("Please select a department.");
+  if (isNaN(credits) || credits <= 0 || credits > 12) return showError("Credits must be a positive integer between 1 and 12.");
+  if (isNaN(semester) || semester < 1 || semester > 8) return showError("Semester must be between 1 and 8.");
+  if (isNaN(coverage) || coverage < 0 || coverage > 100) return showError("Syllabus coverage must be between 0 and 100%.");
+
+  if (errEl) errEl.style.display = "none";
+  if (btn) { btn.disabled = true; btn.textContent = "Creating..."; }
+
+  var payload = {
+    code: code,
+    title: title,
+    department: dept,
+    credits: credits,
+    category: category,
+    semester: semester,
+    year: year,
+    division: division,
+    room: room,
+    syllabusCoverage: coverage,
+    instructorId: instructor || null,
+    status: status
+  };
+
+  api("/api/courses", { method: "POST", body: payload })
+    .then(function (res) {
+      if (btn) { btn.disabled = false; btn.textContent = "Create Course"; }
+      closeModal("addCourseModal");
+      showToast("Course Created", "Course " + code + " has been added successfully.", "success");
+      loadCoursesList();
+    })
+    .catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = "Create Course"; }
+      showError(err.message || "Failed to create course.");
+    });
+}
+
+function openEditCourseModal(courseId) {
+  if (getActiveRole() !== "admin") {
+    showToast("Access Denied", "Only administrators can edit courses.", "warning");
+    return;
+  }
+  var errEl = document.getElementById("editCourseErrorMsg");
+  if (errEl) errEl.style.display = "none";
+
+  api("/api/courses/" + encodeURIComponent(courseId)).then(function (res) {
+    var c = res.data;
+    if (!c) return;
+
+    document.getElementById("editCourseId").value = c.id;
+    document.getElementById("editCourseCode").value = c.code || "";
+    document.getElementById("editCourseTitle").value = c.title || "";
+    document.getElementById("editCourseCredits").value = c.credits || 3;
+    document.getElementById("editCourseCategory").value = (c.category || "core").toLowerCase();
+    document.getElementById("editCourseSemester").value = c.semester || 1;
+    document.getElementById("editCourseYear").value = c.year || "1st Year";
+    document.getElementById("editCourseDivision").value = c.division || "All";
+    document.getElementById("editCourseRoom").value = c.room || "";
+    document.getElementById("editCourseCoverage").value = c.syllabusCoverage !== undefined ? c.syllabusCoverage : 0;
+    document.getElementById("editCourseStatus").value = (c.status || "active").toLowerCase();
+
+    populateDeptDropdowns(_allDepartmentsCache);
+    if (document.getElementById("editCourseDept")) {
+      document.getElementById("editCourseDept").value = c.departmentId || "";
+    }
+
+    onDepartmentChanged("editCourseDept", "editCourseInstructor", c.instructorId || c.instructorCode);
+    openModal("editCourseModal");
+  }).catch(function (err) {
+    showToast("Error", "Could not load course details: " + (err.message || ""), "danger");
+  });
+}
+
+function submitUpdateCourse() {
+  var courseId = document.getElementById("editCourseId").value;
+  var errEl = document.getElementById("editCourseErrorMsg");
+  var btn = document.getElementById("btnSubmitEditCourse");
+
+  var code = (document.getElementById("editCourseCode").value || "").trim().toUpperCase();
+  var title = (document.getElementById("editCourseTitle").value || "").trim();
+  var dept = document.getElementById("editCourseDept").value;
+  var credits = parseInt(document.getElementById("editCourseCredits").value || "3", 10);
+  var category = document.getElementById("editCourseCategory").value;
+  var semester = parseInt(document.getElementById("editCourseSemester").value || "1", 10);
+  var year = document.getElementById("editCourseYear").value;
+  var division = document.getElementById("editCourseDivision").value;
+  var room = (document.getElementById("editCourseRoom").value || "").trim();
+  var coverage = parseInt(document.getElementById("editCourseCoverage").value || "0", 10);
+  var instructor = document.getElementById("editCourseInstructor").value;
+  var status = document.getElementById("editCourseStatus").value;
+
+  function showError(msg) {
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = "block";
+    } else {
+      showToast("Validation Error", msg, "danger");
+    }
+  }
+
+  if (!code) return showError("Course code is required.");
+  if (!title) return showError("Course title is required.");
+  if (!dept) return showError("Please select a department.");
+  if (isNaN(credits) || credits <= 0 || credits > 12) return showError("Credits must be a positive integer between 1 and 12.");
+  if (isNaN(semester) || semester < 1 || semester > 8) return showError("Semester must be between 1 and 8.");
+  if (isNaN(coverage) || coverage < 0 || coverage > 100) return showError("Syllabus coverage must be between 0 and 100%.");
+
+  if (errEl) errEl.style.display = "none";
+  if (btn) { btn.disabled = true; btn.textContent = "Saving..."; }
+
+  var payload = {
+    code: code,
+    title: title,
+    departmentId: dept,
+    credits: credits,
+    category: category,
+    semester: semester,
+    year: year,
+    division: division,
+    room: room,
+    syllabusCoverage: coverage,
+    instructorId: instructor || null,
+    status: status
+  };
+
+  api("/api/courses/" + encodeURIComponent(courseId), { method: "PUT", body: payload })
+    .then(function (res) {
+      if (btn) { btn.disabled = false; btn.textContent = "Save Changes"; }
+      closeModal("editCourseModal");
+      showToast("Course Updated", "Course " + code + " has been updated successfully.", "success");
+      loadCoursesList();
+    })
+    .catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = "Save Changes"; }
+      showError(err.message || "Failed to update course.");
+    });
+}
+
+function openCourseDetailsModal(courseId) {
+  api("/api/courses/" + encodeURIComponent(courseId)).then(function (res) {
+    var c = res.data;
+    if (!c) return;
+
+    var codeEl = document.getElementById("detailCourseCode");
+    var titleEl = document.getElementById("detailCourseTitle");
+    var deptEl = document.getElementById("detailDept");
+    var credEl = document.getElementById("detailCredits");
+    var catEl = document.getElementById("detailCategory");
+    var semEl = document.getElementById("detailSemester");
+    var yrEl = document.getElementById("detailYear");
+    var divEl = document.getElementById("detailDivision");
+    var roomEl = document.getElementById("detailRoom");
+    var instEl = document.getElementById("detailInstructor");
+    var statusEl = document.getElementById("detailStatus");
+    var covText = document.getElementById("detailCoverageText");
+    var covBar = document.getElementById("detailCoverageBar");
+
+    if (codeEl) codeEl.textContent = c.code || "-";
+    if (titleEl) titleEl.textContent = c.title || "-";
+    if (deptEl) deptEl.textContent = (c.department || "-") + (c.departmentCode ? " (" + c.departmentCode + ")" : "");
+    if (credEl) credEl.textContent = (c.credits || 3) + " Credits";
+    if (catEl) catEl.textContent = (c.category || "Core").toUpperCase();
+    if (semEl) semEl.textContent = "Semester " + (c.semester || "-");
+    if (yrEl) yrEl.textContent = c.year || "-";
+    if (divEl) divEl.textContent = c.division || "All";
+    if (roomEl) roomEl.textContent = c.room || "TBA";
+    if (instEl) instEl.textContent = c.instructor || "Unassigned";
+
+    if (statusEl) {
+      var isAct = (c.status || "active").toLowerCase() === "active";
+      statusEl.textContent = isAct ? "Active" : "Inactive";
+      statusEl.className = isAct ? "badge badge-success" : "badge badge-secondary";
+    }
+
+    var cov = c.syllabusCoverage !== undefined ? c.syllabusCoverage : 0;
+    if (covText) covText.textContent = cov + "%";
+    if (covBar) covBar.style.width = cov + "%";
+
+    // Related Academic Records counts
+    var countEnr = document.getElementById("countEnrolledStudents");
+    var countAtt = document.getElementById("countAttendanceSessions");
+    var countAsg = document.getElementById("countAssignments");
+    var countRes = document.getElementById("countResults");
+    var countMat = document.getElementById("countStudyMaterials");
+    var countFa = document.getElementById("countFacultyAssignments");
+
+    if (countEnr) countEnr.textContent = c.enrolledStudentsCount !== undefined ? c.enrolledStudentsCount : 0;
+    if (countAtt) countAtt.textContent = c.attendanceSessionsCount !== undefined ? c.attendanceSessionsCount : 0;
+    if (countAsg) countAsg.textContent = c.assignmentsCount !== undefined ? c.assignmentsCount : 0;
+    if (countRes) countRes.textContent = c.resultsCount !== undefined ? c.resultsCount : 0;
+    if (countMat) countMat.textContent = c.studyMaterialsCount !== undefined ? c.studyMaterialsCount : 0;
+    if (countFa) countFa.textContent = c.facultyAssignmentsCount !== undefined ? c.facultyAssignmentsCount : 0;
+
+    openModal("courseDetailsModal");
+  }).catch(function (err) {
+    showToast("Error", "Could not load course details: " + (err.message || ""), "danger");
+  });
+}
+
+function toggleCourseStatus(courseId, currentStatus) {
+  var newStatus = (currentStatus || "active").toLowerCase() === "active" ? "inactive" : "active";
+  api("/api/courses/" + encodeURIComponent(courseId) + "/status", {
+    method: "PATCH",
+    body: { status: newStatus }
+  }).then(function (res) {
+    showToast("Status Updated", res.message || ("Course marked as " + newStatus), "success");
+    loadCoursesList();
+  }).catch(function (err) {
+    showToast("Error", err.message || "Failed to update status", "danger");
+  });
+}
+
+function deleteCourse(courseId) {
+  if (!confirm("Are you sure you want to delete this course? If academic records exist, it will need to be deactivated instead.")) {
+    return;
+  }
+  api("/api/courses/" + encodeURIComponent(courseId), { method: "DELETE" })
+    .then(function (res) {
+      showToast("Course Deleted", res.message || "Course deleted successfully.", "success");
+      loadCoursesList();
+    })
+    .catch(function (err) {
+      if (err.canDeactivate || (err.message && err.message.indexOf("associated academic records") !== -1)) {
+        if (confirm(err.message + "\n\nWould you like to deactivate this course instead?")) {
+          toggleCourseStatus(courseId, "active");
+        }
+      } else {
+        showToast("Cannot Delete Course", err.message || "Failed to delete course.", "danger");
+      }
+    });
 }
 
 // ---- Profile page ---------------------------------------------------------------
@@ -2589,6 +3151,10 @@ function openModal(id) {
   }
   if (id === "addUserModal" && role !== "admin") {
     showToast("Access Restricted", "Only Administrators can add members to the user directory.", "warning");
+    return;
+  }
+  if ((id === "addCourseModal" || id === "editCourseModal") && role !== "admin") {
+    showToast("Access Restricted", "Only Administrators can manage course offerings.", "warning");
     return;
   }
   var el = document.getElementById(id);

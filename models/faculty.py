@@ -103,6 +103,7 @@ class Faculty(db.Model):
         summaries = self._get_assignment_summaries()
         return {
             "id": self.faculty_code,
+            "facultyId": self.id,
             "facultyCode": self.faculty_code,
             "name": self.user.full_name,
             "email": self.user.email,

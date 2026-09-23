@@ -97,10 +97,13 @@ def summary():
         }
 
     else:  # admin
+        from extensions import db
         stu_cnt = Student.query.count()
         fac_cnt = Faculty.query.count()
         crs_cnt = Course.query.count()
-        act_crs_cnt = Course.query.filter_by(status="active").count()
+        act_crs_cnt = Course.query.filter(Course.status.ilike("active")).count()
+        inact_crs_cnt = Course.query.filter(Course.status.ilike("inactive")).count()
+        dept_with_crs = db.session.query(Course.department_id).distinct().count()
         data = {
             "totalStudents": stu_cnt,
             "total_students": stu_cnt,
@@ -108,8 +111,10 @@ def summary():
             "totalFaculty": fac_cnt,
             "total_faculty": fac_cnt,
             "activeCourses": act_crs_cnt,
+            "inactiveCourses": inact_crs_cnt,
             "totalCourses": crs_cnt,
             "total_courses": crs_cnt,
+            "departmentsWithCourses": dept_with_crs,
             "systemHealth": 100,
         }
 

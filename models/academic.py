@@ -105,10 +105,31 @@ class Course(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
-        db.CheckConstraint(category.in_(("core", "lab")), name="ck_course_category"),
+        db.CheckConstraint(
+            category.in_(("core", "elective", "practical", "laboratory", "open elective", "lab")),
+            name="ck_course_category"
+        ),
     )
 
+    def get_dependent_counts(self):
+        from models import Enrollment, Result, AttendanceSession, Assignment, StudyMaterial, FacultyAssignment
+        return {
+            "enrollments": Enrollment.query.filter_by(course_id=self.id).count(),
+            "results": Result.query.filter_by(course_id=self.id).count(),
+            "attendanceSessions": AttendanceSession.query.filter_by(course_id=self.id).count(),
+            "assignments": Assignment.query.filter_by(course_id=self.id).count(),
+            "studyMaterials": StudyMaterial.query.filter_by(course_id=self.id).count(),
+            "facultyAssignments": FacultyAssignment.query.filter_by(course_id=self.id).count(),
+        }
+
     def to_dict(self):
+        sem = self.semester or 1
+        year_num = (sem + 1) // 2
+        suffix = "st" if year_num == 1 else "nd" if year_num == 2 else "rd" if year_num == 3 else "th"
+        year_derived = f"{year_num}{suffix} Year"
+        divisions = sorted(list({a.division for a in self.faculty_assignments if a.division}))
+        year_label = self.faculty_assignments[0].year_label if self.faculty_assignments else year_derived
+
         return {
             "id": self.id,
             "code": self.code,
@@ -116,13 +137,19 @@ class Course(db.Model):
             "credits": self.credits,
             "category": self.category,
             "semester": self.semester,
+            "year": year_label,
+            "division": divisions[0] if len(divisions) == 1 else ("All" if not divisions else ", ".join(divisions)),
+            "assignedDivisions": divisions,
             "room": self.room,
             "syllabusCoverage": self.syllabus_coverage,
             "status": self.status,
             "department": self.department.name if self.department else None,
+            "departmentCode": self.department.code if self.department else None,
             "departmentId": self.department_id,
-            "instructor": self.instructor.user.full_name if self.instructor else None,
+            "instructor": self.instructor.user.full_name if (self.instructor and self.instructor.user) else None,
             "instructorId": self.instructor_id,
+            "instructorCode": self.instructor.faculty_code if self.instructor else None,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
 
 
