@@ -62,6 +62,31 @@ class User(db.Model):
             return self.faculty_profile.faculty_code
         return "ADM" + str(self.id).zfill(6)
 
+    @property
+    def dept_name(self):
+        if self.student_profile and self.student_profile.department:
+            return self.student_profile.department.name
+        if self.faculty_profile and self.faculty_profile.department:
+            return self.faculty_profile.department.name
+        return "Administration"
+
+    @property
+    def extra_label(self):
+        if self.student_profile:
+            return "Academic Year"
+        if self.faculty_profile:
+            return "Designation"
+        return "Access Level"
+
+    @property
+    def extra_val(self):
+        if self.student_profile:
+            sem = f" (Semester {self.student_profile.semester})" if self.student_profile.semester else ""
+            return f"{self.student_profile.year_label or ''}{sem}".strip() or "-"
+        if self.faculty_profile:
+            return self.faculty_profile.designation or "Faculty Member"
+        return "Full Administrative Privileges"
+
     def to_dict(self):
         data = {
             "id": self.id,

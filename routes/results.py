@@ -56,14 +56,17 @@ def list_results():
 def enter_result():
     user = current_user()
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["studentId", "courseCode"])
+    stu_ref = str(data.get("studentId") or data.get("student_id") or "").strip()
+    c_code = (data.get("courseCode") or data.get("course_code") or "").strip()
+    if not stu_ref or not c_code:
+        require_fields(data, ["studentId", "courseCode"])
 
     student = Student.query.filter(
-        db.or_(Student.student_code == data["studentId"], Student.prn == data["studentId"])
+        db.or_(Student.student_code == stu_ref, Student.prn == stu_ref)
     ).first()
     if not student:
         raise ValidationError("Unknown student.")
-    course = Course.query.filter_by(code=data["courseCode"]).first()
+    course = Course.query.filter_by(code=c_code).first()
     if not course:
         raise ValidationError("Unknown course.")
 
@@ -83,9 +86,12 @@ def enter_result():
         internal = round(total * 0.3, 2)
         end_sem = round(total * 0.7, 2)
     else:
-        require_fields(data, ["internal", "endSem"])
-        internal = validate_marks(data["internal"], 0, 30, "internal marks")
-        end_sem = validate_marks(data["endSem"], 0, 70, "end-semester marks")
+        internal_val = data.get("internal") if "internal" in data else data.get("internal_marks")
+        end_sem_val = data.get("endSem") if "endSem" in data else (data.get("external_marks") if "external_marks" in data else data.get("end_sem"))
+        if internal_val is None or end_sem_val is None:
+            require_fields(data, ["internal", "endSem"])
+        internal = validate_marks(internal_val, 0, 30, "internal marks")
+        end_sem = validate_marks(end_sem_val, 0, 70, "end-semester marks")
 
     result = Result.query.filter_by(student_id=student.id, course_id=course.id).first()
     if not result:
@@ -101,13 +107,24 @@ def enter_result():
     return jsonify({"success": True, "data": result.to_dict()}), 201
 
 
+@bp.get("/my")
+@roles_required("student")
+def my_results():
+    user = current_user()
+    student = user.student_profile
+    if not student:
+        return jsonify({"success": True, "data": []})
+    results = Result.query.filter_by(student_id=student.id, is_published=True).all()
+    return jsonify({"success": True, "data": [r.to_dict() for r in results]})
+
+
 @bp.put("/<int:result_id>/publish")
-@roles_required("admin")
+@roles_required("faculty", "admin")
 def toggle_publish(result_id):
     result = Result.query.get(result_id)
     if not result:
         return jsonify({"success": False, "error": "Result not found."}), 404
     data = request.get_json(silent=True) or {}
-    result.is_published = bool(data.get("isPublished", not result.is_published))
+    result.is_published = bool(data.get("isPublished", True))
     db.session.commit()
     return jsonify({"success": True, "data": result.to_dict()})

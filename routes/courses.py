@@ -63,9 +63,18 @@ def list_courses():
 @roles_required("admin")
 def create_course():
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["code", "title", "department"])
+    title = data.get("title") or data.get("name")
+    if not data.get("code") or not title or not data.get("department"):
+        require_fields(data, ["code", "title", "department"])
 
-    dept = Department.query.filter_by(name=data["department"]).first()
+    code = data["code"].strip().upper()
+
+    # Pre-check for duplicate course code
+    existing = Course.query.filter_by(code=code).first()
+    if existing:
+        return jsonify({"success": False, "error": f"Course with code '{code}' already exists."}), 400
+
+    dept = Department.resolve(data["department"])
     if not dept:
         raise ValidationError(f"Unknown department: {data['department']}")
 
@@ -76,10 +85,10 @@ def create_course():
             raise ValidationError("Unknown instructor code.")
 
     course = Course(
-        code=data["code"].strip().upper(),
-        title=data["title"].strip(),
+        code=code,
+        title=title.strip(),
         credits=data.get("credits", 3),
-        category=data.get("category", "core"),
+        category=(data.get("category") or "core").strip().lower(),
         semester=data.get("semester", 1),
         room=data.get("room"),
         department_id=dept.id,
@@ -93,7 +102,10 @@ def create_course():
 @bp.put("/<string:code>")
 @roles_required("admin", "faculty")
 def update_course(code):
-    course = Course.query.filter_by(code=code).first()
+    q = Course.query.filter_by(code=code)
+    if code.isdigit():
+        q = Course.query.filter(db.or_(Course.id == int(code), Course.code == code))
+    course = q.first()
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
 
@@ -102,16 +114,23 @@ def update_course(code):
         return jsonify({"success": False, "error": "You can only update your own courses."}), 403
 
     data = request.get_json(silent=True) or {}
-    if "title" in data:
-        course.title = data["title"]
+    if "title" in data and data["title"].strip():
+        course.title = data["title"].strip()
+    if "department" in data:
+        dept = Department.resolve(data["department"])
+        if not dept:
+            raise ValidationError(f"Unknown department: {data['department']}")
+        course.department_id = dept.id
     if "credits" in data:
         course.credits = data["credits"]
+    if "category" in data:
+        course.category = str(data["category"]).strip().lower()
     if "room" in data:
         course.room = data["room"]
     if "syllabusCoverage" in data:
         coverage = int(data["syllabusCoverage"])
-        if not (0 <= coverage <= 100):
-            raise ValidationError("syllabusCoverage must be between 0 and 100.")
+    if not (0 <= coverage <= 100):
+        raise ValidationError("syllabusCoverage must be between 0 and 100.")
         course.syllabus_coverage = coverage
     if "status" in data:
         course.status = data["status"]
@@ -123,9 +142,86 @@ def update_course(code):
 @bp.delete("/<string:code>")
 @roles_required("admin")
 def delete_course(code):
-    course = Course.query.filter_by(code=code).first()
+    q = Course.query.filter_by(code=code)
+    if code.isdigit():
+        q = Course.query.filter(db.or_(Course.id == int(code), Course.code == code))
+    course = q.first()
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
     db.session.delete(course)
     db.session.commit()
     return jsonify({"success": True})
+
+
+@bp.get("/<string:code>/students")
+@roles_required("admin", "faculty")
+def list_course_students(code):
+    q = Course.query.filter_by(code=code)
+    if code.isdigit():
+        q = Course.query.filter(db.or_(Course.id == int(code), Course.code == code))
+    course = q.first()
+    if not course:
+        return jsonify({"success": False, "error": "Course not found."}), 404
+    from models import Student, Enrollment
+    students = Student.query.join(Enrollment).filter(Enrollment.course_id == course.id).all()
+    return jsonify({"success": True, "data": [s.to_dict() for s in students]})
+
+
+@bp.post("/<string:code>/enroll")
+@roles_required("admin", "faculty")
+def enroll_student(code):
+    q = Course.query.filter_by(code=code)
+    if code.isdigit():
+        q = Course.query.filter(db.or_(Course.id == int(code), Course.code == code))
+    course = q.first()
+    if not course:
+        return jsonify({"success": False, "error": "Course not found."}), 404
+    data = request.get_json(silent=True) or {}
+    stu_ref = str(data.get("studentId") or data.get("student_id") or "").strip()
+    if not stu_ref:
+        require_fields(data, ["studentId"])
+    from models import Student, Enrollment
+    q_stu = Student.query.filter(db.or_(Student.student_code == stu_ref, Student.prn == stu_ref))
+    if stu_ref.isdigit():
+        q_stu = Student.query.filter(db.or_(Student.id == int(stu_ref), Student.student_code == stu_ref, Student.prn == stu_ref))
+    student = q_stu.first()
+    if not student:
+        return jsonify({"success": False, "error": f"Unknown student: {stu_ref}"}), 404
+
+    existing = Enrollment.query.filter_by(student_id=student.id, course_id=course.id).first()
+    if existing:
+        return jsonify({"success": True, "message": "Student already enrolled in this course.", "data": existing.to_dict()})
+
+    enr = Enrollment(student_id=student.id, course_id=course.id)
+    db.session.add(enr)
+    db.session.commit()
+    return jsonify({"success": True, "data": enr.to_dict()}), 201
+
+
+@bp.delete("/<string:code>/enroll")
+@roles_required("admin")
+def unenroll_student(code):
+    q = Course.query.filter_by(code=code)
+    if code.isdigit():
+        q = Course.query.filter(db.or_(Course.id == int(code), Course.code == code))
+    course = q.first()
+    if not course:
+        return jsonify({"success": False, "error": "Course not found."}), 404
+    data = request.get_json(silent=True) or {}
+    stu_ref = str(data.get("studentId") or data.get("student_id") or "").strip()
+    if not stu_ref:
+        require_fields(data, ["studentId"])
+    from models import Student, Enrollment
+    stu_ref = str(data["studentId"]).strip()
+    q_stu = Student.query.filter(db.or_(Student.student_code == stu_ref, Student.prn == stu_ref))
+    if stu_ref.isdigit():
+        q_stu = Student.query.filter(db.or_(Student.id == int(stu_ref), Student.student_code == stu_ref, Student.prn == stu_ref))
+    student = q_stu.first()
+    if not student:
+        return jsonify({"success": False, "error": f"Unknown student: {stu_ref}"}), 404
+
+    enr = Enrollment.query.filter_by(student_id=student.id, course_id=course.id).first()
+    if enr:
+        db.session.delete(enr)
+        db.session.commit()
+    return jsonify({"success": True, "message": "Student unenrolled."})

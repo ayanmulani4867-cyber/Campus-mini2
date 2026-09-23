@@ -37,10 +37,11 @@ def update_profile():
             raise ValidationError("Phone number cannot be empty.")
         user.phone = phone
 
-    if "dept" in data and data["dept"].strip():
-        dept = Department.query.filter_by(name=data["dept"].strip()).first()
+    dept_input = data.get("dept") or data.get("department")
+    if dept_input and str(dept_input).strip():
+        dept = Department.resolve(str(dept_input).strip())
         if not dept:
-            raise ValidationError(f"Unknown department: {data['dept']}")
+            raise ValidationError(f"Unknown department: {dept_input}")
         if user.student_profile:
             user.student_profile.department_id = dept.id
         elif user.faculty_profile:

@@ -22,15 +22,15 @@
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
-          <option value="student">Student</option>
-          <option value="faculty">Faculty</option>
-          <option value="admin">Admin</option>
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>
       </div>
 
       <a href="profile.html" class="user-chip">
-        <div class="user-avatar-mini" id="topbarAvatar">A</div>
-        <span id="topbarUserName">John Snow</span>
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
       </a>
     </div>
   </header>
@@ -85,78 +85,6 @@
             </tr>
           </thead>
           <tbody id="materialsTableBody">
-            <tr class="filterable-item" data-category="notes">
-              <td>
-                <strong>📄 Module 1: Relational Algebra & SQL Normalization</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">PDF Document • Updated Feb 20, 2026</div>
-              </td>
-              <td>DBMS (CS601)</td>
-              <td><span class="badge badge-primary">Lecture Notes</span></td>
-              <td>P B Patil</td>
-              <td>4.2 MB</td>
-              <td><button class="btn btn-secondary btn-sm" onclick="alert('Downloading: Module 1 DBMS Notes.pdf')">📥 Download</button></td>
-            </tr>
-
-            <tr class="filterable-item" data-category="lab">
-              <td>
-                <strong>📘 DBMS Practical Lab Manual (Queries & Triggers)</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">PDF Document • Updated Feb 15, 2026</div>
-              </td>
-              <td>DBMS Lab (CS691)</td>
-              <td><span class="badge badge-success">Lab Manual</span></td>
-              <td>P B Patil</td>
-              <td>2.8 MB</td>
-              <td><button class="btn btn-secondary btn-sm" onclick="alert('Downloading: DBMS Lab Manual.pdf')">📥 Download</button></td>
-            </tr>
-
-            <tr class="filterable-item" data-category="notes">
-              <td>
-                <strong>📄 TCP/IP Protocol Suite & Subnetting Handout</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">PDF Document • Updated Feb 18, 2026</div>
-              </td>
-              <td>Networks (CS602)</td>
-              <td><span class="badge badge-primary">Lecture Notes</span></td>
-              <td>Prof. Rajesh Verma</td>
-              <td>3.5 MB</td>
-              <td><button class="btn btn-secondary btn-sm" onclick="alert('Downloading: TCP-IP Handout.pdf')">📥 Download</button></td>
-            </tr>
-
-            <tr class="filterable-item" data-category="lab">
-              <td>
-                <strong>📘 Socket Programming in C & Java Guide</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">ZIP Archive • Updated Feb 10, 2026</div>
-              </td>
-              <td>Networks Lab (CS692)</td>
-              <td><span class="badge badge-success">Lab Manual</span></td>
-              <td>Prof. Rajesh Verma</td>
-              <td>6.1 MB</td>
-              <td><button class="btn btn-secondary btn-sm" onclick="alert('Downloading: Socket Programming Code.zip')">📥 Download</button></td>
-            </tr>
-
-            <tr class="filterable-item" data-category="exam">
-              <td>
-                <strong>📝 Previous 3 Years Mid-Term Solved Question Papers</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">PDF Document • Updated Feb 12, 2026</div>
-              </td>
-              <td>Algorithms (CS603)</td>
-              <td><span class="badge badge-warning">Question Papers</span></td>
-              <td>Academic Cell</td>
-              <td>5.4 MB</td>
-              <td><button class="btn btn-secondary btn-sm" onclick="alert('Downloading: Algorithms Question Bank.pdf')">📥 Download</button></td>
-            </tr>
-
-            <tr class="filterable-item" data-category="notes">
-              <td>
-                <strong>📄 Agile Methodology & Scrum Framework Slides</strong>
-                <div style="font-size: 12px; color: var(--text-muted);">PPTX Document • Updated Feb 08, 2026</div>
-              </td>
-              <td>Software Eng (CS604)</td>
-              <td><span class="badge badge-info">Div C</span></td>
-              <td><span class="badge badge-primary">Lecture Notes</span></td>
-              <td>Prof. K. Raman</td>
-              <td>8.0 MB</td>
-              <td><button class="btn btn-secondary btn-sm" onclick="alert('Downloading: Agile Scrum Slides.pptx')">📥 Download</button></td>
-            </tr>
           </tbody>
         </table>
       </div>

@@ -22,15 +22,15 @@
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
-          <option value="student">Student</option>
-          <option value="faculty">Faculty</option>
-          <option value="admin">Admin</option>
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>
       </div>
 
       <a href="profile.html" class="user-chip">
-        <div class="user-avatar-mini" id="topbarAvatar">A</div>
-        <span id="topbarUserName">John Snow</span>
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
       </a>
     </div>
   </header>
@@ -65,9 +65,9 @@
           <div class="profile-avatar-wrap">
             <img src="images/profile-placeholder.png" alt="Profile Avatar" class="profile-pic" id="profilePic">
           </div>
-          <h3 class="profile-name" id="profileName">John Snow</h3>
+          <h3 class="profile-name" id="profileName">{{ current_user.full_name if current_user else '' }}</h3>
           <div class="profile-role-tag">
-            <span class="badge badge-primary" id="profileRoleTag">Student</span>
+            <span class="badge badge-primary" id="profileRoleTag">{{ current_user.role_label if current_user else '' }}</span>
           </div>
 
           <div class="profile-details-list">
@@ -98,35 +98,35 @@
             <div class="list-item">
               <div class="list-item-main">
                 <span class="info-label">Unique Identity ID</span>
-                <h4 id="pId">STU2024001</h4>
+                <h4 id="pId">{{ current_user.public_id if current_user else '' }}</h4>
               </div>
             </div>
 
             <div class="list-item">
               <div class="list-item-main">
                 <span class="info-label">Official Email Address</span>
-                <h4 id="pEmail">rahul@campus.edu</h4>
+                <h4 id="pEmail">{{ current_user.email if current_user else '' }}</h4>
               </div>
             </div>
 
             <div class="list-item">
               <div class="list-item-main">
                 <span class="info-label">Phone Number</span>
-                <h4 id="pPhone">-</h4>
+                <h4 id="pPhone">{{ current_user.phone or '-' if current_user else '-' }}</h4>
               </div>
             </div>
 
             <div class="list-item">
               <div class="list-item-main">
                 <span class="info-label">Department / Faculty</span>
-                <h4 id="pDept">Computer Science</h4>
+                <h4 id="pDept">{{ current_user.dept_name if current_user else '' }}</h4>
               </div>
             </div>
 
             <div class="list-item">
               <div class="list-item-main">
-                <span class="info-label" id="pExtraLabel">Academic Year</span>
-                <h4 id="pExtra">3rd Year (6th Semester)</h4>
+                <span class="info-label" id="pExtraLabel">{{ current_user.extra_label if current_user else 'Academic Info' }}</span>
+                <h4 id="pExtra">{{ current_user.extra_val if current_user else '-' }}</h4>
               </div>
             </div>
           </div>

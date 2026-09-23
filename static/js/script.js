@@ -630,6 +630,7 @@ window.logoutUser = function (e) {
   api("/api/auth/logout", { method: "POST" }).finally(function () {
     sessionStorage.removeItem("campus_session_token");
     sessionStorage.removeItem("campus_user_role");
+    sessionStorage.removeItem("campus_role");
     CURRENT_USER = null;
     window.location.href = "login.html";
   });
@@ -639,6 +640,11 @@ window.logoutUser = function (e) {
 function initLogin() {
   var form = document.getElementById("loginForm");
   if (!form) return;
+
+  // Clean stale session tokens whenever reaching the login screen
+  sessionStorage.removeItem("campus_session_token");
+  sessionStorage.removeItem("campus_user_role");
+  CURRENT_USER = null;
 
   var tabs = document.querySelectorAll(".role-tab");
   var selectedRole = "student";
@@ -1782,6 +1788,21 @@ function initUsers(role) {
   // Setup initial toggle state
   window.toggleMemberTypeFields();
 
+  // Dynamically load departments from backend database
+  api("/api/departments").then(function (res) {
+    var depts = res.data || [];
+    var deptSelect = document.getElementById("newMemberDept");
+    if (deptSelect && depts.length) {
+      var currentVal = deptSelect.value;
+      deptSelect.innerHTML = depts.map(function (d) {
+        return '<option value="' + escapeHtml(d.name) + '">' + escapeHtml(d.name) + '</option>';
+      }).join('');
+      if (currentVal && Array.from(deptSelect.options).some(function (opt) { return opt.value === currentVal; })) {
+        deptSelect.value = currentVal;
+      }
+    }
+  }).catch(function () {});
+
   var typeSelect = document.getElementById("newMemberType");
   if (typeSelect) {
     typeSelect.addEventListener("change", window.toggleMemberTypeFields);
@@ -2215,8 +2236,12 @@ window.viewDirectoryMember = function (type, code) {
 // ---- Directory Member Editing ------------------------------------------------------
 window.editDirectoryMember = function (type, code) {
   var endpoint = type === "faculty" ? "/api/faculty/" : "/api/students/";
-  api(endpoint + encodeURIComponent(code)).then(function (res) {
-    var d = res.data || {};
+  Promise.all([
+    api(endpoint + encodeURIComponent(code)),
+    api("/api/departments").catch(function() { return { data: [] }; })
+  ]).then(function (results) {
+    var d = (results[0] && results[0].data) || {};
+    var depts = (results[1] && results[1].data) || [];
     var modal = document.getElementById("editUserModal");
     var body = document.getElementById("editModalBody");
     var heading = document.getElementById("editModalHeading");
@@ -2227,10 +2252,19 @@ window.editDirectoryMember = function (type, code) {
 
     if (heading) heading.textContent = "Edit " + (type === "faculty" ? "Faculty" : "Student") + " Details";
 
+    var currentDeptName = d.dept || d.department || "";
+    var deptOptions = depts.map(function(dept) {
+      var sel = (dept.name === currentDeptName || dept.code === currentDeptName) ? " selected" : "";
+      return '<option value="' + escapeHtml(dept.name) + '"' + sel + '>' + escapeHtml(dept.name) + '</option>';
+    }).join("");
+
     if (type === "student") {
       body.innerHTML =
         '<div class="form-group"><label>Full Name *</label><input type="text" class="form-input" id="editMemberName" value="' + escapeHtml(d.name) + '" required></div>' +
-        '<div class="form-group"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+          '<div class="form-group"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
+          '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept">' + deptOptions + '</select></div>' +
+        '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
           '<div class="form-group"><label>Academic Year</label><select class="form-select" id="editMemberYear">' +
             ['1st Year', '2nd Year', '3rd Year', '4th Year'].map(function(y){return '<option value="' + y + '"' + (d.year === y ? ' selected' : '') + '>' + y + '</option>';}).join('') +
@@ -2251,6 +2285,10 @@ window.editDirectoryMember = function (type, code) {
           semester: document.getElementById("editMemberSem").value,
           division: document.getElementById("editMemberDiv").value
         };
+        var deptEl = document.getElementById("editMemberDept");
+        if (deptEl && deptEl.value) {
+          payload.department = deptEl.value;
+        }
 
         if (!payload.name || !payload.phone) {
           showInlineError(body, "Please fill in all required fields.");
@@ -2266,6 +2304,10 @@ window.editDirectoryMember = function (type, code) {
           if (row) {
             var nameEl = row.querySelector(".col-member-name");
             if (nameEl) nameEl.textContent = payload.name;
+            if (payload.department) {
+              var deptCol = row.querySelector(".col-member-dept");
+              if (deptCol) deptCol.textContent = payload.department;
+            }
             var classEl = row.querySelector(".col-member-class");
             if (classEl) {
               classEl.innerHTML = '<span class="badge badge-secondary">' + escapeHtml(payload.year) + ' • Sem ' + payload.semester + ' • Div ' + escapeHtml(payload.division) + '</span>';
@@ -2290,7 +2332,8 @@ window.editDirectoryMember = function (type, code) {
           '<div class="form-group"><label>Designation *</label><select class="form-select" id="editMemberDesignation">' +
             ['Assistant Professor', 'Associate Professor', 'Professor', 'Head of Department'].map(function(des){return '<option value="' + des + '"' + (d.designation === des ? ' selected' : '') + '>' + des + '</option>';}).join('') +
           '</select></div>' +
-        '</div>';
+        '</div>' +
+        '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept">' + deptOptions + '</select></div>';
 
       saveBtn.onclick = function () {
         var payload = {
@@ -2298,6 +2341,10 @@ window.editDirectoryMember = function (type, code) {
           phone: document.getElementById("editMemberPhone").value.trim(),
           designation: document.getElementById("editMemberDesignation").value
         };
+        var deptEl = document.getElementById("editMemberDept");
+        if (deptEl && deptEl.value) {
+          payload.department = deptEl.value;
+        }
 
         if (!payload.name || !payload.phone) {
           showInlineError(body, "Please fill in all required fields.");
@@ -2313,6 +2360,10 @@ window.editDirectoryMember = function (type, code) {
           if (row) {
             var nameEl = row.querySelector(".col-member-name");
             if (nameEl) nameEl.textContent = payload.name;
+            if (payload.department) {
+              var deptCol = row.querySelector(".col-member-dept");
+              if (deptCol) deptCol.textContent = payload.department;
+            }
             var classEl = row.querySelector(".col-member-class");
             if (classEl) {
               classEl.innerHTML = '<span class="badge badge-secondary">' + escapeHtml(payload.designation) + '</span>';

@@ -53,9 +53,12 @@ def list_assignments():
 def create_assignment():
     user = current_user()
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["title", "courseCode", "dueDate"])
+    c_code = (data.get("courseCode") or data.get("course_code") or "").strip()
+    raw_due = data.get("dueDate") or data.get("due_date")
+    if not data.get("title") or not c_code or not raw_due:
+        require_fields(data, ["title", "courseCode", "dueDate"])
 
-    course = Course.query.filter_by(code=data["courseCode"]).first()
+    course = Course.query.filter_by(code=c_code).first()
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
 
@@ -63,8 +66,11 @@ def create_assignment():
     if user.role == "faculty":
         fac_id = user.faculty_profile.id
     elif user.role == "admin":
-        if "facultyId" in data:
-            fac = Faculty.query.filter_by(faculty_code=data["facultyId"]).first()
+        fac_ref = data.get("facultyId") or data.get("faculty_id")
+        if fac_ref:
+            fac = Faculty.query.filter(
+                db.or_(Faculty.faculty_code == fac_ref, Faculty.id == int(fac_ref) if str(fac_ref).isdigit() else False)
+            ).first()
             if fac:
                 fac_id = fac.id
         if not fac_id and course.instructor_id:
@@ -77,7 +83,7 @@ def create_assignment():
         return jsonify({"success": False, "error": "Faculty instructor is required."}), 400
 
     try:
-        due_d = datetime.fromisoformat(str(data["dueDate"]).replace("Z", "+00:00"))
+        due_d = datetime.fromisoformat(str(raw_due).replace("Z", "+00:00"))
     except (ValueError, TypeError):
         raise ValidationError("Invalid due date format. Use ISO format (YYYY-MM-DDTHH:MM).")
 
@@ -90,7 +96,7 @@ def create_assignment():
         semester=course.semester,
         division=(data.get("division") or "All").strip().upper(),
         due_date=due_d,
-        total_points=int(data.get("totalPoints", 100)),
+        total_points=int(data.get("totalPoints") or data.get("total_points") or data.get("total_marks") or data.get("totalMarks") or 100),
     )
     db.session.add(assignment)
     db.session.commit()
@@ -136,9 +142,9 @@ def submit_assignment(assignment_id):
 
     if request.is_json:
         data = request.get_json(silent=True) or {}
-        text_content = data.get("submissionText", "").strip()
+        text_content = (data.get("submissionText") or data.get("submission_text") or "").strip()
     else:
-        text_content = (request.form.get("submissionText") or "").strip()
+        text_content = (request.form.get("submissionText") or request.form.get("submission_text") or "").strip()
         uploaded = request.files.get("file")
         if uploaded and uploaded.filename:
             try:
@@ -219,27 +225,57 @@ def download_submission(assignment_id, submission_id):
     return jsonify({"success": False, "error": "No file attached to this submission."}), 404
 
 
-@bp.post("/<int:assignment_id>/grade")
+@bp.get("/submissions/<int:submission_id>/download")
+@login_required
+def download_submission_flat(submission_id):
+    """Flat URL: GET /api/assignments/submissions/<id>/download"""
+    from services.storage_service import storage_service
+    user = current_user()
+    submission = AssignmentSubmission.query.get(submission_id)
+    if not submission:
+        return jsonify({"success": False, "error": "Submission not found."}), 404
+
+    # Authorization
+    if user.role == "student":
+        student = user.student_profile
+        if not student or submission.student_id != student.id:
+            return jsonify({"success": False, "error": "You cannot access another student's submission."}), 403
+    elif user.role == "faculty":
+        faculty = user.faculty_profile
+        assignment = submission.assignment
+        is_owner = (assignment.faculty_id == faculty.id) or (assignment.course.instructor_id == faculty.id) or any(
+            a.course_id == assignment.course_id for a in faculty.assignments
+        )
+        if not is_owner:
+            return jsonify({"success": False, "error": "You do not have permission to view this submission."}), 403
+
+    if submission.file_data:
+        return storage_service.create_download_response(
+            submission.file_data,
+            submission.file_name or f"submission_{submission.id}.pdf",
+            submission.mime_type,
+        )
+
+    return jsonify({"success": False, "error": "No file attached to this submission."}), 404
+
+
+@bp.post("/submissions/<int:submission_id>/grade")
 @roles_required("faculty", "admin")
-def grade_submission(assignment_id):
+def grade_submission_flat(submission_id):
+    """Flat URL: POST /api/assignments/submissions/<id>/grade"""
     user = current_user()
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["studentId", "grade"])
 
-    student = Student.query.filter(
-        db.or_(Student.student_code == data["studentId"], Student.prn == data["studentId"])
-    ).first()
-    if not student:
-        return jsonify({"success": False, "error": "Student not found."}), 404
-
-    submission = AssignmentSubmission.query.filter_by(
-        assignment_id=assignment_id, student_id=student.id
-    ).first()
+    submission = AssignmentSubmission.query.get(submission_id)
     if not submission:
-        return jsonify({"success": False, "error": "Submission not found for this student."}), 404
+        return jsonify({"success": False, "error": "Submission not found."}), 404
+
+    grade_val = data.get("grade") or data.get("marks_obtained")
+    if grade_val is None:
+        return jsonify({"success": False, "error": "grade or marks_obtained is required."}), 400
 
     try:
-        grade_val = float(data["grade"])
+        grade_val = float(grade_val)
     except (ValueError, TypeError):
         raise ValidationError("Grade must be a number.")
 
@@ -253,6 +289,77 @@ def grade_submission(assignment_id):
     return jsonify({"success": True, "data": submission.to_dict()})
 
 
+@bp.post("/<int:assignment_id>/grade")
+@roles_required("faculty", "admin")
+def grade_submission(assignment_id):
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+
+    # Support both flat submission_id-based grading and student-lookup grading
+    student_ref = data.get("studentId") or data.get("student_id")
+    if not student_ref:
+        require_fields(data, ["studentId"])
+
+    student = Student.query.filter(
+        db.or_(Student.student_code == student_ref, Student.prn == student_ref)
+    ).first()
+    if not student:
+        return jsonify({"success": False, "error": "Student not found."}), 404
+
+    submission = AssignmentSubmission.query.filter_by(
+        assignment_id=assignment_id, student_id=student.id
+    ).first()
+    if not submission:
+        return jsonify({"success": False, "error": "Submission not found for this student."}), 404
+
+    grade_val = data.get("grade") or data.get("marks_obtained")
+    if grade_val is None:
+        return jsonify({"success": False, "error": "grade or marks_obtained is required."}), 400
+
+    try:
+        grade_val = float(grade_val)
+    except (ValueError, TypeError):
+        raise ValidationError("Grade must be a number.")
+
+    submission.grade = grade_val
+    submission.feedback = data.get("feedback")
+    submission.status = "graded"
+    if user.faculty_profile:
+        submission.graded_by_id = user.faculty_profile.id
+
+    db.session.commit()
+    return jsonify({"success": True, "data": submission.to_dict()})
+
+
+@bp.put("/<int:assignment_id>")
+@roles_required("faculty", "admin")
+def update_assignment(assignment_id):
+    assignment = Assignment.query.get(assignment_id)
+    if not assignment:
+        return jsonify({"success": False, "error": "Assignment not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    if "title" in data and data["title"].strip():
+        assignment.title = str(data["title"]).strip()
+    if "description" in data:
+        assignment.description = data["description"]
+    if "division" in data:
+        assignment.division = str(data["division"]).strip().upper()
+    if "totalPoints" in data:
+        try:
+            assignment.total_points = int(data["totalPoints"])
+        except (ValueError, TypeError):
+            pass
+    if "dueDate" in data:
+        try:
+            assignment.due_date = datetime.fromisoformat(str(data["dueDate"]).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid due date format. Use ISO format (YYYY-MM-DDTHH:MM).")
+
+    db.session.commit()
+    return jsonify({"success": True, "data": assignment.to_dict()})
+
+
 @bp.delete("/<int:assignment_id>")
 @roles_required("faculty", "admin")
 def delete_assignment(assignment_id):
@@ -263,3 +370,4 @@ def delete_assignment(assignment_id):
     db.session.delete(assignment)
     db.session.commit()
     return jsonify({"success": True, "message": "Assignment deleted."})
+

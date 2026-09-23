@@ -77,6 +77,7 @@ def login():
     return jsonify({
         "success": True,
         "data": user.to_dict(),
+        "user": user.to_dict(),
         "sessionToken": session_token
     })
 
@@ -119,8 +120,16 @@ def logout():
             user_session.is_active = False
             db.session.commit()
 
+    user_id = session.get("user_id")
+    if user_id:
+        UserSession.query.filter_by(user_id=user_id, is_active=True).update({"is_active": False})
+        db.session.commit()
+
     session.clear()
-    return jsonify({"success": True})
+    resp = jsonify({"success": True})
+    resp.delete_cookie("session")
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
 
 
 @bp.get("/me")

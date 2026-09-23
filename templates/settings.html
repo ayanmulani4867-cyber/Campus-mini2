@@ -22,15 +22,15 @@
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
-          <option value="student">Student</option>
-          <option value="faculty">Faculty</option>
-          <option value="admin">Admin</option>
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>
       </div>
 
       <a href="profile.html" class="user-chip">
-        <div class="user-avatar-mini" id="topbarAvatar">A</div>
-        <span id="topbarUserName">John Snow</span>
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
       </a>
     </div>
   </header>

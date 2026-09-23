@@ -22,15 +22,15 @@
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
-          <option value="student">Student</option>
-          <option value="faculty">Faculty</option>
-          <option value="admin">Admin</option>
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>
       </div>
 
       <a href="profile.html" class="user-chip">
-        <div class="user-avatar-mini" id="topbarAvatar">A</div>
-        <span id="topbarUserName">John Snow</span>
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
       </a>
     </div>
   </header>
@@ -71,151 +71,6 @@
 
       <!-- Courses Grid -->
       <div class="grid-3" id="coursesContainer">
-        
-        <!-- Course 1 -->
-        <div class="card filterable-item" data-category="core">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-primary">CS601</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">4 Credits</span>
-            </div>
-            <span class="badge badge-success">Active</span>
-          </div>
-          <h3 style="font-size: 17px; margin-bottom: 6px;">Database Management Systems</h3>
-          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: P B Patil • Room 304</p>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
-            <span>Syllabus Coverage</span>
-            <strong>80%</strong>
-          </div>
-          <div class="progress-bar-bg" style="margin-bottom: 16px;">
-            <div class="progress-bar-fill progress-green" style="width: 80%;"></div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
-            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
-          </div>
-        </div>
-
-        <!-- Course 2 -->
-        <div class="card filterable-item" data-category="core">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-primary">CS602</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">4 Credits</span>
-            </div>
-            <span class="badge badge-success">Active</span>
-          </div>
-          <h3 style="font-size: 17px; margin-bottom: 6px;">Computer Networks & Security</h3>
-          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Prof. Rajesh Verma • Room 202</p>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
-            <span>Syllabus Coverage</span>
-            <strong>65%</strong>
-          </div>
-          <div class="progress-bar-bg" style="margin-bottom: 16px;">
-            <div class="progress-bar-fill progress-amber" style="width: 65%;"></div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
-            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
-          </div>
-        </div>
-
-        <!-- Course 3 -->
-        <div class="card filterable-item" data-category="core">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-primary">CS603</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">4 Credits</span>
-            </div>
-            <span class="badge badge-success">Active</span>
-          </div>
-          <h3 style="font-size: 17px; margin-bottom: 6px;">Design & Analysis of Algorithms</h3>
-          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Dr. Sneha Mukherjee • Room 301</p>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
-            <span>Syllabus Coverage</span>
-            <strong>75%</strong>
-          </div>
-          <div class="progress-bar-bg" style="margin-bottom: 16px;">
-            <div class="progress-bar-fill progress-green" style="width: 75%;"></div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
-            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
-          </div>
-        </div>
-
-        <!-- Course 4 -->
-        <div class="card filterable-item" data-category="core">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-primary">CS604</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">3 Credits</span>
-            </div>
-            <span class="badge badge-success">Active</span>
-          </div>
-          <h3 style="font-size: 17px; margin-bottom: 6px;">Software Engineering & Agile</h3>
-          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Prof. K. Raman • Room 105</p>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
-            <span>Syllabus Coverage</span>
-            <strong>90%</strong>
-          </div>
-          <div class="progress-bar-bg" style="margin-bottom: 16px;">
-            <div class="progress-bar-fill progress-green" style="width: 90%;"></div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
-            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
-          </div>
-        </div>
-
-        <!-- Course 5 -->
-        <div class="card filterable-item" data-category="lab">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-info">CS691</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">2 Credits</span>
-            </div>
-            <span class="badge badge-success">Lab</span>
-          </div>
-          <h3 style="font-size: 17px; margin-bottom: 6px;">Database & SQL Practical Lab</h3>
-          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: P B Patil • Lab Block 2</p>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
-            <span>Syllabus Coverage</span>
-            <strong>85%</strong>
-          </div>
-          <div class="progress-bar-bg" style="margin-bottom: 16px;">
-            <div class="progress-bar-fill progress-green" style="width: 85%;"></div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
-            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
-          </div>
-        </div>
-
-        <!-- Course 6 -->
-        <div class="card filterable-item" data-category="lab">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-info">CS692</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">2 Credits</span>
-            </div>
-            <span class="badge badge-success">Lab</span>
-          </div>
-          <h3 style="font-size: 17px; margin-bottom: 6px;">Network Socket Programming Lab</h3>
-          <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 12px;">Instructor: Prof. Rajesh Verma • Lab Block 4</p>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
-            <span>Syllabus Coverage</span>
-            <strong>70%</strong>
-          </div>
-          <div class="progress-bar-bg" style="margin-bottom: 16px;">
-            <div class="progress-bar-fill progress-green" style="width: 70%;"></div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="materials.html" class="btn btn-secondary btn-sm full-width">Notes</a>
-            <a href="attendance.html" class="btn btn-secondary btn-sm full-width">Attendance</a>
-          </div>
-        </div>
-
       </div>
     </main>
   </div>

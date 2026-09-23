@@ -141,14 +141,17 @@ def get_roll_call():
 
 
 @bp.post("/roll-call")
-@roles_required("faculty")
+@bp.post("/sessions")
+@roles_required("faculty", "admin")
 def save_roll_call():
-    """Faculty saves the day's roll-call: {courseCode, date, division, records: [{studentId, status}]}"""
+    """Faculty or Admin saves the day's roll-call/session: {courseCode, date, division, records: [{studentId, status}]}"""
     user = current_user()
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["courseCode", "records"])
+    course_code = data.get("courseCode") or data.get("course_code")
+    if not course_code or not data.get("records"):
+        raise ValidationError("Course code and records list are required.")
 
-    course = Course.query.filter_by(code=data["courseCode"]).first()
+    course = Course.query.filter_by(code=course_code).first()
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
 
@@ -184,24 +187,30 @@ def save_roll_call():
         db.session.flush()
 
     for rec in data["records"]:
-        if "studentId" not in rec or "status" not in rec:
-            raise ValidationError("Each record needs studentId and status.")
-        if rec["status"] not in ("present", "absent", "late"):
+        stu_id = rec.get("studentId") or rec.get("student_id")
+        status = (rec.get("status") or "").lower()
+        if not stu_id or not status:
+            raise ValidationError("Each record needs studentId/student_id and status.")
+        if status not in ("present", "absent", "late"):
             raise ValidationError("status must be present, absent, or late.")
         student = Student.query.filter(
-            db.or_(Student.student_code == rec["studentId"], Student.prn == rec["studentId"])
+            db.or_(
+                Student.student_code == stu_id,
+                Student.prn == stu_id,
+                Student.id == int(stu_id) if str(stu_id).isdigit() else False
+            )
         ).first()
         if not student:
-            raise ValidationError(f"Unknown student: {rec['studentId']}")
+            raise ValidationError(f"Unknown student: {stu_id}")
 
         existing = AttendanceRecord.query.filter_by(
             session_id=session_row.id, student_id=student.id
         ).first()
         if existing:
-            existing.status = rec["status"]
+            existing.status = status
         else:
             db.session.add(AttendanceRecord(
-                session_id=session_row.id, student_id=student.id, status=rec["status"]
+                session_id=session_row.id, student_id=student.id, status=status
             ))
 
     db.session.commit()

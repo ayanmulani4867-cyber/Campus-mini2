@@ -23,15 +23,15 @@
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
-          <option value="student">Student</option>
-          <option value="faculty">Faculty</option>
-          <option value="admin">Admin</option>
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>
       </div>
 
       <a href="profile.html" class="user-chip">
-        <div class="user-avatar-mini" id="topbarAvatar">A</div>
-        <span id="topbarUserName">John Snow</span>
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
       </a>
     </div>
   </header>
@@ -73,26 +73,26 @@
         <div class="card-grid" style="margin-bottom: 20px;">
           <div class="stat-card stat-green">
             <div class="stat-card-header">Current SGPA</div>
-            <div class="stat-card-value">8.85</div>
-            <div class="stat-card-desc">Semester 6 Grade Point Average</div>
+            <div class="stat-card-value" id="studentSgpa">--</div>
+            <div class="stat-card-desc">Semester Grade Point Average</div>
           </div>
 
           <div class="stat-card">
             <div class="stat-card-header">Cumulative CGPA</div>
-            <div class="stat-card-value">8.72</div>
+            <div class="stat-card-value" id="studentCgpa">--</div>
             <div class="stat-card-desc">Overall Academic Score</div>
           </div>
 
           <div class="stat-card stat-amber">
             <div class="stat-card-header">Total Credits</div>
-            <div class="stat-card-value">22 / 22</div>
+            <div class="stat-card-value" id="studentCredits">--</div>
             <div class="stat-card-desc">Credits Cleared</div>
           </div>
 
           <div class="stat-card stat-purple">
             <div class="stat-card-header">Result Status</div>
-            <div class="stat-card-value" style="color: var(--success); font-size: 20px;">PASSED</div>
-            <div class="stat-card-desc">First Class with Distinction</div>
+            <div class="stat-card-value" id="studentResultStatus" style="color: var(--success); font-size: 20px;">--</div>
+            <div class="stat-card-desc">Official Examination Result</div>
           </div>
         </div>
 
@@ -118,66 +118,6 @@
                 </tr>
               </thead>
               <tbody id="studentResultsTableBody">
-                <tr>
-                  <td><strong>CS601</strong></td>
-                  <td>Database Management Systems</td>
-                  <td>27</td>
-                  <td>61</td>
-                  <td><strong>88</strong></td>
-                  <td><span class="badge badge-success">A+</span></td>
-                  <td>4</td>
-                  <td><span class="badge badge-success">Pass</span></td>
-                </tr>
-                <tr>
-                  <td><strong>CS602</strong></td>
-                  <td>Computer Networks & Security</td>
-                  <td>25</td>
-                  <td>58</td>
-                  <td><strong>83</strong></td>
-                  <td><span class="badge badge-primary">A</span></td>
-                  <td>4</td>
-                  <td><span class="badge badge-success">Pass</span></td>
-                </tr>
-                <tr>
-                  <td><strong>CS603</strong></td>
-                  <td>Design & Analysis of Algorithms</td>
-                  <td>28</td>
-                  <td>64</td>
-                  <td><strong>92</strong></td>
-                  <td><span class="badge badge-success">O (Outstanding)</span></td>
-                  <td>4</td>
-                  <td><span class="badge badge-success">Pass</span></td>
-                </tr>
-                <tr>
-                  <td><strong>CS604</strong></td>
-                  <td>Software Engineering & Agile</td>
-                  <td>24</td>
-                  <td>55</td>
-                  <td><strong>79</strong></td>
-                  <td><span class="badge badge-info">B+</span></td>
-                  <td>3</td>
-                  <td><span class="badge badge-success">Pass</span></td>
-                </tr>
-                <tr>
-                  <td><strong>CS691</strong></td>
-                  <td>Database Practical Lab</td>
-                  <td>28</td>
-                  <td>67</td>
-                  <td><strong>95</strong></td>
-                  <td><span class="badge badge-success">O (Outstanding)</span></td>
-                  <td>2</td>
-                  <td><span class="badge badge-success">Pass</span></td>
-                </tr>
-                <tr>
-                  <td><strong>CS692</strong></td>
-                  <td>Network Socket Lab</td>
-                  <td>26</td>
-                  <td>62</td>
-                  <td><strong>88</strong></td>
-                  <td><span class="badge badge-success">A+</span></td>
-                  <td>2</td>
-                  <td><span class="badge badge-success">Pass</span></td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -247,102 +187,6 @@
                 </tr>
               </thead>
               <tbody id="facultyMarksTableBody">
-                <tr>
-                  <td><strong>STU2024001</strong></td>
-                  <td>John Snow</td>
-                  <td><input type="number" class="form-input" value="88" style="width: 90px; padding: 6px;" min="0" max="100"></td>
-                  <td>
-                    <select class="form-select" style="width: 110px; padding: 6px;">
-                      <option selected>A+ (85-89)</option>
-                      <option>O (90-100)</option>
-                      <option>A (80-84)</option>
-                      <option>B+ (70-79)</option>
-                      <option>F (Fail)</option>
-                    </select>
-                  </td>
-                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for John Snow!')">Save</button></td>
-                </tr>
-
-                <tr>
-                  <td><strong>STU2024002</strong></td>
-                  <td>Priya Patel</td>
-                  <td><input type="number" class="form-input" value="92" style="width: 90px; padding: 6px;" min="0" max="100"></td>
-                  <td>
-                    <select class="form-select" style="width: 110px; padding: 6px;">
-                      <option>A+ (85-89)</option>
-                      <option selected>O (90-100)</option>
-                      <option>A (80-84)</option>
-                      <option>B+ (70-79)</option>
-                      <option>F (Fail)</option>
-                    </select>
-                  </td>
-                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Priya Patel!')">Save</button></td>
-                </tr>
-
-                <tr>
-                  <td><strong>STU2024003</strong></td>
-                  <td>Aman Verma</td>
-                  <td><input type="number" class="form-input" value="74" style="width: 90px; padding: 6px;" min="0" max="100"></td>
-                  <td>
-                    <select class="form-select" style="width: 110px; padding: 6px;">
-                      <option>A+ (85-89)</option>
-                      <option>O (90-100)</option>
-                      <option>A (80-84)</option>
-                      <option selected>B+ (70-79)</option>
-                      <option>F (Fail)</option>
-                    </select>
-                  </td>
-                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Aman Verma!')">Save</button></td>
-                </tr>
-
-                <tr>
-                  <td><strong>STU2024004</strong></td>
-                  <td>Sneha Roy</td>
-                  <td><input type="number" class="form-input" value="81" style="width: 90px; padding: 6px;" min="0" max="100"></td>
-                  <td>
-                    <select class="form-select" style="width: 110px; padding: 6px;">
-                      <option>A+ (85-89)</option>
-                      <option>O (90-100)</option>
-                      <option selected>A (80-84)</option>
-                      <option>B+ (70-79)</option>
-                      <option>F (Fail)</option>
-                    </select>
-                  </td>
-                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Sneha Roy!')">Save</button></td>
-                </tr>
-
-                <tr>
-                  <td><strong>STU2024005</strong></td>
-                  <td>Vikram Aditya</td>
-                  <td><input type="number" class="form-input" value="68" style="width: 90px; padding: 6px;" min="0" max="100"></td>
-                  <td>
-                    <select class="form-select" style="width: 110px; padding: 6px;">
-                      <option>A+ (85-89)</option>
-                      <option>O (90-100)</option>
-                      <option>A (80-84)</option>
-                      <option>B+ (70-79)</option>
-                      <option selected>B (60-69)</option>
-                      <option>F (Fail)</option>
-                    </select>
-                  </td>
-                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Vikram Aditya!')">Save</button></td>
-                </tr>
-
-                <tr>
-                  <td><strong>STU2024006</strong></td>
-                  <td>Ananya Das</td>
-                  <td><input type="number" class="form-input" value="86" style="width: 90px; padding: 6px;" min="0" max="100"></td>
-                  <td>
-                    <select class="form-select" style="width: 110px; padding: 6px;">
-                      <option selected>A+ (85-89)</option>
-                      <option>O (90-100)</option>
-                      <option>A (80-84)</option>
-                      <option>B+ (70-79)</option>
-                      <option>F (Fail)</option>
-                    </select>
-                  </td>
-                  <td><button class="btn btn-secondary btn-sm" onclick="alert('Marks saved for Ananya Das!')">Save</button></td>
-                </tr>
               </tbody>
             </table>
           </div>

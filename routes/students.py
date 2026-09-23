@@ -57,9 +57,7 @@ def create_student():
     if User.query.filter_by(email=email).first():
         raise ValidationError("A user with that email already exists.")
 
-    dept = Department.query.filter(
-        db.or_(Department.name.ilike(data["department"].strip()), Department.code.ilike(data["department"].strip()))
-    ).first()
+    dept = Department.resolve(data["department"])
     if not dept:
         raise ValidationError(f"Unknown department: {data['department']}")
 
@@ -135,9 +133,7 @@ def update_student(student_code):
             raise ValidationError("Phone number cannot be empty.")
         student.user.phone = phone
     if "department" in data:
-        dept = Department.query.filter(
-            db.or_(Department.name.ilike(data["department"].strip()), Department.code.ilike(data["department"].strip()))
-        ).first()
+        dept = Department.resolve(data["department"])
         if not dept:
             raise ValidationError(f"Unknown department: {data['department']}")
         student.department_id = dept.id
@@ -172,7 +168,14 @@ def update_student(student_code):
 @bp.delete("/<string:student_code>")
 @roles_required("admin")
 def delete_student(student_code):
-    student = Student.query.filter_by(student_code=student_code).first()
+    q = Student.query.filter(
+        db.or_(Student.student_code == student_code, Student.prn == student_code)
+    )
+    if student_code.isdigit():
+        q = Student.query.filter(
+            db.or_(Student.id == int(student_code), Student.student_code == student_code, Student.prn == student_code)
+        )
+    student = q.first()
     if not student:
         return jsonify({"success": False, "error": "Student not found."}), 404
     user = student.user

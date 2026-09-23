@@ -46,13 +46,13 @@ def create_notice():
     from models import Department
     user = current_user()
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["title", "body"])
+    body_text = data.get("body") or data.get("content")
+    if not data.get("title") or not body_text:
+        require_fields(data, ["title", "body"])
 
     dept_id = None
     if data.get("department") and data["department"] != "All Departments":
-        d = Department.query.filter(
-            db.or_(Department.name.ilike(data["department"].strip()), Department.code.ilike(data["department"].strip()))
-        ).first()
+        d = Department.resolve(data["department"])
         if d:
             dept_id = d.id
 
@@ -69,7 +69,7 @@ def create_notice():
     notice = Notice(
         title=data["title"].strip(),
         category=data.get("category", "General"),
-        body=data["body"].strip(),
+        body=body_text.strip(),
         department_id=dept_id,
         year_label=year_val,
         semester=sem_val,
@@ -79,6 +79,41 @@ def create_notice():
     db.session.add(notice)
     db.session.commit()
     return jsonify({"success": True, "data": notice.to_dict()}), 201
+
+
+@bp.put("/<int:notice_id>")
+@roles_required("faculty", "admin")
+def update_notice(notice_id):
+    from models import Department
+    notice = Notice.query.get(notice_id)
+    if not notice:
+        return jsonify({"success": False, "error": "Notice not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    if "title" in data and data["title"].strip():
+        notice.title = data["title"].strip()
+    if "body" in data and data["body"].strip():
+        notice.body = data["body"].strip()
+    if "category" in data and data["category"].strip():
+        notice.category = data["category"].strip()
+    if "department" in data:
+        if data["department"] and data["department"] != "All Departments":
+            d = Department.resolve(data["department"])
+            notice.department_id = d.id if d else None
+        else:
+            notice.department_id = None
+    if "year" in data:
+        notice.year_label = data["year"] if data["year"] != "All Years" else None
+    if "semester" in data:
+        try:
+            notice.semester = int(data["semester"])
+        except (ValueError, TypeError):
+            notice.semester = None
+    if "division" in data:
+        notice.division = data["division"] or "All"
+
+    db.session.commit()
+    return jsonify({"success": True, "data": notice.to_dict()})
 
 
 @bp.delete("/<int:notice_id>")

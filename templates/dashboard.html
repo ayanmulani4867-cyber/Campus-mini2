@@ -23,15 +23,15 @@
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
-          <option value="student">Student</option>
-          <option value="faculty">Faculty</option>
-          <option value="admin">Admin</option>
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>
       </div>
 
       <a href="profile.html" class="user-chip">
-        <div class="user-avatar-mini" id="topbarAvatar">A</div>
-        <span id="topbarUserName">John Snow</span>
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
       </a>
     </div>
   </header>
@@ -53,13 +53,13 @@
       <!-- Welcome Banner -->
       <div class="welcome-banner">
         <div class="welcome-text">
-          <h3 id="welcomeMsg">Welcome, Student!</h3>
+          <h3 id="welcomeMsg">Welcome{{ ', ' + current_user.full_name if current_user else '' }}!</h3>
           <p id="welcomeSub">Spring Semester 2026 • Campus Connect Portal</p>
         </div>
         <div class="welcome-meta">
           <div>
             <strong>Role:</strong>
-            <span id="welcomeRole">Student</span>
+            <span id="welcomeRole">{{ current_user.role_label if current_user else '' }}</span>
           </div>
           <div>
             <strong>Status:</strong>

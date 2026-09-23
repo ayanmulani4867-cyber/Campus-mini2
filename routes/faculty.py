@@ -95,9 +95,7 @@ def create_faculty():
     if User.query.filter_by(email=email).first():
         raise ValidationError("A user with that email already exists.")
 
-    dept = Department.query.filter(
-        db.or_(Department.name.ilike(data["department"].strip()), Department.code.ilike(data["department"].strip()))
-    ).first()
+    dept = Department.resolve(data["department"])
     if not dept:
         raise ValidationError(f"Unknown department: {data['department']}")
 
@@ -198,9 +196,7 @@ def update_faculty(faculty_code):
             raise ValidationError("Phone number cannot be empty.")
         fac.user.phone = phone
     if "department" in data:
-        dept = Department.query.filter(
-            db.or_(Department.name.ilike(data["department"].strip()), Department.code.ilike(data["department"].strip()))
-        ).first()
+        dept = Department.resolve(data["department"])
         if not dept:
             raise ValidationError(f"Unknown department: {data['department']}")
         fac.department_id = dept.id
@@ -258,7 +254,12 @@ def update_faculty(faculty_code):
 @bp.delete("/<string:faculty_code>")
 @roles_required("admin")
 def delete_faculty(faculty_code):
-    fac = Faculty.query.filter_by(faculty_code=faculty_code).first()
+    q = Faculty.query.filter_by(faculty_code=faculty_code)
+    if faculty_code.isdigit():
+        q = Faculty.query.filter(
+            db.or_(Faculty.id == int(faculty_code), Faculty.faculty_code == faculty_code)
+        )
+    fac = q.first()
     if not fac:
         return jsonify({"success": False, "error": "Faculty member not found."}), 404
     user = fac.user

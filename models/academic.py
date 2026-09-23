@@ -16,6 +16,66 @@ class Department(db.Model):
     def to_dict(self):
         return {"id": self.id, "name": self.name, "code": self.code}
 
+    @classmethod
+    def resolve(cls, identifier):
+        """Robustly finds or provisions a department by ID, name, code, or alias.
+        Auto-provisions the 4 canonical departments if missing from the database."""
+        if not identifier:
+            return None
+        identifier = str(identifier).strip()
+        if identifier.isdigit():
+            d = cls.query.get(int(identifier))
+            if d:
+                return d
+
+        # 1. Exact or case-insensitive match on name or code
+        d = cls.query.filter(
+            db.or_(cls.name.ilike(identifier), cls.code.ilike(identifier))
+        ).first()
+        if d:
+            return d
+
+        # 2. Canonical mapping dictionary
+        CANONICAL = {
+            "computer science & engineering": ("Computer Science & Engineering", "CSE"),
+            "computer science and engineering": ("Computer Science & Engineering", "CSE"),
+            "computer science": ("Computer Science & Engineering", "CSE"),
+            "cse": ("Computer Science & Engineering", "CSE"),
+            "electronics & communication": ("Electronics & Communication", "ECE"),
+            "electronics and communication": ("Electronics & Communication", "ECE"),
+            "ece": ("Electronics & Communication", "ECE"),
+            "mechanical engineering": ("Mechanical Engineering", "MECH"),
+            "mechanical": ("Mechanical Engineering", "MECH"),
+            "mech": ("Mechanical Engineering", "MECH"),
+            "civil engineering": ("Civil Engineering", "CE"),
+            "civil": ("Civil Engineering", "CE"),
+            "ce": ("Civil Engineering", "CE"),
+        }
+
+        clean_key = identifier.lower().replace("&amp;", "&").strip()
+        if clean_key in CANONICAL:
+            name, code = CANONICAL[clean_key]
+            d = cls.query.filter(db.or_(cls.name.ilike(name), cls.code.ilike(code))).first()
+            if d:
+                return d
+            # Auto-provision canonical department if missing
+            try:
+                d = cls(name=name, code=code)
+                db.session.add(d)
+                db.session.flush()
+                return d
+            except Exception:
+                db.session.rollback()
+                return cls.query.filter(db.or_(cls.name.ilike(name), cls.code.ilike(code))).first()
+
+        # 3. Flexible substring match as fallback
+        return cls.query.filter(
+            db.or_(
+                cls.name.ilike(f"%{identifier}%"),
+                cls.code.ilike(f"%{identifier}%")
+            )
+        ).first()
+
 
 class Course(db.Model):
     """A subject/course offering. Covers both 'core theory' and 'lab' rows
@@ -81,3 +141,12 @@ class Enrollment(db.Model):
     __table_args__ = (
         db.UniqueConstraint("student_id", "course_id", name="uq_enrollment_student_course"),
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "studentId": self.student.student_code if self.student else None,
+            "studentName": self.student.user.full_name if self.student and self.student.user else None,
+            "courseCode": self.course.code if self.course else None,
+            "courseTitle": self.course.title if self.course else None,
+        }

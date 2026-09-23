@@ -2,7 +2,7 @@ import os
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from flask import Flask, render_template, send_from_directory, jsonify, request
+from flask import Flask, render_template, send_from_directory, jsonify, request, redirect, session
 from config import config_by_name
 from extensions import db, migrate
 from utils.errors import register_error_handlers
@@ -107,6 +107,50 @@ def create_app(config_name=None):
     def serve_images(filename):
         return send_from_directory(os.path.join(app.static_folder, "images"), filename)
 
+    # Injects the authenticated user into all Jinja templates
+    @app.context_processor
+    def inject_auth_user():
+        from utils.auth import current_user
+        try:
+            user = current_user()
+            return {"current_user": user}
+        except Exception:
+            return {"current_user": None}
+
+    # Browser caching controls: prevent caching for authenticated pages/API responses
+    @app.after_request
+    def set_cache_control_headers(response):
+        is_static = (
+            request.path.startswith("/static/") or
+            request.path.startswith("/css/") or
+            request.path.startswith("/js/") or
+            request.path.startswith("/images/") or
+            any(request.path.endswith(ext) for ext in (".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".woff", ".woff2"))
+        )
+        if not is_static:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+    # Global logout route via GET for browser navigation
+    @app.get("/logout")
+    def page_logout():
+        from utils.auth import current_user
+        try:
+            user = current_user()
+            if user:
+                from models import UserSession
+                UserSession.query.filter_by(user_id=user.id, is_active=True).update({"is_active": False})
+                db.session.commit()
+        except Exception:
+            pass
+        session.clear()
+        resp = redirect("/login.html")
+        resp.delete_cookie("session")
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return resp
+
     # Frontend Page Routes
     @app.get("/")
     def index():
@@ -118,6 +162,28 @@ def create_app(config_name=None):
         # Do not catch /api routes - let them return proper 404
         if path.startswith("api/"):
             return jsonify({"success": False, "error": "Not found"}), 404
+
+        # Enforce server-side authentication gating on protected pages
+        protected_pages = {
+            "dashboard.html", "dashboard",
+            "profile.html", "profile",
+            "courses.html", "courses",
+            "attendance.html", "attendance",
+            "results.html", "results",
+            "materials.html", "materials",
+            "notices.html", "notices",
+            "events.html", "events",
+            "users.html", "users",
+            "settings.html", "settings",
+        }
+        norm_path = path.lower().strip("/")
+        if norm_path in protected_pages:
+            from utils.auth import current_user
+            user = current_user()
+            if not user:
+                return redirect("/login.html")
+            if norm_path.startswith("users") and user.role != "admin":
+                return redirect("/dashboard.html")
 
         # 1. Exact match in templates (e.g., "login.html")
         template_file = os.path.join(templates_dir, path)

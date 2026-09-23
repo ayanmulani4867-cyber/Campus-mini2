@@ -95,6 +95,7 @@ class AssignmentSubmission(db.Model):
             "submittedAt": self.submitted_at.isoformat() if self.submitted_at else None,
             "status": self.status,
             "grade": self.grade,
+            "marks_obtained": self.grade,
             "feedback": self.feedback,
             "gradedBy": self.graded_by.user.full_name if (self.graded_by and self.graded_by.user) else None,
         }

@@ -10,6 +10,7 @@ bp = Blueprint("dashboard", __name__, url_prefix="/api/dashboard")
 
 
 @bp.get("/summary")
+@bp.get("/stats")
 @login_required
 def summary():
     user = current_user()
@@ -89,16 +90,26 @@ def summary():
         data = {
             "todayClasses": len(all_course_ids),
             "totalStudents": total_students,
+            "total_students": total_students,
             "attendancePending": attendance_pending,
             "uploadedNotes": uploaded_notes,
             "assignedDivisions": list(assigned_divs),
         }
 
     else:  # admin
+        stu_cnt = Student.query.count()
+        fac_cnt = Faculty.query.count()
+        crs_cnt = Course.query.count()
+        act_crs_cnt = Course.query.filter_by(status="active").count()
         data = {
-            "totalStudents": Student.query.count(),
-            "facultyMembers": Faculty.query.count(),
-            "activeCourses": Course.query.filter_by(status="active").count(),
+            "totalStudents": stu_cnt,
+            "total_students": stu_cnt,
+            "facultyMembers": fac_cnt,
+            "totalFaculty": fac_cnt,
+            "total_faculty": fac_cnt,
+            "activeCourses": act_crs_cnt,
+            "totalCourses": crs_cnt,
+            "total_courses": crs_cnt,
             "systemHealth": 100,
         }
 

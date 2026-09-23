@@ -19,20 +19,47 @@ def list_events():
 def create_event():
     user = current_user()
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["title", "date"])
-    event_date = validate_date(data["date"])
+    raw_date = data.get("date") or data.get("event_date")
+    if not data.get("title") or not raw_date:
+        require_fields(data, ["title", "date"])
+    event_date = validate_date(raw_date)
 
     event = Event(
         title=data["title"].strip(),
         description=data.get("description"),
         category=data.get("category", "General"),
         event_date=event_date,
-        location=data.get("location"),
+        location=data.get("location") or data.get("venue"),
         created_by_id=user.id,
     )
     db.session.add(event)
     db.session.commit()
     return jsonify({"success": True, "data": event.to_dict()}), 201
+
+
+@bp.put("/<int:event_id>")
+@roles_required("faculty", "admin")
+def update_event(event_id):
+    event = Event.query.get(event_id)
+    if not event:
+        return jsonify({"success": False, "error": "Event not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    if "title" in data and data["title"].strip():
+        event.title = data["title"].strip()
+    if "description" in data:
+        event.description = data["description"]
+    if "category" in data and data["category"].strip():
+        event.category = data["category"].strip()
+    raw_date = data.get("date") or data.get("event_date")
+    if raw_date:
+        event.event_date = validate_date(raw_date)
+    loc = data.get("location") or data.get("venue")
+    if loc:
+        event.location = loc
+
+    db.session.commit()
+    return jsonify({"success": True, "data": event.to_dict()})
 
 
 @bp.delete("/<int:event_id>")

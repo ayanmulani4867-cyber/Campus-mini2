@@ -62,11 +62,13 @@ class Result(db.Model):
             "studentId": self.student.student_code,
             "studentName": self.student.user.full_name,
             "courseCode": self.course.code,
+            "course_code": self.course.code,
             "courseTitle": self.course.title,
             "assessmentType": self.assessment_type,
             "internal": self.internal_marks,
             "endSem": self.end_sem_marks,
             "total": self.total_marks,
             "grade": self.grade,
+            "status": "published" if self.is_published else "draft",
             "isPublished": self.is_published,
         }

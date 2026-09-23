@@ -41,7 +41,7 @@ def list_materials():
         dept = request.args.get("department")
         if dept:
             from models import Department
-            d = Department.query.filter_by(name=dept).first()
+            d = Department.resolve(dept)
             if d:
                 q = q.filter_by(department_id=d.id)
 
@@ -96,9 +96,7 @@ def upload_material():
     dept_id = None
     dept_name = request.form.get("department")
     if dept_name:
-        d = Department.query.filter(
-            db.or_(Department.name.ilike(dept_name.strip()), Department.code.ilike(dept_name.strip()))
-        ).first()
+        d = Department.resolve(dept_name)
         if d:
             dept_id = d.id
     if not dept_id and course:
