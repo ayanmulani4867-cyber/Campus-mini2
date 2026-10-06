@@ -180,8 +180,8 @@ All seeded accounts share the initial password: **`campus@123`**
 | Role | Email / Login ID | Password | Access Level |
 | :--- | :--- | :--- | :--- |
 | **Admin** | `admin@campus.edu` | `campus@123` | Full college admin, User Directory, Add Members |
-| **Faculty** | `anita.sen@campus.edu` | `campus@123` | Mark Attendance, Enter Marks, Upload Notes |
-| **Student** | `rahul@campus.edu` | `campus@123` | View Attendance %, Results, Download Notes |
+| **Faculty** | mit.deshmukh@campus.edu | campus@123 | Mark Attendance, Enter Marks, Upload Notes (CS601 Div A) |
+| **Student** | student001@campus.edu | campus@123 | View Attendance %, Results, Download Notes (B.Tech CSE Sem 6) |
 
 *Note: Students and Faculty added by the Admin can also sign in with their registered phone number as their initial temporary password.*
 

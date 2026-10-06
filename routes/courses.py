@@ -53,12 +53,7 @@ def list_courses():
     elif user.role == "faculty":
         faculty = user.faculty_profile
         assigned_ids = [a.course_id for a in faculty.assignments]
-        q = q.filter(
-            db.or_(
-                Course.instructor_id == faculty.id,
-                Course.id.in_(assigned_ids) if assigned_ids else False
-            )
-        )
+        q = q.filter(Course.id.in_(assigned_ids) if assigned_ids else False)
     else:  # admin
         dept_param = request.args.get("department") or request.args.get("department_id")
         if dept_param and dept_param.lower() != "all":

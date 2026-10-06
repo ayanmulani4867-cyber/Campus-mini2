@@ -1,4 +1,4 @@
-import io
+﻿import io
 import os
 import sys
 from pathlib import Path
@@ -20,7 +20,7 @@ from models import (
 
 def run_storage_tests():
     print("=" * 80)
-    print("CAMPUS CONNECT — POSTGRESQL BYTEA FILE STORAGE VERIFICATION SUITE")
+    print("CAMPUS CONNECT â€” POSTGRESQL BYTEA FILE STORAGE VERIFICATION SUITE")
     print("=" * 80)
 
     client = app.test_client()
@@ -39,23 +39,23 @@ def run_storage_tests():
         # 1. Authenticate Users (Faculty, Student, Admin)
         # ---------------------------------------------------------------------
         print("\n--- 1. Authenticating Roles ---")
-        fac_login = client.post("/api/auth/login", json={"email": "anita.sen@campus.edu", "password": "campus@123", "role": "faculty"})
+        fac_login = client.post("/api/auth/login", json={"email": "amit.deshmukh@campus.edu", "password": "campus@123", "role": "faculty"})
         assert fac_login.status_code == 200, f"Faculty login failed: {fac_login.get_json()}"
         fac_token = fac_login.get_json()["sessionToken"]
         fac_headers = {"X-Session-Token": fac_token}
-        print("✓ Faculty (anita.sen@campus.edu) authenticated.")
+        print("âœ“ Faculty (amit.deshmukh@campus.edu) authenticated.")
 
         stu_login = client.post("/api/auth/login", json={"email": "rahul@campus.edu", "password": "campus@123", "role": "student"})
         assert stu_login.status_code == 200, f"Student login failed: {stu_login.get_json()}"
         stu_token = stu_login.get_json()["sessionToken"]
         stu_headers = {"X-Session-Token": stu_token}
-        print("✓ Student (rahul@campus.edu) authenticated.")
+        print("âœ“ Student (rahul@campus.edu) authenticated.")
 
         admin_login = client.post("/api/auth/login", json={"email": "admin@campus.edu", "password": "campus@123", "role": "admin"})
         assert admin_login.status_code == 200, f"Admin login failed: {admin_login.get_json()}"
         admin_token = admin_login.get_json()["sessionToken"]
         admin_headers = {"X-Session-Token": admin_token}
-        print("✓ Admin (admin@campus.edu) authenticated.")
+        print("âœ“ Admin (admin@campus.edu) authenticated.")
 
         # Ensure course CS601 exists
         course = Course.query.filter_by(code="CS601").first()
@@ -118,10 +118,10 @@ def run_storage_tests():
             assert mat_db.file_name == filename
             assert mat_db.mime_type == expected_mime
             assert mat_db.file_path is None, "Ephemeral file_path must be None in production persistent mode!"
-            assert mat_db.uploaded_by_id == User.query.filter_by(email="anita.sen@campus.edu").first().id
+            assert mat_db.uploaded_by_id == User.query.filter_by(email="amit.deshmukh@campus.edu").first().id
             assert mat_db.course_id == course.id
 
-            print(f"✓ Uploaded {filename} -> DB ID={mat_id}, BYTEA size={len(mat_db.file_data)} bytes, MIME={mat_db.mime_type}")
+            print(f"âœ“ Uploaded {filename} -> DB ID={mat_id}, BYTEA size={len(mat_db.file_data)} bytes, MIME={mat_db.mime_type}")
 
         # ---------------------------------------------------------------------
         # 3. Student Lists Materials and Downloads PDF, PPT, PPTX
@@ -135,7 +135,7 @@ def run_storage_tests():
         for filename, mat_id in uploaded_mat_ids.items():
             assert mat_id in item_ids, f"Student should see uploaded material ID={mat_id}"
 
-        print(f"✓ Student successfully listed {len(materials_list)} study materials.")
+        print(f"âœ“ Student successfully listed {len(materials_list)} study materials.")
 
         # Download and verify bit-for-bit parity
         for title, filename, original_bytes, expected_mime in upload_specs:
@@ -145,7 +145,7 @@ def run_storage_tests():
             assert dl_res.data == original_bytes, f"Downloaded content does not match original bytes for {filename}!"
             assert dl_res.headers.get("Content-Type") == expected_mime
             assert filename in dl_res.headers.get("Content-Disposition", "")
-            print(f"✓ Downloaded {filename} ({len(dl_res.data)} bytes) directly from PostgreSQL BYTEA — 100% BIT PARITY!")
+            print(f"âœ“ Downloaded {filename} ({len(dl_res.data)} bytes) directly from PostgreSQL BYTEA â€” 100% BIT PARITY!")
 
         # ---------------------------------------------------------------------
         # 4. Assignment Submission with File, Faculty Access & Grading
@@ -166,7 +166,7 @@ def run_storage_tests():
         res_assign = client.post("/api/assignments", json=assign_payload, headers=fac_headers)
         assert res_assign.status_code == 201, f"Failed to create assignment: {res_assign.get_json()}"
         assign_id = res_assign.get_json()["data"]["id"]
-        print(f"✓ Faculty created Assignment ID={assign_id}: '{assign_payload['title']}'")
+        print(f"âœ“ Faculty created Assignment ID={assign_id}: '{assign_payload['title']}'")
 
         # Student submits assignment with PDF attachment
         submission_pdf_bytes = (
@@ -188,7 +188,7 @@ def run_storage_tests():
         assert sub_res.status_code in (200, 201), f"Submit assignment failed: {sub_res.get_json()}"
         sub_json = sub_res.get_json()["data"]
         sub_id = sub_json["id"]
-        print(f"✓ Student submitted assignment with PDF attachment: Sub ID={sub_id}")
+        print(f"âœ“ Student submitted assignment with PDF attachment: Sub ID={sub_id}")
 
         # Verify DB persistence of student submission BYTEA
         sub_db = AssignmentSubmission.query.get(sub_id)
@@ -197,7 +197,7 @@ def run_storage_tests():
         assert sub_db.file_name == "rahul_assignment1_solution.pdf"
         assert sub_db.mime_type == "application/pdf"
         assert sub_db.file_size_bytes == len(submission_pdf_bytes)
-        print(f"✓ Verified AssignmentSubmission BYTEA stored in PostgreSQL ({len(sub_db.file_data)} bytes).")
+        print(f"âœ“ Verified AssignmentSubmission BYTEA stored in PostgreSQL ({len(sub_db.file_data)} bytes).")
 
         # Faculty reviews assignment and downloads student's PDF submission
         fac_get_assign = client.get(f"/api/assignments/{assign_id}", headers=fac_headers)
@@ -214,7 +214,7 @@ def run_storage_tests():
         sub_dl_res = client.get(f"/api/assignments/{assign_id}/submissions/{sub_id}/download", headers=fac_headers)
         assert sub_dl_res.status_code == 200, f"Faculty download submission failed: {sub_dl_res.status_code}"
         assert sub_dl_res.data == submission_pdf_bytes, "Faculty downloaded submission bytes do not match submitted PDF!"
-        print(f"✓ Faculty downloaded Student submission from PostgreSQL BYTEA — 100% BIT PARITY!")
+        print(f"âœ“ Faculty downloaded Student submission from PostgreSQL BYTEA â€” 100% BIT PARITY!")
 
         # Faculty grades the submission
         grade_res = client.post(f"/api/assignments/{assign_id}/grade", json={
@@ -225,7 +225,7 @@ def run_storage_tests():
         assert grade_res.status_code == 200, f"Grading failed: {grade_res.get_json()}"
         assert grade_res.get_json()["data"]["grade"] == 96.5
         assert grade_res.get_json()["data"]["status"] == "graded"
-        print(f"✓ Faculty graded Student submission: 96.5/100, Status: 'graded'")
+        print(f"âœ“ Faculty graded Student submission: 96.5/100, Status: 'graded'")
 
         # ---------------------------------------------------------------------
         # 5. Security & Validation Enforcement Tests
@@ -236,20 +236,20 @@ def run_storage_tests():
         bad_file = (io.BytesIO(b"MALICIOUS_EXEC_DATA"), "exploit.exe")
         bad_res = client.post("/api/materials", data={"title": "Bad File", "file": bad_file}, content_type="multipart/form-data", headers=fac_headers)
         assert bad_res.status_code == 400, "Disallowed extension .exe must be rejected with 400!"
-        print("✓ Disallowed extension (.exe) rejected with 400 ValidationError.")
+        print("âœ“ Disallowed extension (.exe) rejected with 400 ValidationError.")
 
         # File header mismatch (e.g. text file disguised as .pdf) rejected
         fake_pdf = (io.BytesIO(b"THIS_IS_PLAIN_TEXT_NOT_A_PDF"), "fake.pdf")
         fake_res = client.post("/api/materials", data={"title": "Fake PDF", "file": fake_pdf}, content_type="multipart/form-data", headers=fac_headers)
         assert fake_res.status_code == 400, "Header mismatch must be rejected with 400!"
-        print("✓ Corrupted / forged file header rejected with 400 ValidationError.")
+        print("âœ“ Corrupted / forged file header rejected with 400 ValidationError.")
 
         # Size limit check: reject file > 25MB
         oversized_data = b"0" * (26 * 1024 * 1024)  # 26 MB
         oversized_file = (io.BytesIO(b"%PDF-1.4\n" + oversized_data), "huge_book.pdf")
         over_res = client.post("/api/materials", data={"title": "Oversized", "file": oversized_file}, content_type="multipart/form-data", headers=fac_headers)
         assert over_res.status_code == 400, "Oversized file > 25MB must be rejected with 400!"
-        print("✓ Oversized file (>25 MB) rejected with 400 ValidationError.")
+        print("âœ“ Oversized file (>25 MB) rejected with 400 ValidationError.")
 
         # Access control: student cannot download another student's assignment submission
         stu2 = Student.query.filter_by(student_code="STU2024002").first()
@@ -260,14 +260,14 @@ def run_storage_tests():
                 stu2_headers = {"X-Session-Token": stu2_login.get_json()["sessionToken"]}
                 unauth_dl = client.get(f"/api/assignments/{assign_id}/submissions/{sub_id}/download", headers=stu2_headers)
                 assert unauth_dl.status_code == 403, "Student must not be allowed to download another student's submission!"
-                print("✓ Access control verified: unauthorized student blocked (403 Forbidden).")
+                print("âœ“ Access control verified: unauthorized student blocked (403 Forbidden).")
 
         # Deletion from PostgreSQL
         del_mat_id = uploaded_mat_ids["lecture_notes_unit1.pdf"]
         del_res = client.delete(f"/api/materials/{del_mat_id}", headers=fac_headers)
         assert del_res.status_code == 200, f"Delete material failed: {del_res.get_json()}"
         assert StudyMaterial.query.get(del_mat_id) is None, "Material row must be deleted from database!"
-        print(f"✓ Deletion verified: Material ID={del_mat_id} removed from PostgreSQL.")
+        print(f"âœ“ Deletion verified: Material ID={del_mat_id} removed from PostgreSQL.")
 
         # Clean up remaining test records
         for title, filename, _, _ in upload_specs:

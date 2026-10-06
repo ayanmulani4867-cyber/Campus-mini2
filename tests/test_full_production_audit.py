@@ -1,4 +1,4 @@
-import io
+﻿import io
 import json
 import os
 import sys
@@ -107,7 +107,7 @@ def test_02_auth_flows(client, app):
     logout(client)
 
     # 3. Faculty login
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, f"Faculty login failed: {res.data}"
     data = res.get_json()
     assert (data.get("user") or data.get("data"))["role"] == "faculty"
@@ -253,7 +253,7 @@ def test_05_courses_and_enrollments(client, app):
 def test_06_attendance_workflow(client, app):
     """Test complete faculty attendance marking and student viewing."""
     # Faculty login
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
 
     # Post attendance session for CS601
@@ -292,7 +292,7 @@ def test_06_attendance_workflow(client, app):
 def test_07_results_workflow(client, app):
     """Test faculty entering marks, saving, publishing, and student viewing."""
     # Faculty login
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
 
     # Enter marks for STU2024001 in CS601
@@ -332,7 +332,7 @@ def test_07_results_workflow(client, app):
 def test_08_assignments_and_bytea_submission(client, app):
     """Test assignment creation, BYTEA file submission, grading, and download."""
     # 1. Faculty creates assignment
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
     due_date = (date.today() + timedelta(days=7)).isoformat()
     assign_payload = {
@@ -372,7 +372,7 @@ def test_08_assignments_and_bytea_submission(client, app):
     logout(client)
 
     # 4. Faculty grades submission
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
     grade_payload = {
         "marks_obtained": 48,
@@ -394,7 +394,7 @@ def test_08_assignments_and_bytea_submission(client, app):
 
 def test_09_study_materials_bytea(client, app):
     """Test study material upload with BYTEA binary data and download."""
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
 
     fake_file_content = b"%PDF-1.4 Binary Study Material Lecture Notes Content\n%%EOF"
@@ -451,7 +451,7 @@ def test_10_leave_requests_workflow(client, app):
     logout(client)
 
     # 2. Faculty reviews and approves leave
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
     res = client.put(
         f"/api/leaves/{leave_id}/status",
@@ -543,7 +543,7 @@ def test_12_dashboards_real_data(client):
     logout(client)
 
     # Faculty dashboard
-    res = login(client, "anita.sen@campus.edu", "campus@123")
+    res = login(client, "amit.deshmukh@campus.edu", "campus@123")
     assert res.status_code == 200, res.data
     res = client.get("/api/dashboard/stats")
     assert res.status_code == 200
@@ -559,7 +559,7 @@ def test_12_dashboards_real_data(client):
 
 def run_audit_suite():
     print("=" * 80)
-    print("CAMPUS CONNECT — FULL PRODUCTION AUDIT & VERIFICATION SUITE")
+    print("CAMPUS CONNECT â€” FULL PRODUCTION AUDIT & VERIFICATION SUITE")
     print("=" * 80)
 
     app, _ = get_app_and_client()

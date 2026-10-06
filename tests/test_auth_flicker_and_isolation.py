@@ -1,4 +1,4 @@
-"""
+﻿"""
 Auth Isolation and Flicker Verification Test Suite
 ==================================================
 Tests:
@@ -133,7 +133,7 @@ def run_tests():
         # TEST 5: Faculty login and refresh
         print("\n[RUNNING] TEST 5: Faculty login and repeated refresh ...")
         client_fac = app.test_client()
-        token_fac, user_fac = login(client_fac, "anita.sen@campus.edu", "campus@123", "faculty")
+        token_fac, user_fac = login(client_fac, "amit.deshmukh@campus.edu", "campus@123", "faculty")
         fac_name = user_fac["name"]
 
         for _ in range(5):

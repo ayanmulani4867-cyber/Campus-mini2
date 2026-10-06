@@ -1513,20 +1513,37 @@ function initAttendance(role) {
     var courseSelect = document.getElementById("facultyRollCourseSelect");
     var divSelect = document.getElementById("facultyRollDivisionSelect");
     var tbody = document.getElementById("rollCallTableBody") || (facultyCard ? facultyCard.querySelector(".data-table tbody") : null);
+    var coursesList = [];
+
+    function updateDivisions() {
+      if (!divSelect || !courseSelect) return;
+      var selectedCode = courseSelect.value;
+      var matchedCourse = coursesList.find(function (c) { return c.code === selectedCode; });
+      var divs = (matchedCourse && matchedCourse.assignedDivisions && matchedCourse.assignedDivisions.length)
+        ? matchedCourse.assignedDivisions
+        : ["A"];
+      divSelect.innerHTML = divs.map(function (d) {
+        return '<option value="' + escapeHtml(d) + '">Division ' + escapeHtml(d) + '</option>';
+      }).join("");
+    }
 
     api("/api/courses").then(function (res) {
-      var courses = res.data || [];
-      if (courseSelect && courses.length) {
-        courseSelect.innerHTML = courses.map(function (c) {
+      coursesList = res.data || [];
+      if (courseSelect && coursesList.length) {
+        courseSelect.innerHTML = coursesList.map(function (c) {
           return '<option value="' + escapeHtml(c.code) + '">' + escapeHtml(c.code + ' - ' + c.title) + '</option>';
         }).join("");
       }
+      updateDivisions();
       loadRollCall();
     }).catch(function () {
       loadRollCall();
     });
 
-    if (courseSelect) courseSelect.addEventListener("change", loadRollCall);
+    if (courseSelect) courseSelect.addEventListener("change", function () {
+      updateDivisions();
+      loadRollCall();
+    });
     if (divSelect) divSelect.addEventListener("change", loadRollCall);
 
     function loadRollCall() {
@@ -1742,20 +1759,37 @@ function initResults(role) {
     var tbody = container.querySelector(".data-table tbody");
     var heading = container.querySelector(".card:last-child h3");
     if (!tbody) return;
+    var coursesList = [];
+
+    function updateDivisions() {
+      if (!divSelect || !courseSelect) return;
+      var selectedCode = courseCodeFromSelect();
+      var matchedCourse = coursesList.find(function (c) { return c.code === selectedCode; });
+      var divs = (matchedCourse && matchedCourse.assignedDivisions && matchedCourse.assignedDivisions.length)
+        ? matchedCourse.assignedDivisions
+        : ["A"];
+      divSelect.innerHTML = divs.map(function (d) {
+        return '<option value="' + escapeHtml(d) + '">Division ' + escapeHtml(d) + '</option>';
+      }).join("");
+    }
 
     api("/api/courses").then(function (res) {
-      var courses = res.data || [];
-      if (courseSelect && courses.length) {
-        courseSelect.innerHTML = courses.map(function (c) {
+      coursesList = res.data || [];
+      if (courseSelect && coursesList.length) {
+        courseSelect.innerHTML = coursesList.map(function (c) {
           return '<option value="' + escapeHtml(c.code) + '">' + escapeHtml(c.code + ' - ' + c.title) + '</option>';
         }).join("");
       }
+      updateDivisions();
       render();
     }).catch(function () {
       render();
     });
 
-    if (courseSelect) courseSelect.addEventListener("change", render);
+    if (courseSelect) courseSelect.addEventListener("change", function () {
+      updateDivisions();
+      render();
+    });
     if (divSelect) divSelect.addEventListener("change", render);
 
     function courseCodeFromSelect() {
@@ -1767,22 +1801,42 @@ function initResults(role) {
       var courseCode = courseCodeFromSelect();
       var division = divSelect ? divSelect.value : "A";
       if (heading) heading.textContent = "Student Marks Entry Sheet (" + courseCode + " - Div " + division + ")";
-      api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(courseCode) + "&division=" + encodeURIComponent(division)).then(function (res) {
-        var roster = res.data.roster || [];
+
+      Promise.all([
+        api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(courseCode) + "&division=" + encodeURIComponent(division)),
+        api("/api/results?courseCode=" + encodeURIComponent(courseCode) + "&division=" + encodeURIComponent(division))
+      ]).then(function (responses) {
+        var roster = responses[0].data && responses[0].data.roster ? responses[0].data.roster : [];
+        var results = responses[1].data || [];
+        var resultMap = {};
+        results.forEach(function (r) {
+          resultMap[r.studentId] = r;
+        });
+
         if (!roster.length) {
           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">No students found in ' + escapeHtml(courseCode) + ' (Div ' + escapeHtml(division) + ').</td></tr>';
           return;
         }
         tbody.innerHTML = roster.map(function (s) {
+          var existingRes = resultMap[s.studentId] || resultMap[s.prn];
+          var marksVal = existingRes ? existingRes.total : 0;
+          var gradeVal = existingRes ? existingRes.grade : "-";
+          var pass = marksVal >= 40;
+          var gradeHtml = existingRes
+            ? '<span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(gradeVal) + ' (' + marksVal + '/100)</span>'
+            : '<span class="grade-preview">-</span>';
+
           return '<tr data-student-id="' + s.studentId + '" data-course="' + courseCode + '">' +
             '<td><strong>' + escapeHtml(s.prn || s.studentId) + '</strong></td>' +
             '<td>' + escapeHtml(s.name) + '</td>' +
-            '<td><input type="number" class="form-input marks-input" value="0" style="width: 90px; padding: 6px;" min="0" max="100"></td>' +
-            '<td><span class="grade-preview">-</span></td>' +
+            '<td><input type="number" class="form-input marks-input" value="' + marksVal + '" style="width: 90px; padding: 6px;" min="0" max="100"></td>' +
+            '<td><span class="grade-preview">' + gradeHtml + '</span></td>' +
             '<td><button class="btn btn-secondary btn-sm save-marks-btn" type="button">Save</button></td></tr>';
         }).join("");
         wireSaveButtons();
-      }).catch(function () {});
+      }).catch(function (err) {
+        console.error("Error loading roster/results:", err);
+      });
     }
 
     function wireSaveButtons() {

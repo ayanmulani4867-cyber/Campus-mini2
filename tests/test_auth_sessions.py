@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 from pathlib import Path
 
@@ -103,7 +103,7 @@ def run_tests():
     # -------------------------------------------------------------------------
     print("\n[TEST 5] Tab 3: Faculty Login & Isolation")
     res = client.post("/api/auth/login", json={
-        "email": "anita.sen@campus.edu",
+        "email": "amit.deshmukh@campus.edu",
         "password": "campus@123",
         "role": "faculty"
     })

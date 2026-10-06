@@ -1,8 +1,8 @@
-from datetime import date
+﻿from datetime import date
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import (
-    Student, Course, AttendanceSession, AttendanceRecord, Enrollment,
+    Student, Course, AttendanceSession, AttendanceRecord, Enrollment, FacultyAssignment,
 )
 from utils.auth import roles_required, login_required, current_user
 from utils.validators import require_fields, ValidationError
@@ -51,7 +51,7 @@ def attendance_summary():
         rows.append({
             "courseCode": course.code,
             "courseTitle": course.title,
-            "instructor": course.instructor.user.full_name if course.instructor else None,
+            "instructor": course.instructor.user.full_name if course.instructor and course.instructor.user else None,
             "held": held,
             "attended": attended,
             "percentage": pct,
@@ -78,15 +78,37 @@ def attendance_summary():
 @roles_required("faculty")
 def get_roll_call():
     """Faculty's classroom roster with today's marks filtered by course and division."""
+    user = current_user()
     course_code = request.args.get("courseCode")
     if not course_code:
         raise ValidationError("courseCode is required.")
-    session_date = request.args.get("date", date.today().isoformat())
+
+    raw_date = request.args.get("date")
+    if raw_date:
+        try:
+            session_date = date.fromisoformat(str(raw_date)[:10])
+        except (ValueError, TypeError):
+            session_date = date.today()
+    else:
+        session_date = date.today()
+
     division = (request.args.get("division") or "A").strip().upper()
 
     course = Course.query.filter_by(code=course_code).first()
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
+
+    # Server-side RBAC: Faculty must be assigned to this course and division
+    fac = user.faculty_profile
+    matching_assignment = next(
+        (a for a in fac.assignments if a.course_id == course.id and (a.division.upper() == division or a.division.upper() == "ALL")),
+        None
+    )
+    if not matching_assignment:
+        return jsonify({
+            "success": False,
+            "error": f"You are not assigned to teach course {course.code} for Division {division}."
+        }), 403
 
     session_row = AttendanceSession.query.filter_by(
         course_id=course.id, session_date=session_date, division=division
@@ -95,23 +117,31 @@ def get_roll_call():
     if session_row:
         marks_by_student = {r.student_id: r.status for r in session_row.records}
 
-    # Find enrolled students belonging to this course & division
+    target_sem = matching_assignment.semester if matching_assignment else course.semester
+
+    # Relational student query:
+    # Faculty -> FacultyAssignment -> Course -> Dept/Sem/Div -> Enrollment -> Student
     enrolled_students = (
-        Student.query.join(Enrollment)
-        .filter(Enrollment.course_id == course.id, db.or_(Student.division == division, Student.division.is_(None)))
+        Student.query.join(Enrollment, Student.id == Enrollment.student_id)
+        .filter(
+            Enrollment.course_id == course.id,
+            Student.department_id == course.department_id,
+            Student.semester == target_sem,
+            db.or_(Student.division == division, Student.division.is_(None))
+        )
         .all()
     )
 
-    # Fallback to cohort students if enrollment records were not explicitly created
     if not enrolled_students:
-        from models import FacultyAssignment
-        assigned_sems = [a.semester for a in course.faculty_assignments if a.division in (division, "ALL")]
-        target_sems = set([course.semester] + [s for s in assigned_sems if s])
-        enrolled_students = Student.query.filter(
-            Student.department_id == course.department_id,
-            Student.semester.in_(target_sems),
-            db.or_(Student.division == division, Student.division.is_(None))
-        ).all()
+        enrolled_students = (
+            Student.query.join(Enrollment, Student.id == Enrollment.student_id)
+            .filter(
+                Enrollment.course_id == course.id,
+                Student.department_id == course.department_id,
+                db.or_(Student.division == division, Student.division.is_(None))
+            )
+            .all()
+        )
 
     roster = []
     for s in enrolled_students:
@@ -125,15 +155,14 @@ def get_roll_call():
             "status": marks_by_student.get(s.id, "present"),
         })
 
-    # Sort roster by PRN or name
-    roster.sort(key=lambda x: str(x.get("prn") or x.get("name") or ""))
+    roster.sort(key=lambda x: str(x.get("prn") or x.get("studentId") or ""))
 
     return jsonify({
         "success": True,
         "data": {
             "courseCode": course.code,
             "courseTitle": course.title,
-            "date": session_date,
+            "date": session_date.isoformat(),
             "division": division,
             "roster": roster,
         },
@@ -167,11 +196,15 @@ def save_roll_call():
 
     if user.role == "faculty":
         fac = user.faculty_profile
-        is_assigned = (course.instructor_id == fac.id) or any(
-            a.course_id == course.id and a.division.upper() == division for a in fac.assignments
-        ) or any(a.course_id == course.id for a in fac.assignments)
+        is_assigned = any(
+            a.course_id == course.id and (a.division.upper() == division or a.division.upper() == "ALL")
+            for a in fac.assignments
+        ) or (course.instructor_id == fac.id)
         if not is_assigned:
-            return jsonify({"success": False, "error": "You can only mark attendance for your assigned courses and classes."}), 403
+            return jsonify({
+                "success": False,
+                "error": "You can only mark attendance for your assigned courses and divisions."
+            }), 403
 
     session_row = AttendanceSession.query.filter_by(
         course_id=course.id, session_date=session_date, division=division
@@ -202,6 +235,19 @@ def save_roll_call():
         ).first()
         if not student:
             raise ValidationError(f"Unknown student: {stu_id}")
+
+        enr = Enrollment.query.filter_by(student_id=student.id, course_id=course.id).first()
+        if not enr:
+            return jsonify({
+                "success": False,
+                "error": f"Student {stu_id} is not enrolled in {course.code}."
+            }), 403
+
+        if student.division and student.division.upper() != division and division != "ALL":
+            return jsonify({
+                "success": False,
+                "error": f"Student {stu_id} does not belong to Division {division}."
+            }), 403
 
         existing = AttendanceRecord.query.filter_by(
             session_id=session_row.id, student_id=student.id
