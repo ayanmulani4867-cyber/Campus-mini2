@@ -17,6 +17,7 @@ class Student(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("prn", name="uq_students_prn"),
+        db.Index("ix_students_dept_sem_div", "department_id", "semester", "division"),
     )
 
     user = db.relationship("User", back_populates="student_profile")

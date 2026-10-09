@@ -109,6 +109,7 @@ class Course(db.Model):
             category.in_(("core", "elective", "practical", "laboratory", "open elective", "lab")),
             name="ck_course_category"
         ),
+        db.Index("ix_courses_dept_sem", "department_id", "semester"),
     )
 
     def get_dependent_counts(self):
@@ -167,6 +168,7 @@ class Enrollment(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("student_id", "course_id", name="uq_enrollment_student_course"),
+        db.Index("ix_enrollments_course_id", "course_id"),
     )
 
     def to_dict(self):

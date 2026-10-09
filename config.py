@@ -1,4 +1,4 @@
-﻿import os
+import os
 from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -27,7 +27,13 @@ class Config:
     _raw_db_url = os.environ.get("DATABASE_URL") or "postgresql+psycopg://postgres:postgres@localhost:5432/campus_connect"
     SQLALCHEMY_DATABASE_URI = _normalize_db_url(_raw_db_url)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30,
+        "pool_recycle": 300,
+        "pool_pre_ping": True,
+    }
 
     # Session-based auth settings
     SESSION_COOKIE_HTTPONLY = True

@@ -6,9 +6,18 @@
 
 var CURRENT_USER = null; // populated by bootstrap() from /api/auth/me
 
-// ---- Low-level API helper --------------------------------------------------
+// ---- Low-level API helper with request deduplication ------------------------
+var _inflightGetRequests = {};
+
 function api(path, options) {
   options = options || {};
+  var method = (options.method || "GET").toUpperCase();
+  var isGet = method === "GET";
+
+  if (isGet && _inflightGetRequests[path]) {
+    return _inflightGetRequests[path];
+  }
+
   options.credentials = "include";
   var token = sessionStorage.getItem("campus_session_token");
   var headers = Object.assign({}, options.headers || {});
@@ -21,7 +30,8 @@ function api(path, options) {
   }
   options.headers = headers;
   var targetUrl = path;
-  return fetch(targetUrl, options).then(function (res) {
+
+  var reqPromise = fetch(targetUrl, options).then(function (res) {
     return res.json().catch(function () { return {}; }).then(function (data) {
       if (!res.ok) {
         var err = new Error(data.error || ("Request failed (" + res.status + ")"));
@@ -31,7 +41,28 @@ function api(path, options) {
       }
       return data;
     });
+  }).finally(function () {
+    if (isGet) {
+      delete _inflightGetRequests[path];
+    }
   });
+
+  if (isGet) {
+    _inflightGetRequests[path] = reqPromise;
+  }
+
+  return reqPromise;
+}
+
+function debounce(fn, delay) {
+  var timer = null;
+  return function () {
+    var context = this, args = arguments;
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      fn.apply(context, args);
+    }, delay || 300);
+  };
 }
 
 function getActiveRole() {
@@ -1499,8 +1530,16 @@ function initAttendance(role) {
   }
 
   function renderStudentAttendance() {
+    if (document.hidden) return; // Tab in background, skip polling
     var summaryBody = document.querySelector('[data-role="attendance-summary-body"]');
     var historyBody = document.getElementById("attendanceHistoryBody");
+    if (!summaryBody && !historyBody) {
+      if (attendancePollTimer) {
+        clearInterval(attendancePollTimer);
+        attendancePollTimer = null;
+      }
+      return;
+    }
     var syncBadge = document.getElementById("attendanceLastUpdated");
 
     api("/api/attendance/summary").then(function (res) {
@@ -1811,7 +1850,15 @@ function initAssignments(role) {
   }
 
   function loadStudentAssignments() {
+    if (document.hidden) return; // Tab in background, skip polling
     var tbody = document.getElementById("studentAssignmentsTableBody");
+    if (!tbody) {
+      if (assignmentsPollTimer) {
+        clearInterval(assignmentsPollTimer);
+        assignmentsPollTimer = null;
+      }
+      return;
+    }
     api("/api/assignments").then(function (res) {
       currentAssignmentsList = res.data || [];
       var assignments = currentAssignmentsList;
@@ -4073,6 +4120,29 @@ document.addEventListener("keydown", function (e) {
         closeModal("assignmentPdfViewerModal");
       }
     }
+  }
+});
+
+// Global visibility and lifecycle management for optimized background polling
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden) {
+    if (attendancePollTimer && typeof window.renderStudentAttendance === "function") {
+      window.renderStudentAttendance();
+    }
+    if (assignmentsPollTimer && typeof window.loadStudentAssignments === "function") {
+      window.loadStudentAssignments();
+    }
+  }
+});
+
+window.addEventListener("beforeunload", function () {
+  if (attendancePollTimer) {
+    clearInterval(attendancePollTimer);
+    attendancePollTimer = null;
+  }
+  if (assignmentsPollTimer) {
+    clearInterval(assignmentsPollTimer);
+    assignmentsPollTimer = null;
   }
 });
 

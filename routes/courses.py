@@ -14,11 +14,16 @@ def _resolve_course(identifier):
     if not identifier:
         return None
     identifier = str(identifier).strip()
+    base_q = Course.query.options(
+        db.joinedload(Course.department),
+        db.joinedload(Course.instructor).joinedload(Faculty.user),
+        db.selectinload(Course.faculty_assignments)
+    )
     if identifier.isdigit():
-        c = Course.query.get(int(identifier))
+        c = base_q.filter_by(id=int(identifier)).first()
         if c:
             return c
-    return Course.query.filter(Course.code.ilike(identifier)).first()
+    return base_q.filter(Course.code.ilike(identifier)).first()
 
 
 def _derive_year_label(semester: int) -> str:
@@ -32,7 +37,11 @@ def _derive_year_label(semester: int) -> str:
 @login_required
 def list_courses():
     user = current_user()
-    q = Course.query
+    q = Course.query.options(
+        db.joinedload(Course.department),
+        db.joinedload(Course.instructor).joinedload(Faculty.user),
+        db.selectinload(Course.faculty_assignments)
+    )
 
     if user.role == "student":
         student = user.student_profile

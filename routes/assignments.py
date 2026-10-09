@@ -8,11 +8,66 @@ from utils.validators import require_fields, ValidationError
 bp = Blueprint("assignments", __name__, url_prefix="/api/assignments")
 
 
+def _batch_serialize_assignments(assignments, student_id=None):
+    if not assignments:
+        return []
+
+    course_ids = list({a.course_id for a in assignments if a.course_id})
+    # Query enrollment counts per (course_id, division) in a single fast aggregation
+    counts_rows = (
+        db.session.query(
+            Enrollment.course_id,
+            Student.division,
+            db.func.count(Student.id)
+        )
+        .join(Student, Student.id == Enrollment.student_id)
+        .filter(Enrollment.course_id.in_(course_ids))
+        .group_by(Enrollment.course_id, Student.division)
+        .all()
+    ) if course_ids else []
+
+    # Map course_id -> {division: count, "_total": count}
+    enrollment_map = {}
+    for cid, div, cnt in counts_rows:
+        if cid not in enrollment_map:
+            enrollment_map[cid] = {"_total": 0}
+        enrollment_map[cid]["_total"] += cnt
+        if div:
+            enrollment_map[cid][div.upper()] = cnt
+
+    results = []
+    for a in assignments:
+        div_key = (a.division or "").strip().upper()
+        c_map = enrollment_map.get(a.course_id, {})
+        if not div_key or div_key == "ALL":
+            eligible_count = c_map.get("_total", 0)
+        else:
+            eligible_count = c_map.get(div_key, 0)
+
+        sub_count = len(a.submissions)
+        evaluated_count = sum(1 for s in a.submissions if s.grade is not None or s.status in ("graded", "evaluated"))
+        awaiting_count = max(0, sub_count - evaluated_count)
+
+        counts = {
+            "eligibleCount": eligible_count,
+            "submissionsCount": sub_count,
+            "evaluatedCount": evaluated_count,
+            "awaitingEvaluationCount": awaiting_count,
+        }
+        results.append(a.to_dict(student_id=student_id, counts=counts))
+    return results
+
+
 @bp.get("")
 @login_required
 def list_assignments():
     user = current_user()
-    query = Assignment.query
+    from sqlalchemy.orm import defer
+    query = Assignment.query.options(
+        db.joinedload(Assignment.course),
+        db.joinedload(Assignment.faculty).joinedload(Faculty.user),
+        db.selectinload(Assignment.submissions).defer(AssignmentSubmission.file_data).joinedload(AssignmentSubmission.student).joinedload(Student.user)
+    )
 
     course_code = request.args.get("courseCode")
     if course_code:
@@ -32,7 +87,7 @@ def list_assignments():
             db.or_(Assignment.division == "All", Assignment.division == student.division),
         )
         assignments = query.order_by(Assignment.due_date.asc()).all()
-        return jsonify({"success": True, "data": [a.to_dict(student_id=student.id) for a in assignments]})
+        return jsonify({"success": True, "data": _batch_serialize_assignments(assignments, student_id=student.id)})
 
     elif user.role == "faculty":
         fac = user.faculty_profile
@@ -41,11 +96,11 @@ def list_assignments():
             if assigned_cids:
                 query = query.filter(Assignment.course_id.in_(assigned_cids))
         assignments = query.order_by(Assignment.created_at.desc()).all()
-        return jsonify({"success": True, "data": [a.to_dict() for a in assignments]})
+        return jsonify({"success": True, "data": _batch_serialize_assignments(assignments)})
 
     # Admin: all assignments
     assignments = query.order_by(Assignment.created_at.desc()).all()
-    return jsonify({"success": True, "data": [a.to_dict() for a in assignments]})
+    return jsonify({"success": True, "data": _batch_serialize_assignments(assignments)})
 
 
 @bp.post("")
@@ -130,7 +185,11 @@ def create_assignment():
 @login_required
 def get_assignment(assignment_id):
     user = current_user()
-    assignment = Assignment.query.get(assignment_id)
+    assignment = Assignment.query.options(
+        db.joinedload(Assignment.course),
+        db.joinedload(Assignment.faculty).joinedload(Faculty.user),
+        db.selectinload(Assignment.submissions).defer(AssignmentSubmission.file_data).joinedload(AssignmentSubmission.student).joinedload(Student.user)
+    ).get(assignment_id)
     if not assignment:
         return jsonify({"success": False, "error": "Assignment not found."}), 404
 
@@ -236,7 +295,11 @@ def submit_assignment(assignment_id):
 def get_evaluation_roster(assignment_id):
     """Returns the full evaluation roster: eligible students with submission and evaluation statuses."""
     user = current_user()
-    assignment = Assignment.query.get(assignment_id)
+    assignment = Assignment.query.options(
+        db.joinedload(Assignment.course),
+        db.joinedload(Assignment.faculty).joinedload(Faculty.user),
+        db.selectinload(Assignment.submissions).defer(AssignmentSubmission.file_data).joinedload(AssignmentSubmission.student).joinedload(Student.user)
+    ).get(assignment_id)
     if not assignment:
         return jsonify({"success": False, "error": "Assignment not found."}), 404
 
@@ -253,7 +316,9 @@ def get_evaluation_roster(assignment_id):
         if not is_assigned:
             return jsonify({"success": False, "error": "Forbidden: You are not assigned to this course/division."}), 403
 
-    eligible_q = Student.query.join(Enrollment, Student.id == Enrollment.student_id).filter(
+    eligible_q = Student.query.options(
+        db.joinedload(Student.user)
+    ).join(Enrollment, Student.id == Enrollment.student_id).filter(
         Enrollment.course_id == assignment.course_id
     )
     if assignment.division and assignment.division.upper() != "ALL":
@@ -274,7 +339,7 @@ def get_evaluation_roster(assignment_id):
                 "id": None,
                 "assignmentId": assignment.id,
                 "studentId": stu.student_code,
-                "studentName": stu.user.full_name,
+                "studentName": stu.user.full_name if stu.user else None,
                 "prn": stu.prn or stu.student_code,
                 "rollNumber": stu.roll_number,
                 "division": stu.division,
@@ -296,11 +361,19 @@ def get_evaluation_roster(assignment_id):
             }
         roster.append(sub_dict)
 
-    counts = assignment.get_evaluation_counts()
+    sub_count = len(assignment.submissions)
+    evaluated_count = sum(1 for s in assignment.submissions if s.grade is not None or s.status in ("graded", "evaluated"))
+    awaiting_count = max(0, sub_count - evaluated_count)
+    counts = {
+        "eligibleCount": len(students),
+        "submissionsCount": sub_count,
+        "evaluatedCount": evaluated_count,
+        "awaitingEvaluationCount": awaiting_count,
+    }
     return jsonify({
         "success": True,
         "data": {
-            "assignment": assignment.to_dict(),
+            "assignment": assignment.to_dict(counts=counts),
             "counts": counts,
             "roster": roster,
         }

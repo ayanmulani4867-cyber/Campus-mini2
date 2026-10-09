@@ -2,7 +2,7 @@ from datetime import date
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import (
-    Student, Course, AttendanceSession, AttendanceRecord, Enrollment, FacultyAssignment,
+    Student, Course, AttendanceSession, AttendanceRecord, Enrollment, FacultyAssignment, Faculty,
 )
 from utils.auth import roles_required, login_required, current_user
 from utils.validators import require_fields, ValidationError
@@ -40,19 +40,40 @@ def attendance_summary():
     # Configurable Late attendance policy (default 1.0 = counted as attended, 0.5 = half attendance)
     late_weight = float(current_app.config.get("LATE_ATTENDANCE_WEIGHT", 1.0))
 
+    # Eager load enrollments and their courses with instructors
+    enrollments = (
+        Enrollment.query.options(
+            db.joinedload(Enrollment.course).joinedload(Course.instructor).joinedload(Faculty.user)
+        )
+        .filter_by(student_id=student.id)
+        .all()
+    )
+
+    # Fetch all attendance records for this student in a single query with sessions and markers eager-loaded
+    all_records = (
+        AttendanceRecord.query.options(
+            db.joinedload(AttendanceRecord.session).joinedload(AttendanceSession.marked_by).joinedload(Faculty.user)
+        )
+        .join(AttendanceSession, AttendanceRecord.session_id == AttendanceSession.id)
+        .filter(AttendanceRecord.student_id == student.id)
+        .order_by(AttendanceSession.session_date.desc())
+        .all()
+    )
+
+    records_by_course = {}
+    for r in all_records:
+        records_by_course.setdefault(r.session.course_id, []).append(r)
+
     rows = []
     history = []
     total_held = total_attended = 0
     total_present = total_absent = total_late = 0
 
-    for enr in student.enrollments:
+    for enr in enrollments:
         course = enr.course
-        records = (
-            AttendanceRecord.query.join(AttendanceSession)
-            .filter(AttendanceSession.course_id == course.id, AttendanceRecord.student_id == student.id)
-            .order_by(AttendanceSession.session_date.desc())
-            .all()
-        )
+        if not course:
+            continue
+        records = records_by_course.get(course.id, [])
         held = len(records)
         present_count = sum(1 for r in records if r.status == "present")
         absent_count = sum(1 for r in records if r.status == "absent")
@@ -70,7 +91,7 @@ def attendance_summary():
             "courseCode": course.code,
             "courseTitle": course.title,
             "courseName": course.title,
-            "instructor": course.instructor.user.full_name if course.instructor and course.instructor.user else None,
+            "instructor": course.instructor.user.full_name if (course.instructor and course.instructor.user) else None,
             "held": held,
             "totalConducted": held,
             "attended": attended,
@@ -143,6 +164,7 @@ def get_roll_call():
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
 
+    matching_assignment = None
     # Server-side RBAC: Faculty must be assigned to this course and division
     if user.role == "faculty":
         fac = user.faculty_profile
@@ -156,19 +178,25 @@ def get_roll_call():
                 "error": f"You are not assigned to teach course {course.code} for Division {division}."
             }), 403
 
-    session_row = AttendanceSession.query.filter_by(
+    session_row = AttendanceSession.query.options(
+        db.selectinload(AttendanceSession.records)
+    ).filter_by(
         course_id=course.id, session_date=session_date, division=division
     ).first()
+
     marks_by_student = {}
     if session_row:
         marks_by_student = {r.student_id: r.status for r in session_row.records}
 
     target_sem = matching_assignment.semester if matching_assignment else course.semester
 
-    # Relational student query:
-    # Faculty -> FacultyAssignment -> Course -> Dept/Sem/Div -> Enrollment -> Student
+    # Relational student query with eager-loaded user & department to eliminate N+1
     enrolled_students = (
-        Student.query.join(Enrollment, Student.id == Enrollment.student_id)
+        Student.query.options(
+            db.joinedload(Student.user),
+            db.joinedload(Student.department)
+        )
+        .join(Enrollment, Student.id == Enrollment.student_id)
         .filter(
             Enrollment.course_id == course.id,
             Student.department_id == course.department_id,
@@ -180,7 +208,11 @@ def get_roll_call():
 
     if not enrolled_students:
         enrolled_students = (
-            Student.query.join(Enrollment, Student.id == Enrollment.student_id)
+            Student.query.options(
+                db.joinedload(Student.user),
+                db.joinedload(Student.department)
+            )
+            .join(Enrollment, Student.id == Enrollment.student_id)
             .filter(
                 Enrollment.course_id == course.id,
                 Student.department_id == course.department_id,
@@ -196,7 +228,7 @@ def get_roll_call():
             "prn": s.prn or s.student_code,
             "rollNumber": s.roll_number,
             "roll_number": s.roll_number,
-            "name": s.user.full_name,
+            "name": s.user.full_name if s.user else None,
             "department": s.department.name if s.department else None,
             "semester": s.semester,
             "division": s.division or division,
@@ -221,7 +253,7 @@ def get_roll_call():
 @bp.post("/sessions")
 @roles_required("faculty", "admin")
 def save_roll_call():
-    """Faculty or Admin saves the day's roll-call/session: {courseCode, date, division, records: [{studentId, status}]}"""
+    """Faculty or Admin saves the day's roll-call/session in a batch transaction."""
     user = current_user()
     data = request.get_json(silent=True) or {}
     course_code = data.get("courseCode") or data.get("course_code")
@@ -267,25 +299,53 @@ def save_roll_call():
         db.session.add(session_row)
         db.session.flush()
 
+    # Pre-fetch all students matching the incoming IDs in a single query
+    incoming_stu_ids = [str(rec.get("studentId") or rec.get("student_id")).strip() for rec in data["records"] if (rec.get("studentId") or rec.get("student_id"))]
+    int_ids = [int(x) for x in incoming_stu_ids if x.isdigit()]
+
+    student_filters = [
+        Student.student_code.in_(incoming_stu_ids),
+        Student.prn.in_(incoming_stu_ids)
+    ]
+    if int_ids:
+        student_filters.append(Student.id.in_(int_ids))
+
+    all_matched_students = Student.query.filter(db.or_(*student_filters)).all()
+    student_lookup = {}
+    for s in all_matched_students:
+        student_lookup[s.student_code] = s
+        if s.prn:
+            student_lookup[s.prn] = s
+        student_lookup[str(s.id)] = s
+
+    student_db_ids = [s.id for s in all_matched_students]
+
+    # Pre-fetch enrollments in a single query
+    enrolled_set = set(
+        e.student_id for e in Enrollment.query.filter(
+            Enrollment.course_id == course.id,
+            Enrollment.student_id.in_(student_db_ids)
+        ).all()
+    ) if student_db_ids else set()
+
+    # Pre-fetch existing records for this session in a single query
+    existing_records = {
+        r.student_id: r for r in AttendanceRecord.query.filter_by(session_id=session_row.id).all()
+    }
+
     for rec in data["records"]:
-        stu_id = rec.get("studentId") or rec.get("student_id")
+        stu_id = str(rec.get("studentId") or rec.get("student_id") or "").strip()
         status = (rec.get("status") or "").lower()
         if not stu_id or not status:
             raise ValidationError("Each record needs studentId/student_id and status.")
         if status not in ("present", "absent", "late"):
             raise ValidationError("status must be present, absent, or late.")
-        student = Student.query.filter(
-            db.or_(
-                Student.student_code == stu_id,
-                Student.prn == stu_id,
-                Student.id == int(stu_id) if str(stu_id).isdigit() else False
-            )
-        ).first()
+
+        student = student_lookup.get(stu_id)
         if not student:
             raise ValidationError(f"Unknown student: {stu_id}")
 
-        enr = Enrollment.query.filter_by(student_id=student.id, course_id=course.id).first()
-        if not enr:
+        if student.id not in enrolled_set:
             return jsonify({
                 "success": False,
                 "error": f"Student {stu_id} is not enrolled in {course.code}."
@@ -297,9 +357,7 @@ def save_roll_call():
                 "error": f"Student {stu_id} does not belong to Division {division}."
             }), 403
 
-        existing = AttendanceRecord.query.filter_by(
-            session_id=session_row.id, student_id=student.id
-        ).first()
+        existing = existing_records.get(student.id)
         if existing:
             existing.status = status
         else:

@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Result, Student, Course, Enrollment, FacultyAssignment
 from utils.auth import roles_required, login_required, current_user
@@ -11,7 +11,10 @@ bp = Blueprint("results", __name__, url_prefix="/api/results")
 @login_required
 def list_results():
     user = current_user()
-    q = Result.query
+    q = Result.query.options(
+        db.joinedload(Result.student).joinedload(Student.user),
+        db.joinedload(Result.course)
+    )
 
     if user.role == "student":
         q = q.filter_by(student_id=user.student_profile.id, is_published=True)

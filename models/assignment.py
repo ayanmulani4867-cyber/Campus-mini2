@@ -41,8 +41,9 @@ class Assignment(db.Model):
             "awaitingEvaluationCount": awaiting_count,
         }
 
-    def to_dict(self, student_id=None):
-        counts = self.get_evaluation_counts()
+    def to_dict(self, student_id=None, counts=None):
+        if counts is None:
+            counts = self.get_evaluation_counts()
         stu_sub = None
         if student_id:
             for s in self.submissions:
@@ -124,7 +125,7 @@ class AssignmentSubmission(db.Model):
         display_status = "Evaluated" if is_evaluated else ("Late Submission" if self.status == "late" else ("Under Review" if self.status == "under_review" else "Submitted"))
         ext = self.file_name.rsplit(".", 1)[-1].lower() if (self.file_name and "." in self.file_name) else ""
         is_pdf = bool(ext == "pdf" or self.mime_type == "application/pdf")
-        has_file = bool(self.file_data or self.file_path)
+        has_file = bool(self.file_size_bytes or self.file_path or self.file_name)
         return {
             "id": self.id,
             "assignmentId": self.assignment_id,

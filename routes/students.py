@@ -39,7 +39,10 @@ def get_generated_prn():
 @roles_required("admin")
 def list_students():
     """User Directory student list is restricted to Administrators."""
-    q = Student.query
+    q = Student.query.options(
+        db.joinedload(Student.user),
+        db.joinedload(Student.department)
+    )
     search = request.args.get("q")
     if search:
         like = f"%{search}%"

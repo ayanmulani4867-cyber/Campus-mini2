@@ -17,15 +17,25 @@ def summary():
 
     if user.role == "student":
         student = user.student_profile
-        records = AttendanceRecord.query.filter_by(student_id=student.id).all()
-        held = len(records)
-        attended = sum(1 for r in records if r.status in ("present", "late"))
+        from extensions import db
+        # SQL aggregation for attendance
+        att_stats = db.session.query(
+            db.func.count(AttendanceRecord.id),
+            db.func.count(db.case((AttendanceRecord.status.in_(("present", "late")), 1)))
+        ).filter(AttendanceRecord.student_id == student.id).first()
+        held = att_stats[0] or 0
+        attended = att_stats[1] or 0
         attendance_pct = round((attended / held) * 100, 1) if held else 0.0
 
-        published = [r for r in student.results if r.is_published]
-        cgpa = round(sum(r.total_marks for r in published) / (len(published) * 10), 2) if published else 0.0
+        # SQL aggregation for published results CGPA
+        res_stats = db.session.query(
+            db.func.count(Result.id),
+            db.func.sum(Result.internal_marks + Result.end_sem_marks)
+        ).filter(Result.student_id == student.id, Result.is_published.is_(True)).first()
+        res_cnt = res_stats[0] or 0
+        res_sum = float(res_stats[1] or 0.0)
+        cgpa = round(res_sum / (res_cnt * 10), 2) if res_cnt else 0.0
 
-        from extensions import db
         recent_notices = Notice.query.filter(
             Notice.created_at >= date.today() - timedelta(days=7),
             db.and_(
@@ -46,10 +56,14 @@ def summary():
             "badge": f"{student.department.code if student.department else 'CSE'} • {student.year_label} • Sem {student.semester} • Div {student.division or 'A'}"
         }
 
+        enrolled_count = db.session.query(db.func.count(Enrollment.id)).filter_by(student_id=student.id).scalar()
+        if not enrolled_count:
+            enrolled_count = Course.query.filter_by(department_id=student.department_id, semester=student.semester).count()
+
         data = {
             "attendancePct": attendance_pct,
             "cgpa": cgpa,
-            "enrolledCourses": len(student.enrollments) or Course.query.filter_by(department_id=student.department_id, semester=student.semester).count(),
+            "enrolledCourses": enrolled_count,
             "pendingTasks": recent_notices,
             "cohort": cohort_info,
         }
@@ -58,20 +72,21 @@ def summary():
         faculty = user.faculty_profile
         from extensions import db
         assigned_ids = {a.course_id for a in faculty.assignments}
-        instructed_ids = {c.id for c in Course.query.filter_by(instructor_id=faculty.id).all()}
+        instructed_ids = {c[0] for c in Course.query.with_entities(Course.id).filter_by(instructor_id=faculty.id).all()}
         all_course_ids = list(assigned_ids | instructed_ids)
 
         assigned_divs = {a.division.upper() for a in faculty.assignments} or {"A"}
 
-        total_students = (
-            len({
-                e.student_id for e in Enrollment.query.join(Student).filter(
-                    Enrollment.course_id.in_(all_course_ids),
-                    db.or_(Student.division.in_(assigned_divs), Student.division.is_(None))
-                ).all()
-            })
-            if all_course_ids else 0
-        )
+        if all_course_ids:
+            total_students = db.session.query(
+                db.func.count(db.distinct(Enrollment.student_id))
+            ).join(Student, Student.id == Enrollment.student_id).filter(
+                Enrollment.course_id.in_(all_course_ids),
+                db.or_(Student.division.in_(assigned_divs), Student.division.is_(None))
+            ).scalar() or 0
+        else:
+            total_students = 0
+
         if total_students == 0 and all_course_ids:
             total_students = Student.query.filter(
                 Student.department_id == faculty.department_id,
@@ -79,11 +94,12 @@ def summary():
             ).count()
 
         today_marked = {
-            s.course_id for s in AttendanceSession.query.filter(
+            s[0] for s in db.session.query(AttendanceSession.course_id).filter(
                 AttendanceSession.course_id.in_(all_course_ids),
                 AttendanceSession.session_date == date.today(),
             ).all()
-        }
+        } if all_course_ids else set()
+
         attendance_pending = len([c for c in all_course_ids if c not in today_marked])
         uploaded_notes = StudyMaterial.query.filter_by(uploaded_by_id=user.id).count()
 
@@ -100,21 +116,24 @@ def summary():
         from extensions import db
         stu_cnt = Student.query.count()
         fac_cnt = Faculty.query.count()
-        crs_cnt = Course.query.count()
-        act_crs_cnt = Course.query.filter(Course.status.ilike("active")).count()
-        inact_crs_cnt = Course.query.filter(Course.status.ilike("inactive")).count()
-        dept_with_crs = db.session.query(Course.department_id).distinct().count()
+        crs_stats = db.session.query(
+            db.func.count(Course.id),
+            db.func.count(db.case((Course.status.ilike("active"), 1))),
+            db.func.count(db.case((Course.status.ilike("inactive"), 1))),
+            db.func.count(db.distinct(Course.department_id))
+        ).first()
+
         data = {
             "totalStudents": stu_cnt,
             "total_students": stu_cnt,
             "facultyMembers": fac_cnt,
             "totalFaculty": fac_cnt,
             "total_faculty": fac_cnt,
-            "activeCourses": act_crs_cnt,
-            "inactiveCourses": inact_crs_cnt,
-            "totalCourses": crs_cnt,
-            "total_courses": crs_cnt,
-            "departmentsWithCourses": dept_with_crs,
+            "activeCourses": crs_stats[1] or 0,
+            "inactiveCourses": crs_stats[2] or 0,
+            "totalCourses": crs_stats[0] or 0,
+            "total_courses": crs_stats[0] or 0,
+            "departmentsWithCourses": crs_stats[3] or 0,
             "systemHealth": 100,
         }
 

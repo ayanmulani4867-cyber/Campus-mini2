@@ -19,7 +19,11 @@ def _next_faculty_code():
 @roles_required("admin", "faculty")
 def list_faculty():
     """Faculty list optionally filtered by department."""
-    q = Faculty.query
+    q = Faculty.query.options(
+        db.joinedload(Faculty.user),
+        db.joinedload(Faculty.department),
+        db.selectinload(Faculty.assignments)
+    )
     dept_param = request.args.get("department_id") or request.args.get("department")
     if dept_param:
         dept = Department.resolve(dept_param)

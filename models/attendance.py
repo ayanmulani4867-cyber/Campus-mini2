@@ -43,4 +43,6 @@ class AttendanceRecord(db.Model):
     __table_args__ = (
         db.CheckConstraint(status.in_(("present", "absent", "late")), name="ck_attendance_status"),
         db.UniqueConstraint("session_id", "student_id", name="uq_record_session_student"),
+        db.Index("ix_attendance_records_student_id", "student_id"),
+        db.Index("ix_attendance_records_student_status", "student_id", "status"),
     )

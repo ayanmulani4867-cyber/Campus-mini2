@@ -46,6 +46,8 @@ class Result(db.Model):
         db.UniqueConstraint("student_id", "course_id", name="uq_result_student_course"),
         db.CheckConstraint("internal_marks >= 0 AND internal_marks <= 30", name="ck_internal_range"),
         db.CheckConstraint("end_sem_marks >= 0 AND end_sem_marks <= 70", name="ck_endsem_range"),
+        db.Index("ix_results_course_id", "course_id"),
+        db.Index("ix_results_student_published", "student_id", "is_published"),
     )
 
     @property
