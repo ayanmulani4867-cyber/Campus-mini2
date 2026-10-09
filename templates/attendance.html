@@ -59,7 +59,7 @@
         </div>
       </div>
 
-      {% if not current_user or current_user.role != 'faculty' %}
+      {% if not current_user or current_user.role == 'student' %}
       <!-- Student Attendance Overview Cards -->
       <div class="card-grid" style="margin-bottom: 24px;">
         <div class="stat-card stat-green">
@@ -156,7 +156,7 @@
       {% endif %}
 
       <!-- Interactive Faculty Roll-Call Section -->
-      <div class="card" id="facultyRollCallCard" style="display: {% if current_user and current_user.role == 'faculty' %}block{% else %}none{% endif %};">
+      <div class="card" id="facultyRollCallCard" style="display: {% if current_user and current_user.role in ['faculty', 'admin'] %}block{% else %}none{% endif %};">
         <div class="card-header-row">
           <div>
             <h3>Interactive Classroom Roll-Call</h3>

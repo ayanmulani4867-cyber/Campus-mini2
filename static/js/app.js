@@ -580,6 +580,8 @@ function setupSidebar(role) {
       { name: "Dashboard", href: "dashboard.html", icon: "📊" },
       { name: "My Profile", href: "profile.html", icon: "👤" },
       { name: "Courses", href: "courses.html", icon: "📚" },
+      { name: "My Attendance", href: "attendance.html", icon: "📅" },
+      { name: "My Assignments & Submissions", href: "assignments.html", icon: "📋" },
       { name: "My Results", href: "results.html", icon: "📝" },
       { name: "Notices", href: "notices.html", icon: "📢" },
       { name: "Events", href: "events.html", icon: "🎉" },
@@ -591,8 +593,10 @@ function setupSidebar(role) {
       { name: "Dashboard", href: "dashboard.html", icon: "📊" },
       { name: "Faculty Profile", href: "profile.html", icon: "👤" },
       { name: "My Classes", href: "courses.html", icon: "📚" },
-      { name: "Mark Attendance", href: "attendance.html", icon: "📅" },
-      { name: "Enter Marks", href: "results.html", icon: "📝" },
+      { name: "Attendance", href: "attendance.html", icon: "📅" },
+      { name: "Assignment Management", href: "assignments.html", icon: "📋" },
+      { name: "Assignment Evaluation", href: "assignments.html#evaluations", icon: "📝" },
+      { name: "Enter Marks", href: "results.html", icon: "📊" },
       { name: "Notices", href: "notices.html", icon: "📢" },
       { name: "Events", href: "events.html", icon: "🎉" },
       { name: "Upload Materials", href: "materials.html", icon: "📁" },
@@ -751,6 +755,8 @@ function initDashboard(user, role) {
     if (role === "student") {
       quickLinks.innerHTML =
         '<a href="courses.html" class="btn btn-secondary btn-sm">📚 My Courses</a>' +
+        '<a href="attendance.html" class="btn btn-secondary btn-sm">📅 My Attendance</a>' +
+        '<a href="assignments.html" class="btn btn-secondary btn-sm">📋 My Assignments & Submissions</a>' +
         '<a href="results.html" class="btn btn-secondary btn-sm">📝 My Results</a>' +
         '<a href="materials.html" class="btn btn-secondary btn-sm">📁 Study Notes</a>' +
         '<a href="notices.html" class="btn btn-secondary btn-sm">📢 Notice Board</a>' +
@@ -759,7 +765,8 @@ function initDashboard(user, role) {
     } else if (role === "faculty") {
       quickLinks.innerHTML =
         '<a href="courses.html" class="btn btn-secondary btn-sm">📚 My Classes</a>' +
-        '<a href="attendance.html" class="btn btn-secondary btn-sm">📅 Mark Attendance</a>' +
+        '<a href="attendance.html" class="btn btn-secondary btn-sm">📅 Attendance</a>' +
+        '<a href="assignments.html" class="btn btn-secondary btn-sm">📋 Assignment Management</a>' +
         '<a href="results.html" class="btn btn-secondary btn-sm">📝 Enter Marks</a>' +
         '<a href="materials.html" class="btn btn-secondary btn-sm">📁 Upload Materials</a>' +
         '<a href="notices.html" class="btn btn-secondary btn-sm">📢 Notice Board</a>' +

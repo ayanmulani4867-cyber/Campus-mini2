@@ -120,9 +120,9 @@ def attendance_summary():
 
 
 @bp.get("/roll-call")
-@roles_required("faculty")
+@roles_required("faculty", "admin")
 def get_roll_call():
-    """Faculty's classroom roster with today's marks filtered by course and division."""
+    """Faculty or Admin classroom roster with marks filtered by course and division."""
     user = current_user()
     course_code = request.args.get("courseCode")
     if not course_code:
@@ -144,16 +144,17 @@ def get_roll_call():
         return jsonify({"success": False, "error": "Course not found."}), 404
 
     # Server-side RBAC: Faculty must be assigned to this course and division
-    fac = user.faculty_profile
-    matching_assignment = next(
-        (a for a in fac.assignments if a.course_id == course.id and (a.division.upper() == division or a.division.upper() == "ALL")),
-        None
-    )
-    if not matching_assignment:
-        return jsonify({
-            "success": False,
-            "error": f"You are not assigned to teach course {course.code} for Division {division}."
-        }), 403
+    if user.role == "faculty":
+        fac = user.faculty_profile
+        matching_assignment = next(
+            (a for a in fac.assignments if a.course_id == course.id and (a.division.upper() == division or a.division.upper() == "ALL")),
+            None
+        )
+        if not matching_assignment:
+            return jsonify({
+                "success": False,
+                "error": f"You are not assigned to teach course {course.code} for Division {division}."
+            }), 403
 
     session_row = AttendanceSession.query.filter_by(
         course_id=course.id, session_date=session_date, division=division

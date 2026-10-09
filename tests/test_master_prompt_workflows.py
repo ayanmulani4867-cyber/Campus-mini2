@@ -320,3 +320,71 @@ def test_workflow_h_security_and_regression(client, app):
             assert u is None, f"Prohibited legacy record {bad_name} must not exist in database"
         u_bad_email = User.query.filter_by(email="anita.sen@campus.edu").first()
         assert u_bad_email is None, "Prohibited email anita.sen@campus.edu must not exist"
+
+
+def test_workflow_role_based_navigation_and_security(client, app):
+    """Test Role-Based Navigation & Strict Backend Authorization:
+    1. Admin navigation excludes attendance and assignments operational links.
+    2. Faculty navigation includes Attendance, Assignment Management, and Assignment Evaluation.
+    3. Student navigation includes My Attendance and My Assignments & Submissions.
+    4. Student is forbidden (403) from calling faculty roll-call or evaluation APIs.
+    5. Unauthenticated requests to protected pages are redirected to login."""
+
+    # 1. Read script.js and verify sidebar navigation configuration per role
+    script_path = app.static_folder + "/js/script.js"
+    with open(script_path, "r", encoding="utf-8") as f:
+        script_code = f.read()
+
+    # Parse setupSidebar implementation
+    sidebar_match = re.search(r'function setupSidebar\([^\)]*\)\s*\{([\s\S]*?)\n\}', script_code)
+    assert sidebar_match, "setupSidebar function must exist"
+    sidebar_body = sidebar_match.group(1)
+
+    # Extract admin sidebar items
+    admin_match = re.search(r'else\s*\{[\s\S]*?items\s*=\s*\[([\s\S]*?)\];', sidebar_body)
+    assert admin_match, "Admin sidebar section must be defined"
+    admin_block = admin_match.group(1)
+    assert 'attendance.html' not in admin_block, "Attendance must be removed from Admin sidebar"
+    assert 'assignments.html' not in admin_block, "Assignments must be removed from Admin sidebar"
+    assert 'users.html' in admin_block, "User directory must remain in Admin sidebar"
+    assert 'courses.html' in admin_block, "Courses must remain in Admin sidebar"
+
+    # Extract faculty sidebar items
+    fac_match = re.search(r'role\s*===\s*["\']faculty["\']\)[\s\S]*?items\s*=\s*\[([\s\S]*?)\];', sidebar_body)
+    assert fac_match, "Faculty sidebar section must be defined"
+    fac_block = fac_match.group(1)
+    assert 'attendance.html' in fac_block, "Attendance must be in Faculty sidebar"
+    assert 'Assignment Management' in fac_block, "Assignment Management must be in Faculty sidebar"
+    assert 'Assignment Evaluation' in fac_block, "Assignment Evaluation must be in Faculty sidebar"
+
+    # Extract student sidebar items
+    stu_match = re.search(r'role\s*===\s*["\']student["\']\)[\s\S]*?items\s*=\s*\[([\s\S]*?)\];', sidebar_body)
+    assert stu_match, "Student sidebar section must be defined"
+    stu_block = stu_match.group(1)
+    assert 'attendance.html' in stu_block, "My Attendance must be in Student sidebar"
+    assert 'My Assignments & Submissions' in stu_block, "My Assignments & Submissions must be in Student sidebar"
+
+    # 2. Student cannot access faculty roll-call endpoint (HTTP 403)
+    login_user(client, "ayan.mulani@campus.edu", "campus@123")
+    res_stu_denied = client.get("/api/attendance/roll-call?courseCode=CS601&division=A")
+    assert res_stu_denied.status_code == 403, "Student must receive 403 on faculty roll-call"
+
+    # Student cannot grade submissions (HTTP 403)
+    res_grade_denied = client.post(
+        "/api/assignments/submissions/1/grade",
+        data=json.dumps({"marks_obtained": 8, "feedback": "Nice"}),
+        content_type="application/json"
+    )
+    assert res_grade_denied.status_code == 403, "Student must receive 403 on grading"
+
+    # Student cannot access /users.html page (redirects to /dashboard.html)
+    res_page_denied = client.get("/users.html")
+    assert res_page_denied.status_code == 302
+    assert "/dashboard.html" in res_page_denied.headers["Location"]
+    logout_user(client)
+
+    # 3. Unauthenticated user accessing protected pages redirects to /login.html
+    res_unauth = client.get("/dashboard.html")
+    assert res_unauth.status_code == 302
+    assert "/login.html" in res_unauth.headers["Location"]
+
