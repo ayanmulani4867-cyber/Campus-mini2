@@ -14,6 +14,8 @@ def get_current_session():
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
+    if not token:
+        token = request.args.get("token") or request.args.get("session_token")
 
     if not token:
         return None
@@ -40,12 +42,14 @@ def current_user():
     """Return the authenticated User for this request.
     
     Priority:
-    1. Tab-isolated session token via X-Session-Token or Authorization Bearer.
-    2. Fallback to ambient Flask session cookie only if no token header was supplied.
+    1. Tab-isolated session token via X-Session-Token, Authorization Bearer, or query token.
+    2. Fallback to ambient Flask session cookie only if no token was supplied.
     """
     token_supplied = bool(
         request.headers.get("X-Session-Token") or
-        request.headers.get("Authorization", "").startswith("Bearer ")
+        request.headers.get("Authorization", "").startswith("Bearer ") or
+        request.args.get("token") or
+        request.args.get("session_token")
     )
 
     if token_supplied:

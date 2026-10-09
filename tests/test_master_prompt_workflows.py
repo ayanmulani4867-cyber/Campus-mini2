@@ -388,3 +388,157 @@ def test_workflow_role_based_navigation_and_security(client, app):
     assert res_unauth.status_code == 302
     assert "/login.html" in res_unauth.headers["Location"]
 
+
+def test_workflow_in_screen_pdf_assignment_viewer(client, app):
+    """Test In-Screen PDF Assignment Viewer:
+    1. UI: HTML and script contain PDF viewer modal, iframe container, View PDF buttons, and evaluation controls.
+    2. Backend: PDF preview endpoint serves inline Content-Disposition: inline and Content-Type: application/pdf.
+    3. Download endpoint remains available as attachment.
+    4. Security: Faculty assigned to course can preview; unauthorized students get 403 Forbidden; unauth gets 401.
+    5. Non-PDF files: Preview returns 400 with download advice; does not render unsupported format as PDF.
+    6. Evaluation: Marks out of 10 and feedback can be recorded while viewing."""
+    import io
+
+    # 1. UI validation
+    with app.app_context():
+        # Check template contains modal, iframe, and action buttons
+        template_path = app.template_folder + "/assignments.html"
+        with open(template_path, "r", encoding="utf-8") as f:
+            template_html = f.read()
+        assert 'id="assignmentPdfViewerModal"' in template_html, "PDF viewer modal must exist in template"
+        assert 'id="pdfViewerIframe"' in template_html, "PDF viewer iframe must exist in template"
+        assert 'id="evalViewPdfBtn"' in template_html, "In-screen PDF view button must exist in evaluation modal"
+        assert 'id="pdfEvalMarksInput"' in template_html, "Evaluation marks input must exist in PDF viewer"
+        assert 'id="pdfEvalFeedbackInput"' in template_html, "Evaluation feedback input must exist in PDF viewer"
+
+        # Check script.js contains openPdfViewer and closePdfViewerModal
+        script_path = app.static_folder + "/js/script.js"
+        with open(script_path, "r", encoding="utf-8") as f:
+            script_js = f.read()
+        assert 'openPdfViewer' in script_js, "openPdfViewer must be implemented in script.js"
+        assert 'closePdfViewerModal' in script_js, "closePdfViewerModal must be implemented in script.js"
+        assert 'btn-view-pdf' in script_js, "View PDF button class must be rendered for PDF submissions"
+
+        # 2. Setup realistic PDF submission
+        assignment = Assignment.query.first()
+        if not assignment:
+            course = Course.query.filter_by(code="CS601").first() or Course.query.first()
+            fac = Faculty.query.first()
+            assignment = Assignment(
+                title="Lab 1: SQL Optimization",
+                description="Optimize relational queries using indexes and execution plans.",
+                course_id=course.id,
+                faculty_id=fac.id,
+                division="ALL",
+                due_date=datetime.now(timezone.utc) + timedelta(days=7),
+                total_points=10
+            )
+            db.session.add(assignment)
+            db.session.commit()
+
+        student_ayan = Student.query.join(User).filter(User.email == "ayan.mulani@campus.edu").first()
+        student_arkam = Student.query.join(User).filter(User.email == "arkam.momin@campus.edu").first()
+        assert student_ayan and student_arkam
+
+        # Ensure enrollments
+        if not any(e.course_id == assignment.course_id for e in student_ayan.enrollments):
+            db.session.add(Enrollment(student_id=student_ayan.id, course_id=assignment.course_id))
+            db.session.commit()
+        if not any(e.course_id == assignment.course_id for e in student_arkam.enrollments):
+            db.session.add(Enrollment(student_id=student_arkam.id, course_id=assignment.course_id))
+            db.session.commit()
+
+        # Student Ayan submits PDF
+        login_user(client, "ayan.mulani@campus.edu", "campus@123")
+        pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n%%EOF"
+        data = {
+            "submissionText": "Here is my SQL query optimization paper with execution plans.",
+            "file": (io.BytesIO(pdf_bytes), "sql_optimization_report.pdf")
+        }
+        res_sub = client.post(f"/api/assignments/{assignment.id}/submit", data=data, content_type="multipart/form-data")
+        assert res_sub.status_code in (200, 201)
+        sub_data = res_sub.get_json()["data"]
+        sub_id = sub_data["id"]
+        assert sub_data["isPdf"] is True
+        assert sub_data["previewUrl"] == f"/api/assignments/{assignment.id}/submissions/{sub_id}/preview"
+        logout_user(client)
+
+        # 3. Faculty in-screen PDF delivery
+        fac_email = assignment.faculty.user.email if (assignment.faculty and assignment.faculty.user) else "amit.deshmukh@campus.edu"
+        login_user(client, fac_email, "campus@123")
+
+        # GET preview endpoint
+        res_prev = client.get(f"/api/assignments/submissions/{sub_id}/preview")
+        assert res_prev.status_code == 200, "Preview endpoint must return 200 OK for faculty"
+        assert "application/pdf" in res_prev.headers.get("Content-Type", ""), "Content-Type must be application/pdf"
+        cd_header = res_prev.headers.get("Content-Disposition", "")
+        assert cd_header.startswith("inline"), f"Content-Disposition must be inline, got: {cd_header}"
+        assert "sql_optimization_report.pdf" in cd_header
+        assert res_prev.data.startswith(b"%PDF"), "Must return real PDF bytes"
+
+        # GET nested preview endpoint
+        res_prev_nested = client.get(f"/api/assignments/{assignment.id}/submissions/{sub_id}/preview")
+        assert res_prev_nested.status_code == 200
+        assert res_prev_nested.headers.get("Content-Disposition", "").startswith("inline")
+
+        # GET download endpoint (verify download still forces attachment)
+        res_down = client.get(f"/api/assignments/submissions/{sub_id}/download")
+        assert res_down.status_code == 200
+        assert res_down.headers.get("Content-Disposition", "").startswith("attachment"), "Download must be attachment"
+
+        # Faculty grades assignment from PDF viewer
+        res_grade = client.post(
+            f"/api/assignments/submissions/{sub_id}/grade",
+            data=json.dumps({"marks_obtained": 9.5, "feedback": "Excellent execution plan analysis and index utilization."}),
+            content_type="application/json"
+        )
+        assert res_grade.status_code == 200
+        assert res_grade.get_json()["data"]["grade"] == 9.5
+        logout_user(client)
+
+        # 4. Security verification
+        # Submitting student CAN preview their own submission
+        login_user(client, "ayan.mulani@campus.edu", "campus@123")
+        res_own_prev = client.get(f"/api/assignments/submissions/{sub_id}/preview")
+        assert res_own_prev.status_code == 200, "Student must be able to preview own submission"
+        logout_user(client)
+
+        # Another student CANNOT preview another student's submission (HTTP 403)
+        login_user(client, "arkam.momin@campus.edu", "campus@123")
+        res_other_prev = client.get(f"/api/assignments/submissions/{sub_id}/preview")
+        assert res_other_prev.status_code == 403, "Student must receive 403 on another student's submission"
+
+        res_other_down = client.get(f"/api/assignments/submissions/{sub_id}/download")
+        assert res_other_down.status_code == 403, "Student must receive 403 on another student's download"
+        logout_user(client)
+
+        # Unauthenticated user CANNOT access preview (HTTP 401)
+        res_unauth_prev = client.get(f"/api/assignments/submissions/{sub_id}/preview")
+        assert res_unauth_prev.status_code == 401, "Unauthenticated user must receive 401"
+
+        # 5. Non-PDF submission handling
+        # Student Arkam submits a ZIP file
+        login_user(client, "arkam.momin@campus.edu", "campus@123")
+        zip_bytes = b"PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00" + b"\x00" * 20
+        data_zip = {
+            "submissionText": "Project archive bundle.",
+            "file": (io.BytesIO(zip_bytes), "project_code.zip")
+        }
+        res_sub_zip = client.post(f"/api/assignments/{assignment.id}/submit", data=data_zip, content_type="multipart/form-data")
+        assert res_sub_zip.status_code in (200, 201)
+        sub_zip_id = res_sub_zip.get_json()["data"]["id"]
+        logout_user(client)
+
+        # Faculty tries to preview the non-PDF file
+        login_user(client, fac_email, "campus@123")
+        res_zip_prev = client.get(f"/api/assignments/submissions/{sub_zip_id}/preview")
+        assert res_zip_prev.status_code == 400, "Previewing non-PDF must return 400 Bad Request"
+        assert "In-screen preview is only available for PDF documents" in res_zip_prev.get_json()["error"]
+
+        # But download works normally
+        res_zip_down = client.get(f"/api/assignments/submissions/{sub_zip_id}/download")
+        assert res_zip_down.status_code == 200
+        assert res_zip_down.headers.get("Content-Disposition", "").startswith("attachment")
+        logout_user(client)
+
+

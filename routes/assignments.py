@@ -280,7 +280,10 @@ def get_evaluation_roster(assignment_id):
                 "division": stu.division,
                 "submissionText": None,
                 "fileName": None,
+                "fileExtension": None,
+                "isPdf": False,
                 "downloadUrl": None,
+                "previewUrl": None,
                 "submittedAt": None,
                 "status": "not_submitted",
                 "displayStatus": "Not Submitted",
@@ -317,7 +320,7 @@ def download_submission(assignment_id, submission_id):
     if user.role == "student":
         student = user.student_profile
         if not student or submission.student_id != student.id:
-            return jsonify({"success": False, "error": "You cannot access another student's submission."}), 403
+            return jsonify({"success": False, "error": "Forbidden: You cannot access another student's submission."}), 403
     elif user.role == "faculty":
         faculty = user.faculty_profile
         assignment = submission.assignment
@@ -325,7 +328,7 @@ def download_submission(assignment_id, submission_id):
             a.course_id == assignment.course_id for a in faculty.assignments
         )
         if not is_owner:
-            return jsonify({"success": False, "error": "You do not have permission to view this submission."}), 403
+            return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
 
     if submission.file_data:
         return storage_service.create_download_response(
@@ -335,6 +338,48 @@ def download_submission(assignment_id, submission_id):
         )
 
     return jsonify({"success": False, "error": "No file attached to this submission."}), 404
+
+
+@bp.get("/<int:assignment_id>/submissions/<int:submission_id>/preview")
+@login_required
+def preview_submission(assignment_id, submission_id):
+    """Inline PDF Preview for assignment evaluation."""
+    from services.storage_service import storage_service
+    user = current_user()
+    submission = AssignmentSubmission.query.filter_by(id=submission_id, assignment_id=assignment_id).first()
+    if not submission:
+        return jsonify({"success": False, "error": "Submission not found."}), 404
+
+    # Authorization
+    if user.role == "student":
+        student = user.student_profile
+        if not student or submission.student_id != student.id:
+            return jsonify({"success": False, "error": "Forbidden: You cannot access another student's submission."}), 403
+    elif user.role == "faculty":
+        faculty = user.faculty_profile
+        assignment = submission.assignment
+        is_owner = (assignment.faculty_id == faculty.id) or (assignment.course.instructor_id == faculty.id) or any(
+            a.course_id == assignment.course_id for a in faculty.assignments
+        )
+        if not is_owner:
+            return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
+
+    if not submission.file_data:
+        return jsonify({"success": False, "error": "No file attached to this submission."}), 404
+
+    fname = (submission.file_name or "").lower()
+    mime = (submission.mime_type or "").lower()
+    if not (fname.endswith(".pdf") or mime == "application/pdf"):
+        return jsonify({
+            "success": False,
+            "error": "In-screen preview is only available for PDF documents. Please use the download option."
+        }), 400
+
+    return storage_service.create_preview_response(
+        submission.file_data,
+        submission.file_name or f"submission_{submission.id}.pdf",
+        submission.mime_type or "application/pdf",
+    )
 
 
 @bp.get("/submissions/<int:submission_id>/download")
@@ -351,7 +396,7 @@ def download_submission_flat(submission_id):
     if user.role == "student":
         student = user.student_profile
         if not student or submission.student_id != student.id:
-            return jsonify({"success": False, "error": "You cannot access another student's submission."}), 403
+            return jsonify({"success": False, "error": "Forbidden: You cannot access another student's submission."}), 403
     elif user.role == "faculty":
         faculty = user.faculty_profile
         assignment = submission.assignment
@@ -359,7 +404,7 @@ def download_submission_flat(submission_id):
             a.course_id == assignment.course_id for a in faculty.assignments
         )
         if not is_owner:
-            return jsonify({"success": False, "error": "You do not have permission to view this submission."}), 403
+            return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
 
     if submission.file_data:
         return storage_service.create_download_response(
@@ -369,6 +414,48 @@ def download_submission_flat(submission_id):
         )
 
     return jsonify({"success": False, "error": "No file attached to this submission."}), 404
+
+
+@bp.get("/submissions/<int:submission_id>/preview")
+@login_required
+def preview_submission_flat(submission_id):
+    """Flat URL: GET /api/assignments/submissions/<id>/preview"""
+    from services.storage_service import storage_service
+    user = current_user()
+    submission = AssignmentSubmission.query.get(submission_id)
+    if not submission:
+        return jsonify({"success": False, "error": "Submission not found."}), 404
+
+    # Authorization
+    if user.role == "student":
+        student = user.student_profile
+        if not student or submission.student_id != student.id:
+            return jsonify({"success": False, "error": "Forbidden: You cannot access another student's submission."}), 403
+    elif user.role == "faculty":
+        faculty = user.faculty_profile
+        assignment = submission.assignment
+        is_owner = (assignment.faculty_id == faculty.id) or (assignment.course.instructor_id == faculty.id) or any(
+            a.course_id == assignment.course_id for a in faculty.assignments
+        )
+        if not is_owner:
+            return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
+
+    if not submission.file_data:
+        return jsonify({"success": False, "error": "No file attached to this submission."}), 404
+
+    fname = (submission.file_name or "").lower()
+    mime = (submission.mime_type or "").lower()
+    if not (fname.endswith(".pdf") or mime == "application/pdf"):
+        return jsonify({
+            "success": False,
+            "error": "In-screen preview is only available for PDF documents. Please use the download option."
+        }), 400
+
+    return storage_service.create_preview_response(
+        submission.file_data,
+        submission.file_name or f"submission_{submission.id}.pdf",
+        submission.mime_type or "application/pdf",
+    )
 
 
 @bp.post("/submissions/<int:submission_id>/grade")

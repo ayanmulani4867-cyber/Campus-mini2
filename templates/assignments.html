@@ -311,10 +311,16 @@
 
         <div class="form-group" id="evalFileDownloadGroup" style="display: none;">
           <label>Uploaded Document</label>
-          <div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary btn-sm" id="evalViewPdfBtn" style="display: none;" onclick="openPdfViewerFromEvalModal()">
+              <span>📄</span> View Assignment PDF (In-Screen)
+            </button>
             <a href="#" id="evalDownloadLink" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px;">
-              <span>📥</span> Download Student File
+              <span>📥</span> <span id="evalDownloadText">Download Student File</span>
             </a>
+          </div>
+          <div id="evalFileNonPdfNotice" style="display: none; font-size: 11.5px; color: var(--text-muted); margin-top: 5px;">
+            ℹ️ In-screen viewer is available for PDF files. Use Download for this document format.
           </div>
         </div>
 
@@ -332,6 +338,103 @@
       <div class="modal-footer">
         <button class="btn btn-secondary btn-sm" onclick="closeModal('evaluateSubmissionModal')">Cancel</button>
         <button class="btn btn-primary btn-sm" id="btnSaveEvaluation" onclick="saveSubmissionEvaluation()">Save Evaluation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-Screen PDF Viewer & Evaluation Workspace Modal -->
+  <div class="modal-overlay pdf-viewer-overlay" id="assignmentPdfViewerModal">
+    <div class="modal-box pdf-viewer-box">
+      <!-- Top Header -->
+      <div class="pdf-viewer-header">
+        <div class="pdf-viewer-header-info">
+          <span style="font-size: 20px;">📄</span>
+          <div>
+            <h3 id="pdfViewerTitle">Student Assignment PDF Viewer</h3>
+            <div style="font-size: 12px; color: var(--text-muted);" id="pdfViewerSubtitle">Evaluating student submission</div>
+          </div>
+        </div>
+        <div class="pdf-viewer-actions">
+          <a href="#" id="pdfViewerDownloadBtn" class="btn btn-secondary btn-sm" download title="Download file to device">
+            <span>📥</span> Download
+          </a>
+          <a href="#" id="pdfViewerExternalBtn" target="_blank" class="btn btn-secondary btn-sm" title="Open in new browser tab">
+            <span>↗</span> Open in Tab
+          </a>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closePdfViewerModal()" title="Close PDF viewer" style="font-size: 14px; padding: 4px 10px;">
+            ✕ Close Viewer
+          </button>
+        </div>
+      </div>
+
+      <!-- Split Workspace -->
+      <div class="pdf-viewer-workspace">
+        <!-- Left: PDF Embedded Viewer Pane -->
+        <div class="pdf-viewer-pane">
+          <div class="pdf-viewer-toolbar">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge badge-info" id="pdfViewerFileName">document.pdf</span>
+              <span style="color: #94a3b8; font-size: 11px;">Native In-Browser PDF Reader (Zoom, Scroll & Page Controls)</span>
+            </div>
+            <div style="font-size: 11px; color: #cbd5e1;">
+              <span>Press <kbd style="background:#334155; padding:1px 4px; border-radius:3px;">Esc</kbd> or ✕ to return</span>
+            </div>
+          </div>
+
+          <div class="pdf-viewer-container" id="pdfViewerContainer">
+            <div class="pdf-loading-overlay" id="pdfLoadingOverlay">
+              <span class="btn-spinner" style="width: 24px; height: 24px; border-width: 3px;"></span>
+              <span>Loading in-screen PDF document...</span>
+            </div>
+            <iframe id="pdfViewerIframe" class="pdf-viewer-iframe" title="Student Assignment Submission PDF" src="about:blank"></iframe>
+          </div>
+        </div>
+
+        <!-- Right: Faculty Evaluation Form Pane -->
+        <div class="pdf-eval-pane">
+          <div class="pdf-eval-header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">Grading & Review</h4>
+              <span class="badge badge-primary" id="pdfEvalStatusBadge">Submission</span>
+            </div>
+          </div>
+
+          <div class="pdf-eval-body">
+            <div id="pdfViewerEvalError"></div>
+
+            <div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px; border: 1px solid var(--border);">
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-main);" id="pdfEvalStudentName">Student Name</div>
+              <div style="display: flex; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--text-muted);">
+                <span id="pdfEvalPRN">PRN: --</span>
+                <span>•</span>
+                <span id="pdfEvalRoll">Roll: --</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" id="pdfEvalSubmittedAt">Submitted: --</div>
+            </div>
+
+            <!-- Optional student written text preview -->
+            <div class="form-group" id="pdfEvalTextGroup" style="display: none;">
+              <label style="font-size: 12px; font-weight: 600;">Student Written Notes</label>
+              <div id="pdfEvalTextContent" style="background: var(--bg-main); padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; max-height: 90px; overflow-y: auto; border: 1px solid var(--border); white-space: pre-wrap;"></div>
+            </div>
+
+            <div class="form-group">
+              <label style="font-size: 12px; font-weight: 600;">Marks Obtained (0 to 10 Marks) *</label>
+              <input type="number" class="form-input" id="pdfEvalMarksInput" min="0" max="10" step="0.5" placeholder="e.g. 9.0" style="font-size: 14px; font-weight: 600;">
+              <small style="color: var(--text-muted); font-size: 11px;">Institutional rubric max: 10 marks.</small>
+            </div>
+
+            <div class="form-group">
+              <label style="font-size: 12px; font-weight: 600;">Faculty Feedback & Remarks *</label>
+              <textarea class="form-textarea" id="pdfEvalFeedbackInput" rows="4" placeholder="Enter constructive feedback and evaluation remarks..." style="font-size: 12.5px;"></textarea>
+            </div>
+          </div>
+
+          <div class="pdf-eval-footer">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closePdfViewerModal()">Close</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnPdfSaveEvaluation" onclick="savePdfViewerEvaluation()">Save Evaluation</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

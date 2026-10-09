@@ -115,6 +115,27 @@ class StorageService:
             download_name=filename or f"download.{ext or 'bin'}",
         )
 
+    def create_preview_response(self, file_bytes: bytes, filename: str, mime_type: str = None):
+        """Streams binary data stored in PostgreSQL BYTEA for in-screen preview (inline disposition)."""
+        if not file_bytes:
+            raise ValueError("No file data available for preview.")
+
+        ext = self.get_extension(filename)
+        effective_mime = mime_type or MIME_TYPE_MAP.get(ext, "application/octet-stream")
+        if ext == "pdf":
+            effective_mime = "application/pdf"
+
+        safe_name = secure_filename(filename) or f"preview.{ext or 'pdf'}"
+        response = send_file(
+            io.BytesIO(file_bytes),
+            mimetype=effective_mime,
+            as_attachment=False,
+            download_name=safe_name,
+        )
+        response.headers["Content-Disposition"] = f'inline; filename="{safe_name}"'
+        response.headers["Content-Type"] = effective_mime
+        return response
+
 
 # Singleton storage service instance
 storage_service = StorageService()

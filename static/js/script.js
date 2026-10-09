@@ -2106,6 +2106,9 @@ function initAssignments(role) {
         if (subTitleEl) subTitleEl.textContent = (assignment.courseCode || '') + " (Div " + (assignment.division || 'ALL') + ") — " +
           counts.submissions + " Submissions (" + counts.awaiting_evaluation + " Awaiting Review, " + counts.evaluated + " Evaluated)";
 
+        window.currentRosterSubmissions = roster;
+        window.currentRosterAssignment = assignment;
+
         if (!tbody) return;
         if (!roster.length) {
           tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No enrolled students found for this assignment cohort.</td></tr>';
@@ -2134,7 +2137,17 @@ function initAssignments(role) {
           if (isSubmitted) {
             var parts = [];
             if (s.submissionText) parts.push('<span title="' + escapeHtml(s.submissionText) + '">📝 ' + escapeHtml(s.submissionText.substring(0, 30)) + '...</span>');
-            if (s.downloadUrl) parts.push('<a href="' + escapeHtml(s.downloadUrl) + '" target="_blank" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;">📥 ' + escapeHtml(s.fileName || 'File') + '</a>');
+            if (s.isPdf) {
+              parts.push('<button type="button" class="btn btn-primary btn-sm btn-view-pdf" style="padding:2px 8px; font-size:11px; margin-right:4px;" onclick="openPdfViewerFromRoster(' + s.id + ')">📄 View PDF</button>');
+              if (s.downloadUrl) {
+                parts.push('<a href="' + escapeHtml(s.downloadUrl) + '" target="_blank" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" title="Download PDF to device">📥</a>');
+              }
+            } else if (s.downloadUrl) {
+              parts.push('<a href="' + escapeHtml(s.downloadUrl) + '" target="_blank" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;">📥 ' + escapeHtml(s.fileName || 'File') + '</a>');
+              if (s.fileExtension) {
+                parts.push('<span class="badge badge-secondary" style="font-size:10px; margin-left:3px;">' + escapeHtml(s.fileExtension.toUpperCase()) + '</span>');
+              }
+            }
             contentPreview = parts.join(" ") || 'Submitted';
           }
 
@@ -2147,8 +2160,12 @@ function initAssignments(role) {
             var escapedText = escapeHtml(s.submissionText || '').replace(/'/g, "\\'");
             var downloadUrl = s.downloadUrl ? escapeHtml(s.downloadUrl).replace(/'/g, "\\'") : '';
             var gradeVal = s.grade !== null && s.grade !== undefined ? s.grade : 'null';
+            var escapedFileName = s.fileName ? escapeHtml(s.fileName).replace(/'/g, "\\'") : '';
+            var isPdfFlag = s.isPdf ? 'true' : 'false';
 
-            actionBtn = '<button class="btn btn-primary btn-sm" onclick="openEvaluationModal(' + assignmentId + ', ' + s.id + ', \'' + escapedStudentName + '\', \'' + escapedPrn + '\', \'' + escapedTitle + '\', ' + gradeVal + ', \'' + escapedFeedback + '\', \'' + escapedText + '\', \'' + downloadUrl + '\')">' + (s.isEvaluated ? 'Edit Marks' : 'Evaluate') + '</button>';
+            var evalBtn = '<button class="btn btn-primary btn-sm" onclick="openEvaluationModal(' + assignmentId + ', ' + s.id + ', \'' + escapedStudentName + '\', \'' + escapedPrn + '\', \'' + escapedTitle + '\', ' + gradeVal + ', \'' + escapedFeedback + '\', \'' + escapedText + '\', \'' + downloadUrl + '\', \'' + escapedFileName + '\', ' + isPdfFlag + ')">' + (s.isEvaluated ? 'Edit Marks' : 'Evaluate') + '</button>';
+            var pdfBtn = s.isPdf ? ' <button type="button" class="btn btn-secondary btn-sm" onclick="openPdfViewerFromRoster(' + s.id + ')" title="View assignment PDF in-screen">📄 View PDF</button>' : '';
+            actionBtn = evalBtn + pdfBtn;
           } else {
             actionBtn = '<span style="color:var(--text-muted); font-size:12px;">Awaiting</span>';
           }
@@ -2177,7 +2194,26 @@ function initAssignments(role) {
       if (subCard) subCard.style.display = "none";
     };
 
-    window.openEvaluationModal = function (assignmentId, submissionId, studentName, prn, title, existingGrade, existingFeedback, textContent, downloadUrl) {
+    var currentEvalSubmissionData = null;
+    var activePdfSubmission = null;
+    var activePdfBlobUrl = null;
+
+    window.openEvaluationModal = function (assignmentId, submissionId, studentName, prn, title, existingGrade, existingFeedback, textContent, downloadUrl, fileName, isPdf) {
+      currentEvalSubmissionData = {
+        id: submissionId,
+        assignmentId: assignmentId,
+        studentName: studentName,
+        prn: prn,
+        assignmentTitle: title,
+        grade: (existingGrade !== null && existingGrade !== undefined) ? existingGrade : null,
+        feedback: existingFeedback || "",
+        submissionText: textContent || "",
+        downloadUrl: downloadUrl || null,
+        fileName: fileName || null,
+        isPdf: isPdf === true || isPdf === "true",
+        previewUrl: (isPdf === true || isPdf === "true") ? ("/api/assignments/submissions/" + submissionId + "/preview") : null
+      };
+
       document.getElementById("evalSubmissionId").value = submissionId;
       document.getElementById("evalStudentName").textContent = studentName;
       document.getElementById("evalStudentPRN").textContent = prn;
@@ -2186,11 +2222,30 @@ function initAssignments(role) {
 
       var dlGroup = document.getElementById("evalFileDownloadGroup");
       var dlLink = document.getElementById("evalDownloadLink");
+      var dlText = document.getElementById("evalDownloadText");
+      var viewPdfBtn = document.getElementById("evalViewPdfBtn");
+      var nonPdfNotice = document.getElementById("evalFileNonPdfNotice");
+
       if (downloadUrl) {
         if (dlGroup) dlGroup.style.display = "block";
         if (dlLink) dlLink.href = downloadUrl;
+        if (dlText) dlText.textContent = fileName ? ("Download (" + fileName + ")") : "Download Student File";
+
+        if (currentEvalSubmissionData.isPdf) {
+          if (viewPdfBtn) viewPdfBtn.style.display = "inline-flex";
+          if (nonPdfNotice) nonPdfNotice.style.display = "none";
+        } else {
+          if (viewPdfBtn) viewPdfBtn.style.display = "none";
+          if (nonPdfNotice) {
+            nonPdfNotice.style.display = "block";
+            var ext = fileName && fileName.indexOf(".") !== -1 ? fileName.split(".").pop().toUpperCase() : "File";
+            nonPdfNotice.textContent = "ℹ️ In-screen viewer is available for PDF files. Use Download for " + ext + " format.";
+          }
+        }
       } else {
         if (dlGroup) dlGroup.style.display = "none";
+        if (viewPdfBtn) viewPdfBtn.style.display = "none";
+        if (nonPdfNotice) nonPdfNotice.style.display = "none";
       }
 
       var marksInput = document.getElementById("evalMarksInput");
@@ -2202,6 +2257,206 @@ function initAssignments(role) {
       if (feedbackInput) feedbackInput.value = existingFeedback || "";
 
       openModal("evaluateSubmissionModal");
+    };
+
+    window.openPdfViewerFromEvalModal = function () {
+      if (!currentEvalSubmissionData) return;
+      var em = document.getElementById("evalMarksInput");
+      var ef = document.getElementById("evalFeedbackInput");
+      if (em && em.value !== "") currentEvalSubmissionData.grade = parseFloat(em.value);
+      if (ef && ef.value !== "") currentEvalSubmissionData.feedback = ef.value;
+      openPdfViewer(currentEvalSubmissionData, "evalModal");
+    };
+
+    window.openPdfViewerFromRoster = function (subId) {
+      var s = (window.currentRosterSubmissions || []).find(function (item) { return item.id === subId; });
+      if (!s) return;
+      var data = Object.assign({}, s, {
+        assignmentTitle: (window.currentRosterAssignment ? window.currentRosterAssignment.title : "Assignment")
+      });
+      openPdfViewer(data, "roster");
+    };
+
+    window.openPdfViewer = function (data, origin) {
+      activePdfSubmission = data;
+      data.openedFromEvalModal = (origin === "evalModal");
+
+      var iframe = document.getElementById("pdfViewerIframe");
+      var overlay = document.getElementById("pdfLoadingOverlay");
+      var titleEl = document.getElementById("pdfViewerTitle");
+      var subTitleEl = document.getElementById("pdfViewerSubtitle");
+      var fileNameEl = document.getElementById("pdfViewerFileName");
+      var dlBtn = document.getElementById("pdfViewerDownloadBtn");
+      var extBtn = document.getElementById("pdfViewerExternalBtn");
+
+      var stuNameEl = document.getElementById("pdfEvalStudentName");
+      var prnEl = document.getElementById("pdfEvalPRN");
+      var rollEl = document.getElementById("pdfEvalRoll");
+      var submittedEl = document.getElementById("pdfEvalSubmittedAt");
+      var statusBadge = document.getElementById("pdfEvalStatusBadge");
+      var textGroup = document.getElementById("pdfEvalTextGroup");
+      var textContent = document.getElementById("pdfEvalTextContent");
+      var marksInput = document.getElementById("pdfEvalMarksInput");
+      var feedbackInput = document.getElementById("pdfEvalFeedbackInput");
+      var errBox = document.getElementById("pdfViewerEvalError");
+
+      if (errBox) errBox.innerHTML = "";
+      if (titleEl) titleEl.textContent = (data.studentName || "Student") + " — " + (data.assignmentTitle || "Assignment Submission");
+      if (subTitleEl) subTitleEl.textContent = "PRN: " + (data.prn || "-") + " • " + (data.fileName || "document.pdf");
+      if (fileNameEl) fileNameEl.textContent = data.fileName || "document.pdf";
+      if (stuNameEl) stuNameEl.textContent = data.studentName || "Student";
+      if (prnEl) prnEl.textContent = "PRN: " + (data.prn || "-");
+      if (rollEl) rollEl.textContent = "Roll: " + (data.rollNumber || "-");
+      if (submittedEl) submittedEl.textContent = data.submittedAt ? ("Submitted: " + new Date(data.submittedAt).toLocaleString()) : "Submitted";
+      if (statusBadge) {
+        statusBadge.textContent = data.isEvaluated ? "Evaluated" : (data.status === "late" ? "Late" : "Submitted");
+        statusBadge.className = "badge " + (data.isEvaluated ? "badge-success" : (data.status === "late" ? "badge-warning" : "badge-primary"));
+      }
+
+      if (data.submissionText) {
+        if (textGroup) textGroup.style.display = "block";
+        if (textContent) textContent.textContent = data.submissionText;
+      } else {
+        if (textGroup) textGroup.style.display = "none";
+      }
+
+      // Synchronize grading fields from eval modal if opened from there, or from submission data
+      var existingMarks = "";
+      var existingFeedback = "";
+      if (data.openedFromEvalModal) {
+        var em = document.getElementById("evalMarksInput");
+        var ef = document.getElementById("evalFeedbackInput");
+        existingMarks = (em && em.value !== "") ? em.value : (data.grade !== null && data.grade !== undefined ? data.grade : "");
+        existingFeedback = (ef && ef.value !== "") ? ef.value : (data.feedback || "");
+      } else {
+        existingMarks = (data.grade !== null && data.grade !== undefined) ? data.grade : "";
+        existingFeedback = data.feedback || "";
+      }
+
+      if (marksInput) marksInput.value = existingMarks;
+      if (feedbackInput) feedbackInput.value = existingFeedback;
+
+      var token = sessionStorage.getItem("campus_session_token");
+      var previewEndpoint = data.previewUrl || ("/api/assignments/submissions/" + data.id + "/preview");
+      var downloadEndpoint = data.downloadUrl || ("/api/assignments/submissions/" + data.id + "/download");
+
+      if (dlBtn) dlBtn.href = downloadEndpoint + (token ? ("?token=" + encodeURIComponent(token)) : "");
+      if (extBtn) extBtn.href = previewEndpoint + (token ? ("?token=" + encodeURIComponent(token)) : "");
+
+      if (overlay) {
+        overlay.style.display = "flex";
+        overlay.innerHTML = '<span class="btn-spinner" style="width: 24px; height: 24px; border-width: 3px;"></span><span>Loading in-screen PDF document...</span>';
+      }
+      if (iframe) iframe.src = "about:blank";
+
+      if (activePdfBlobUrl) {
+        URL.revokeObjectURL(activePdfBlobUrl);
+        activePdfBlobUrl = null;
+      }
+
+      openModal("assignmentPdfViewerModal");
+
+      var authHeaders = {};
+      if (token) {
+        authHeaders["Authorization"] = "Bearer " + token;
+        authHeaders["X-Session-Token"] = token;
+      }
+
+      fetch(previewEndpoint, {
+        method: "GET",
+        headers: authHeaders
+      }).then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (errData) {
+            throw new Error(errData.error || ("Failed to load preview (HTTP " + res.status + ")"));
+          }).catch(function (e) {
+            throw new Error(e.message || "Failed to load PDF preview");
+          });
+        }
+        return res.blob();
+      }).then(function (blob) {
+        if (overlay) overlay.style.display = "none";
+        var pdfBlob = new Blob([blob], { type: "application/pdf" });
+        activePdfBlobUrl = URL.createObjectURL(pdfBlob);
+        if (iframe) {
+          iframe.src = activePdfBlobUrl;
+        }
+      }).catch(function (err) {
+        if (overlay) {
+          overlay.innerHTML = '<div style="color:#ef4444; font-weight:600; text-align:center; padding:20px;">' +
+            '<div>⚠️ ' + escapeHtml(err.message || "Could not render PDF preview in-screen.") + '</div>' +
+            '<div style="margin-top:12px;"><a href="' + escapeHtml(downloadEndpoint) + '" class="btn btn-secondary btn-sm" download>📥 Download File Instead</a></div>' +
+            '</div>';
+        }
+      });
+    };
+
+    window.closePdfViewerModal = function () {
+      if (activePdfSubmission) {
+        var pdfMarks = document.getElementById("pdfEvalMarksInput");
+        var pdfFeed = document.getElementById("pdfEvalFeedbackInput");
+        var evalMarks = document.getElementById("evalMarksInput");
+        var evalFeed = document.getElementById("evalFeedbackInput");
+
+        if (activePdfSubmission.openedFromEvalModal && evalMarks && evalFeed && pdfMarks && pdfFeed) {
+          if (pdfMarks.value !== "") evalMarks.value = pdfMarks.value;
+          if (pdfFeed.value !== "") evalFeed.value = pdfFeed.value;
+        }
+      }
+
+      closeModal("assignmentPdfViewerModal");
+
+      var iframe = document.getElementById("pdfViewerIframe");
+      if (iframe) iframe.src = "about:blank";
+
+      if (activePdfBlobUrl) {
+        URL.revokeObjectURL(activePdfBlobUrl);
+        activePdfBlobUrl = null;
+      }
+    };
+
+    window.savePdfViewerEvaluation = function () {
+      if (!activePdfSubmission || !activePdfSubmission.id) return;
+      var subId = activePdfSubmission.id;
+      var marksInput = document.getElementById("pdfEvalMarksInput");
+      var feedbackInput = document.getElementById("pdfEvalFeedbackInput");
+      var btn = document.getElementById("btnPdfSaveEvaluation");
+      var errBox = document.getElementById("pdfViewerEvalError");
+
+      var marksVal = parseFloat(marksInput ? marksInput.value : "");
+      var feedbackVal = feedbackInput ? feedbackInput.value.trim() : "";
+
+      if (isNaN(marksVal) || marksVal < 0 || marksVal > 10) {
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">Marks must be a valid number between 0 and 10 inclusive.</div>';
+        return;
+      }
+      if (!feedbackVal) {
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">Please provide feedback for the student.</div>';
+        return;
+      }
+
+      setButtonLoading(btn, "Saving Marks...");
+
+      api("/api/assignments/submissions/" + encodeURIComponent(subId) + "/grade", {
+        method: "POST",
+        body: { marks_obtained: marksVal, feedback: feedbackVal }
+      }).then(function (res) {
+        resetButton(btn, "Save Evaluation");
+        showToast("Marks Recorded", "Evaluated " + marksVal + "/10 with feedback.", "success");
+
+        var evalMarks = document.getElementById("evalMarksInput");
+        var evalFeed = document.getElementById("evalFeedbackInput");
+        if (evalMarks) evalMarks.value = marksVal;
+        if (evalFeed) evalFeed.value = feedbackVal;
+
+        if (activePdfSubmission.assignmentId) {
+          openSubmissionsRoster(activePdfSubmission.assignmentId);
+        }
+        loadFacultyAssignmentsList();
+      }).catch(function (err) {
+        resetButton(btn, "Save Evaluation");
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">' + escapeHtml(err.message || "Failed to record evaluation.") + '</div>';
+      });
     };
 
     window.saveSubmissionEvaluation = function () {
@@ -2232,6 +2487,9 @@ function initAssignments(role) {
         resetButton(btn, "Save Evaluation");
         closeModal("evaluateSubmissionModal");
         showToast("Marks Recorded", "Evaluated " + marksVal + "/10 with feedback.", "success");
+        if (currentEvalSubmissionData && currentEvalSubmissionData.assignmentId) {
+          openSubmissionsRoster(currentEvalSubmissionData.assignmentId);
+        }
         loadFacultyAssignmentsList();
       }).catch(function (err) {
         resetButton(btn, "Save Evaluation");
@@ -3794,6 +4052,27 @@ function openModal(id) {
 }
 
 function closeModal(id) {
+  if (id === "assignmentPdfViewerModal" && typeof window.closePdfViewerModal === "function") {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+    var iframe = document.getElementById("pdfViewerIframe");
+    if (iframe) iframe.src = "about:blank";
+    return;
+  }
   var el = document.getElementById(id);
   if (el) el.classList.remove("active");
 }
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") {
+    var pdfModal = document.getElementById("assignmentPdfViewerModal");
+    if (pdfModal && pdfModal.classList.contains("active")) {
+      if (typeof window.closePdfViewerModal === "function") {
+        window.closePdfViewerModal();
+      } else {
+        closeModal("assignmentPdfViewerModal");
+      }
+    }
+  }
+});
+

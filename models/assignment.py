@@ -122,6 +122,9 @@ class AssignmentSubmission(db.Model):
         stu = self.student
         is_evaluated = self.grade is not None or self.status in ("graded", "evaluated")
         display_status = "Evaluated" if is_evaluated else ("Late Submission" if self.status == "late" else ("Under Review" if self.status == "under_review" else "Submitted"))
+        ext = self.file_name.rsplit(".", 1)[-1].lower() if (self.file_name and "." in self.file_name) else ""
+        is_pdf = bool(ext == "pdf" or self.mime_type == "application/pdf")
+        has_file = bool(self.file_data or self.file_path)
         return {
             "id": self.id,
             "assignmentId": self.assignment_id,
@@ -132,10 +135,13 @@ class AssignmentSubmission(db.Model):
             "division": stu.division if stu else None,
             "submissionText": self.submission_text,
             "fileName": self.file_name,
+            "fileExtension": ext or None,
+            "isPdf": is_pdf,
             "fileSizeBytes": self.file_size_bytes,
             "sizeKb": round(self.file_size_bytes / 1024, 1) if self.file_size_bytes else 0,
             "mimeType": self.mime_type,
-            "downloadUrl": f"/api/assignments/{self.assignment_id}/submissions/{self.id}/download" if (self.file_data or self.file_path) else None,
+            "downloadUrl": f"/api/assignments/{self.assignment_id}/submissions/{self.id}/download" if has_file else None,
+            "previewUrl": f"/api/assignments/{self.assignment_id}/submissions/{self.id}/preview" if (has_file and is_pdf) else None,
             "submittedAt": self.submitted_at.isoformat() if self.submitted_at else None,
             "status": "graded" if is_evaluated else self.status,
             "displayStatus": display_status,
@@ -147,3 +153,4 @@ class AssignmentSubmission(db.Model):
             "feedback": self.feedback,
             "gradedBy": self.graded_by.user.full_name if (self.graded_by and self.graded_by.user) else None,
         }
+
