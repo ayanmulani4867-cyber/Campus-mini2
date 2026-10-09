@@ -956,11 +956,62 @@ def seed_events(admin_user):
     db.session.commit()
 
 
-def run_seed():
+def cleanup_all_students_and_faculty():
+    """Safely and transactionally removes all student and faculty records and all dependent
+    attendance, enrollment, submission, assignment, and result records while strictly preserving
+    the admin account, academic departments, courses, notices, and events."""
+    from sqlalchemy import text
+    admin = ensure_default_admin()
+
+    # 1. Clear course instructor links
+    db.session.execute(text("UPDATE courses SET instructor_id = NULL;"))
+
+    # 2. Reassign study materials to admin so course notes library is preserved
+    db.session.execute(
+        text("UPDATE study_materials SET uploaded_by_id = :aid;"),
+        {"aid": admin.id}
+    )
+
+    # 3. Delete student & faculty dependent records in topological FK order
+    db.session.execute(text("DELETE FROM assignment_submissions;"))
+    db.session.execute(text("DELETE FROM assignments;"))
+    db.session.execute(text("DELETE FROM attendance_records;"))
+    db.session.execute(text("DELETE FROM attendance_sessions;"))
+    db.session.execute(text("DELETE FROM results;"))
+    db.session.execute(text("DELETE FROM leave_requests;"))
+    db.session.execute(text("DELETE FROM enrollments;"))
+    db.session.execute(text("DELETE FROM faculty_assignments;"))
+
+    # 4. Delete Students & Faculty profile tables
+    db.session.execute(text("DELETE FROM students;"))
+    db.session.execute(text("DELETE FROM faculty;"))
+
+    # 5. Delete UserSessions for student and faculty users
+    db.session.execute(text(
+        "DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE role IN ('student', 'faculty'));"
+    ))
+
+    # 6. Delete User accounts for students and faculty
+    db.session.execute(text("DELETE FROM users WHERE role IN ('student', 'faculty');"))
+
+    db.session.commit()
+    print("All existing student and faculty records successfully removed from database.")
+
+
+def run_seed(populate=False):
     print("Beginning database seed...")
     admin = ensure_default_admin()
     cleanup_old_demo_data()
     departments = seed_departments()
+    courses = seed_courses(departments, {})
+    seed_notices(admin, departments)
+    seed_events(admin)
+
+    if not populate:
+        print("Database initialized: Admin account, departments, and courses preserved.")
+        print("Note: Student and faculty accounts were NOT seeded (populate=False).")
+        return
+
     faculty = seed_faculty(departments)
     courses = seed_courses(departments, faculty)
     seed_faculty_assignments(faculty, courses, departments)
@@ -971,8 +1022,6 @@ def run_seed():
     seed_assignments(faculty, courses, students)
     seed_materials(faculty, courses, departments)
     seed_leave_requests(students, admin)
-    seed_notices(admin, departments)
-    seed_events(admin)
 
     # Calculate real database counts
     stu_count = Student.query.count()
@@ -995,7 +1044,7 @@ def run_seed():
     remaining_prns = 100 - prn_24_count
 
     print("=" * 60)
-    print(" CAMPUS CONNECT ERP — ALL SECTIONS POPULATED (10+ STUDENTS)")
+    print(" CAMPUS CONNECT ERP -- ALL SECTIONS POPULATED (10+ STUDENTS)")
     print("=" * 60)
     print("ADMIN CREDENTIALS")
     print("  Username: admin")
@@ -1012,7 +1061,7 @@ def run_seed():
         .all()
     )
     for d_code, sem, div, cnt in div_breakdown:
-        print(f"  • {d_code} Semester {sem} Division {div}: {cnt} active students")
+        print(f"  * {d_code} Semester {sem} Division {div}: {cnt} active students")
 
     print()
     print(f"TOTAL STUDENTS: {stu_count}")
@@ -1028,7 +1077,13 @@ def run_seed():
 
 
 if __name__ == "__main__":
+    import sys
     from app import create_app
     app = create_app()
     with app.app_context():
-        run_seed()
+        if "--cleanup" in sys.argv:
+            cleanup_all_students_and_faculty()
+        elif "--populate" in sys.argv:
+            run_seed(populate=True)
+        else:
+            run_seed(populate=False)
