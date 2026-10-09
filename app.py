@@ -169,6 +169,7 @@ def create_app(config_name=None):
             "profile.html", "profile",
             "courses.html", "courses",
             "attendance.html", "attendance",
+            "assignments.html", "assignments",
             "results.html", "results",
             "materials.html", "materials",
             "notices.html", "notices",

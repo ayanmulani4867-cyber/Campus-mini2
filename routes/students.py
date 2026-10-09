@@ -9,10 +9,30 @@ bp = Blueprint("students", __name__, url_prefix="/api/students")
 DEFAULT_PASSWORD = None  # New member password is their phone number.
 
 
-def _next_student_code():
-    count = Student.query.count() + 1
-    from datetime import date
-    return f"STU{date.today().year}{count:03d}"
+def generate_unique_prn(max_attempts=300):
+    """Generates a unique student PRN adhering to format 241010XX (prefix 241010 + 2 decimal digits 00-99).
+    Enforces uniqueness across all existing students in the database."""
+    import random
+    for _ in range(max_attempts):
+        xx = random.randint(0, 99)
+        candidate = f"241010{xx:02d}"
+        if not Student.query.filter(db.or_(Student.prn == candidate, Student.student_code == candidate)).first():
+            return candidate
+
+    for xx in range(100):
+        candidate = f"241010{xx:02d}"
+        if not Student.query.filter(db.or_(Student.prn == candidate, Student.student_code == candidate)).first():
+            return candidate
+
+    raise ValidationError("All 100 PRNs in the 241010XX pool have been allocated.")
+
+
+@bp.get("/generate-prn")
+@roles_required("admin")
+def get_generated_prn():
+    """Generates a fresh unique 241010XX PRN for the admin creation modal."""
+    prn = generate_unique_prn()
+    return jsonify({"success": True, "prn": prn, "data": {"prn": prn}})
 
 
 @bp.get("")
@@ -24,7 +44,7 @@ def list_students():
     if search:
         like = f"%{search}%"
         q = q.join(User).filter(
-            db.or_(User.full_name.ilike(like), Student.student_code.ilike(like))
+            db.or_(User.full_name.ilike(like), Student.student_code.ilike(like), Student.prn.ilike(like))
         )
     students = q.all()
     return jsonify({"success": True, "data": [s.to_dict() for s in students]})
@@ -47,13 +67,14 @@ def get_student(student_code):
 @bp.post("")
 @roles_required("admin")
 def create_student():
+    from sqlalchemy.exc import IntegrityError
     data = request.get_json(silent=True) or {}
-    require_fields(data, ["name", "email", "phone", "department"])
+    require_fields(data, ["name", "email", "department"])
 
     email = validate_email(data["email"])
-    phone = validate_phone(str(data["phone"]).strip())
-    if not phone:
-        raise ValidationError("Phone number is required.")
+    raw_phone = data.get("phone")
+    phone = validate_phone(str(raw_phone).strip()) if raw_phone else None
+    initial_password = str(raw_phone).strip() if (raw_phone and len(str(raw_phone).strip()) >= 6) else "campus@123"
     if User.query.filter_by(email=email).first():
         raise ValidationError("A user with that email already exists.")
 
@@ -62,19 +83,31 @@ def create_student():
         raise ValidationError(f"Unknown department: {data['department']}")
 
     # Academic year and semester
-    year = data.get("year", "1st Year").strip()
+    year = data.get("year", "3rd Year").strip()
     try:
-        semester = int(data.get("semester", 1))
+        semester = int(data.get("semester", 6))
     except (ValueError, TypeError):
-        semester = 1
+        semester = 6
 
     division = (data.get("division") or "A").strip().upper()
     roll_number = str(data.get("rollNumber") or data.get("roll_number") or "").strip() or None
-    code = (data.get("studentId") or data.get("prn") or "").strip() or _next_student_code()
-    prn = (data.get("prn") or code).strip()
+
+    # Handle PRN generation & duplicate verification (Module 1.2 & Module 4)
+    raw_prn = (data.get("prn") or data.get("studentId") or "").strip()
+    if raw_prn:
+        existing_stu = Student.query.filter(
+            db.or_(Student.prn == raw_prn, Student.student_code == raw_prn)
+        ).first()
+        if existing_stu:
+            raise ValidationError(f"Duplicate PRN: '{raw_prn}' is already registered to {existing_stu.user.full_name}.")
+        prn = raw_prn
+        code = raw_prn
+    else:
+        prn = generate_unique_prn()
+        code = prn
 
     user = User(email=email, full_name=data["name"].strip(), phone=phone, role="student")
-    user.set_password(phone)  # Student phone number automatically becomes their initial password
+    user.set_password(initial_password)
     db.session.add(user)
     db.session.flush()
 
@@ -106,12 +139,26 @@ def create_student():
             )
         )
     ).all()
+
+    # Also handle explicitly selected course IDs if supplied
+    explicit_courses = data.get("courseIds") or data.get("courses") or []
+    if isinstance(explicit_courses, list):
+        for cid in explicit_courses:
+            c_obj = Course.query.get(cid) if str(cid).isdigit() else Course.query.filter_by(code=str(cid)).first()
+            if c_obj and c_obj not in cohort_courses:
+                cohort_courses.append(c_obj)
+
     for c in cohort_courses:
         exists = Enrollment.query.filter_by(student_id=student.id, course_id=c.id).first()
         if not exists:
             db.session.add(Enrollment(student_id=student.id, course_id=c.id))
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError as e:
+        db.session.rollback()
+        raise ValidationError(f"Database constraint violation: {str(e.orig) if hasattr(e, 'orig') else 'Duplicate record'}")
+
     return jsonify({"success": True, "data": student.to_dict()}), 201
 
 

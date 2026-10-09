@@ -51,10 +51,11 @@
       <div class="page-header">
         <div>
           <h2>Academic Attendance Record</h2>
-          <p>Real-time attendance tracking and classroom roll-call session</p>
+          <p>Real-time classroom roll-call session and continuous academic ledger tracking</p>
         </div>
-        <div class="page-actions">
-          <span class="badge badge-success" id="presentCountDisplay">Overall: 85% Attendance</span>
+        <div class="page-actions" style="display: flex; align-items: center; gap: 10px;">
+          <span class="badge badge-info" id="attendanceLastUpdated" style="font-size: 12px;">Live Ledger Synced</span>
+          <span class="badge badge-success" id="presentCountDisplay">Overall: --% Attendance</span>
         </div>
       </div>
 
@@ -64,23 +65,35 @@
         <div class="stat-card stat-green">
           <div class="stat-card-header"><span class="stat-card-title">Overall Attendance</span><span class="stat-card-icon">📈</span></div>
           <div class="stat-card-value" id="overallAttendancePct">--</div>
-          <div class="stat-card-desc">Total Lectures Attended</div>
+          <div class="stat-card-desc">Weighted Attendance Score</div>
           <div class="progress-bar-bg"><div class="progress-bar-fill progress-green" id="overallProgressBar" style="width: 0%;"></div></div>
         </div>
 
         <div class="stat-card">
-          <div class="stat-card-header"><span class="stat-card-title">Classes Attended</span><span class="stat-card-icon">✅</span></div>
+          <div class="stat-card-header"><span class="stat-card-title">Present Sessions</span><span class="stat-card-icon">✅</span></div>
           <div class="stat-card-value" id="classesAttendedCount">--</div>
-          <div class="stat-card-desc">Present sessions</div>
+          <div class="stat-card-desc">On-time attendances</div>
         </div>
 
         <div class="stat-card stat-amber">
-          <div class="stat-card-header"><span class="stat-card-title">Classes Missed</span><span class="stat-card-icon">⚠️</span></div>
+          <div class="stat-card-header"><span class="stat-card-title">Late Sessions</span><span class="stat-card-icon">⏰</span></div>
+          <div class="stat-card-value" id="classesLateCount">--</div>
+          <div class="stat-card-desc">Configurable 0.5x credit</div>
+        </div>
+
+        <div class="stat-card stat-danger">
+          <div class="stat-card-header"><span class="stat-card-title">Absent Sessions</span><span class="stat-card-icon">⚠️</span></div>
           <div class="stat-card-value" id="classesMissedCount">--</div>
-          <div class="stat-card-desc">Excused & Unexcused</div>
+          <div class="stat-card-desc">Missed lectures</div>
         </div>
 
         <div class="stat-card stat-purple">
+          <div class="stat-card-header"><span class="stat-card-title">Total Conducted</span><span class="stat-card-icon">📚</span></div>
+          <div class="stat-card-value" id="classesTotalCount">--</div>
+          <div class="stat-card-desc">Conducted class lectures</div>
+        </div>
+
+        <div class="stat-card">
           <div class="stat-card-header"><span class="stat-card-title">Eligibility Criteria</span><span class="stat-card-icon">🎯</span></div>
           <div class="stat-card-value" id="eligibilityStatus">--</div>
           <div class="stat-card-desc">Above 75% Board Threshold</div>
@@ -90,8 +103,8 @@
       <!-- Subject-Wise Breakdown Table -->
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-header-row">
-          <h3>Subject-Wise Attendance Summary</h3>
-          <span class="badge badge-info">Semester 6</span>
+          <h3>Course-Wise Attendance Summary</h3>
+          <span class="badge badge-info">Current Semester</span>
         </div>
 
         <div class="table-container">
@@ -101,13 +114,41 @@
                 <th>Code</th>
                 <th>Course Name</th>
                 <th>Instructor</th>
-                <th>Held</th>
-                <th>Attended</th>
+                <th>Conducted</th>
+                <th>Present</th>
+                <th>Late</th>
+                <th>Absent</th>
                 <th>Percentage</th>
-                <th>Status</th>
+                <th>Eligibility</th>
               </tr>
             </thead>
             <tbody data-role="attendance-summary-body">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Detailed Attendance History Log -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header-row">
+          <h3>Detailed Attendance Session History</h3>
+          <span class="badge badge-secondary" id="historyCountBadge">0 Sessions Logged</span>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Course</th>
+                <th>Course Name</th>
+                <th>Division</th>
+                <th>Status</th>
+                <th>Recorded By</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceHistoryBody">
+              <tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">Loading attendance logs...</td></tr>
             </tbody>
           </table>
         </div>
@@ -119,9 +160,10 @@
         <div class="card-header-row">
           <div>
             <h3>Interactive Classroom Roll-Call</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Select course and division to mark daily attendance</p>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Select course, division and date to mark authorized student attendance</p>
           </div>
           <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="date" class="form-input" id="facultyRollDateInput" style="width: auto; font-size: 13px; font-weight: 600; padding: 6px 10px;">
             <select class="form-select" id="facultyRollCourseSelect" style="width: auto; font-size: 13px; font-weight: 600;">
               <option value="CS601">CS601 - Database Management Systems</option>
               <option value="CS691">CS691 - Database Practical Lab</option>
@@ -142,11 +184,12 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Student ID / PRN</th>
+                <th>PRN</th>
+                <th>Roll No</th>
                 <th>Student Name</th>
                 <th>Department</th>
                 <th>Division</th>
-                <th>Mark Status (Click to Toggle)</th>
+                <th>Attendance Status</th>
               </tr>
             </thead>
             <tbody id="rollCallTableBody">

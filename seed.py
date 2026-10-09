@@ -1,4 +1,4 @@
-﻿import io
+import io
 from datetime import datetime, timezone, date, timedelta
 from werkzeug.security import generate_password_hash
 from extensions import db
@@ -9,6 +9,24 @@ from models import (
 )
 
 DEMO_PASSWORD = "campus@123"
+
+
+def generate_unique_prn(max_attempts=300):
+    """Generates a unique student PRN adhering to format 241010XX (prefix 241010 + 2 decimal digits 00-99).
+    Enforces uniqueness at database level and rejects duplicates."""
+    import random
+    for _ in range(max_attempts):
+        xx = random.randint(0, 99)
+        candidate = f"241010{xx:02d}"
+        if not Student.query.filter(db.or_(Student.prn == candidate, Student.student_code == candidate)).first():
+            return candidate
+
+    for xx in range(100):
+        candidate = f"241010{xx:02d}"
+        if not Student.query.filter(db.or_(Student.prn == candidate, Student.student_code == candidate)).first():
+            return candidate
+
+    raise RuntimeError("All 100 PRNs in 241010XX space are allocated.")
 
 
 def ensure_default_admin():
@@ -42,7 +60,36 @@ def ensure_default_admin():
 
 
 def cleanup_old_demo_data():
-    """Safely cleans any obsolete non-primary faculty accounts and reassigns demo references safely."""
+    """Safely cleans any obsolete non-primary faculty accounts and explicitly removes prohibited legacy records."""
+    # Module 2: Permanently remove prohibited legacy records
+    prohibited_users = User.query.filter(
+        db.or_(
+            User.email.ilike("%anita.sen%"),
+            User.full_name.ilike("%P B Patil%"),
+            User.full_name.ilike("%P. B. Patil%"),
+            User.full_name.ilike("%PB Patil%"),
+        )
+    ).all()
+    for pu in prohibited_users:
+        pfac = Faculty.query.filter_by(user_id=pu.id).first()
+        if pfac:
+            FacultyAssignment.query.filter_by(faculty_id=pfac.id).delete()
+            Course.query.filter_by(instructor_id=pfac.id).update({"instructor_id": None})
+            for s in AttendanceSession.query.filter_by(marked_by_id=pfac.id).all():
+                AttendanceRecord.query.filter_by(session_id=s.id).delete()
+                db.session.delete(s)
+            Result.query.filter_by(entered_by_id=pfac.id).update({"entered_by_id": None})
+            for a in Assignment.query.filter_by(faculty_id=pfac.id).all():
+                AssignmentSubmission.query.filter_by(assignment_id=a.id).delete()
+                db.session.delete(a)
+            AssignmentSubmission.query.filter_by(graded_by_id=pfac.id).update({"graded_by_id": None})
+            db.session.delete(pfac)
+        StudyMaterial.query.filter_by(uploaded_by_id=pu.id).delete()
+        Notice.query.filter_by(posted_by_id=pu.id).delete()
+        Event.query.filter_by(created_by_id=pu.id).delete()
+        db.session.delete(pu)
+    db.session.commit()
+
     valid_faculty_emails = [
         "amit.deshmukh@campus.edu",
         "rajesh.verma@campus.edu",
@@ -160,8 +207,59 @@ def seed_faculty(departments):
 
 
 def seed_students(departments):
-    """Provisions 20 realistic CSE 3rd Year Semester 6 Division A student accounts."""
+    """Provisions realistic student records including mandatory Module 1 students:
+    Ayan Mulani, Arkam Momin, Piyush Mane, Ankush Saini, and Student 5 (Pending Name)
+    with unique 241010XX PRNs, plus legacy cohort students for test continuity."""
     cse = departments["CSE"]
+
+    # Module 1.1: Mandatory 4 named students + 1 pending student identity
+    named_students_spec = [
+        ("Ayan Mulani", "ayan.mulani@campus.edu", "STU24101", "01", "9823010001"),
+        ("Arkam Momin", "arkam.momin@campus.edu", "STU24102", "02", "9823010002"),
+        ("Piyush Mane", "piyush.mane@campus.edu", "STU24103", "03", "9823010003"),
+        ("Ankush Saini", "ankush.saini@campus.edu", "STU24104", "04", "9823010004"),
+        ("Student 5 (Pending Name)", "student5.pending@campus.edu", "STU24105", "05", "9823010005"),
+    ]
+
+    students = {}
+
+    for name, email, code, roll_num, phone in named_students_spec:
+        user = _get_or_create_user(email, name, "student", phone=phone)
+        stu = Student.query.filter(
+            db.or_(Student.user_id == user.id, Student.student_code == code)
+        ).first()
+
+        if not stu:
+            # Module 1.2: All newly generated PRNs follow 241010XX
+            prn = generate_unique_prn()
+            stu = Student(
+                user_id=user.id,
+                student_code=code,
+                department_id=cse.id,
+                year_label="3rd Year",
+                semester=6,
+                division="A",
+                roll_number=roll_num,
+                prn=prn,
+                status="active",
+            )
+            db.session.add(stu)
+            db.session.flush()
+        else:
+            # Module 1.2: Never overwrite an existing student's PRN when rerunning seed
+            existing_prn = stu.prn or generate_unique_prn()
+            stu.user_id = user.id
+            stu.department_id = cse.id
+            stu.year_label = "3rd Year"
+            stu.semester = 6
+            stu.division = "A"
+            stu.roll_number = roll_num
+            stu.prn = existing_prn
+            stu.status = "active"
+
+        students[code] = stu
+
+    # Legacy cohort students (student001 - student020) for automated test suite compatibility
     student_names = [
         "Aarav Sharma", "Aditi Deshmukh", "Akash Kulkarni", "Ananya Joshi",
         "Atharva Shinde", "Devika Nair", "Ishaan Patil", "Kavya Verma",
@@ -170,19 +268,18 @@ def seed_students(departments):
         "Siddharth Mehta", "Tanvi Salunkhe", "Varun Rane", "Yash Gaikwad"
     ]
 
-    students = {}
     for i in range(1, 21):
         num_str = f"{i:03d}"
         roll_num = f"{i:02d}"
         code = f"STU2026{num_str}"
         email = f"student{num_str}@campus.edu"
-        prn = f"PRN2026{num_str}"
         phone = f"982300{num_str:0>4}"
         name = student_names[i - 1]
 
         user = _get_or_create_user(email, name, "student", phone=phone)
         stu = Student.query.filter_by(student_code=code).first()
         if not stu:
+            prn = f"PRN2026{num_str}"
             stu = Student(
                 user_id=user.id,
                 student_code=code,
@@ -203,7 +300,6 @@ def seed_students(departments):
             stu.semester = 6
             stu.division = "A"
             stu.roll_number = roll_num
-            stu.prn = prn
             stu.status = "active"
 
         students[code] = stu
@@ -213,15 +309,16 @@ def seed_students(departments):
 
 
 def seed_courses(departments, faculty):
-    """Provisions all 6 Semester 6 CSE courses."""
+    """Provisions all Semester 6 CSE demonstration courses as per Module 3."""
     cse = departments["CSE"]
     courses_spec = [
         ("CS601", "Database Management Systems", 4, "core", 6, "CSE-301", 85, faculty["FAC2020021"].id),
-        ("CS602", "Computer Networks & Security", 4, "core", 6, "CSE-302", 80, faculty["FAC2019018"].id),
-        ("CS603", "Design & Analysis of Algorithms", 4, "core", 6, "CSE-303", 75, faculty["FAC2023051"].id),
-        ("CS604", "Software Engineering & Agile", 3, "core", 6, "CSE-304", 90, faculty["FAC2021034"].id),
-        ("CS691", "Database & SQL Practical Lab", 2, "lab", 6, "CSE-LAB1", 80, faculty["FAC2022045"].id),
-        ("CS692", "Network Socket Programming Lab", 2, "lab", 6, "CSE-LAB2", 75, faculty["FAC2019018"].id),
+        ("CS602", "Computer Networks", 4, "core", 6, "CSE-302", 80, faculty["FAC2019018"].id),
+        ("CS603", "Design and Analysis of Algorithms", 4, "core", 6, "CSE-303", 75, faculty["FAC2023051"].id),
+        ("CS604", "Software Engineering", 3, "core", 6, "CSE-304", 90, faculty["FAC2021034"].id),
+        ("CS605", "Web Technology", 3, "core", 6, "CSE-305", 85, faculty["FAC2019018"].id),
+        ("CS691", "Database Management Systems Laboratory", 2, "lab", 6, "CSE-LAB1", 80, faculty["FAC2022045"].id),
+        ("CS692", "Computer Networks Laboratory", 2, "lab", 6, "CSE-LAB2", 75, faculty["FAC2019018"].id),
     ]
 
     courses = {}
@@ -263,9 +360,12 @@ def seed_faculty_assignments(faculty, courses, departments):
     cse = departments["CSE"]
     assignments_data = [
         (faculty["FAC2020021"].id, courses["CS601"].id, cse.id, "3rd Year", 6, "A"),
+        (faculty["FAC2020021"].id, courses["CS601"].id, cse.id, "3rd Year", 6, "B"),
         (faculty["FAC2019018"].id, courses["CS602"].id, cse.id, "3rd Year", 6, "A"),
+        (faculty["FAC2019018"].id, courses["CS602"].id, cse.id, "3rd Year", 6, "B"),
         (faculty["FAC2023051"].id, courses["CS603"].id, cse.id, "3rd Year", 6, "A"),
         (faculty["FAC2021034"].id, courses["CS604"].id, cse.id, "3rd Year", 6, "A"),
+        (faculty["FAC2019018"].id, courses["CS605"].id, cse.id, "3rd Year", 6, "A"),
         (faculty["FAC2022045"].id, courses["CS691"].id, cse.id, "3rd Year", 6, "A"),
         (faculty["FAC2019018"].id, courses["CS692"].id, cse.id, "3rd Year", 6, "A"),
     ]
@@ -426,18 +526,18 @@ def seed_assignments(faculty, courses, students):
     """Creates 4 coursework assignments with realistic student submissions."""
     now = datetime.now(timezone.utc)
     assignment_specs = [
-        ("CS601", faculty["FAC2020021"], "Database Normalization & SQL Optimization",
+        ("CS601", faculty["FAC2020021"], "Database Management Systems — Assignment 1",
          "Complete the normalization exercises from 1NF through BCNF. Provide SQL query execution plans.",
-         now + timedelta(days=10), 100),
+         now + timedelta(days=10), 10),
         ("CS602", faculty["FAC2019018"], "TCP/IP Socket Programming & Routing Assignment",
          "Implement a client-server multi-threaded chat architecture using socket APIs in C/Python.",
-         now + timedelta(days=12), 100),
+         now + timedelta(days=12), 10),
         ("CS603", faculty["FAC2023051"], "Algorithm Complexity & Dynamic Programming",
          "Analyze recurrence relations using Master Theorem and implement Bellman-Ford shortest path.",
-         now + timedelta(days=14), 100),
+         now + timedelta(days=14), 10),
         ("CS604", faculty["FAC2021034"], "Agile Sprint Planning & User Story Estimation",
          "Design a Jira-style Scrum backlog with story points, acceptance criteria, and burndown chart.",
-         now + timedelta(days=16), 100),
+         now + timedelta(days=16), 10),
     ]
 
     for c_code, fac, title, desc, due, pts in assignment_specs:
@@ -457,20 +557,22 @@ def seed_assignments(faculty, courses, students):
             )
             db.session.add(assign)
             db.session.flush()
+        else:
+            assign.total_points = pts
 
         # For CS601, create realistic submissions: 12 submitted, 3 graded, 5 pending
         if c_code == "CS601":
             dummy_pdf = b"%PDF-1.4\\n1 0 obj << /Title (Assignment Solution) >> endobj\\ntrailer << /Root 1 0 R >>\\n%%EOF\\n"
             stu_list = list(students.values())
-            for idx in range(15):
+            for idx in range(min(15, len(stu_list))):
                 stu = stu_list[idx]
                 sub = AssignmentSubmission.query.filter_by(
                     assignment_id=assign.id, student_id=stu.id
                 ).first()
                 if not sub:
                     status = "graded" if idx < 3 else "submitted"
-                    grade = 92.0 if idx == 0 else (88.0 if idx == 1 else 85.0) if idx < 3 else None
-                    feedback = "Excellent schema design and 3NF normalization." if idx < 3 else None
+                    grade = 8.0 if idx == 0 else (9.0 if idx == 1 else 8.5) if idx < 3 else None
+                    feedback = "Good work. Improve the explanation of normalization." if idx == 0 else ("Excellent schema design and 3NF normalization." if idx < 3 else None)
                     sub = AssignmentSubmission(
                         assignment_id=assign.id,
                         student_id=stu.id,

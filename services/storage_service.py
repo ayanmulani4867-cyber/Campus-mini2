@@ -5,20 +5,26 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 from flask import send_file
 
-ALLOWED_EXTENSIONS = {"pdf", "ppt", "pptx"}
+ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "ppt", "pptx", "zip"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 MIME_TYPE_MAP = {
     "pdf": "application/pdf",
+    "doc": "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "ppt": "application/vnd.ms-powerpoint",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "zip": "application/zip",
 }
 
 # Magic byte signatures for secure content verification
 MAGIC_SIGNATURES = {
     "pdf": [b"%PDF"],
+    "doc": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
+    "docx": [b"PK\x03\x04"],  # DOCX is an OpenXML ZIP archive
     "ppt": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
     "pptx": [b"PK\x03\x04"],  # PPTX is an OpenXML ZIP archive
+    "zip": [b"PK\x03\x04", b"PK\x05\x06"],
 }
 
 

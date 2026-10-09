@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assignments - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=50">
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-wrap">
+      <span class="menu-btn" id="menuBtn">&#9776;</span>
+      <a href="dashboard.html" class="logo">
+        <span>🎓</span>
+        <span>Campus Connect</span>
+      </a>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="role-switch-box">
+        <span>Role:</span>
+        <select id="globalRoleSelect">
+          <option value="student" {% if current_user and current_user.role == 'student' %}selected{% endif %}>Student</option>
+          <option value="faculty" {% if current_user and current_user.role == 'faculty' %}selected{% endif %}>Faculty</option>
+          <option value="admin" {% if current_user and current_user.role == 'admin' %}selected{% endif %}>Admin</option>
+        </select>
+      </div>
+
+      <a href="profile.html" class="user-chip">
+        <div class="user-avatar-mini" id="topbarAvatar">{{ current_user.full_name[0] if current_user else '' }}</div>
+        <span id="topbarUserName">{{ current_user.full_name if current_user else '' }}</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="dashboard-wrap">
+    
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-heading">Navigation</div>
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2>Coursework Assignments & Submissions</h2>
+          <p>Academic assignment workflows, submission portals, and faculty grade evaluation</p>
+        </div>
+        <div class="page-actions" style="display: flex; align-items: center; gap: 10px;">
+          <span class="badge badge-info" id="assignmentLastUpdated" style="font-size: 12px;">Live Ledger Synced</span>
+          {% if current_user and current_user.role in ['faculty', 'admin'] %}
+          <button class="btn btn-primary btn-sm" id="openCreateAssignmentBtn" onclick="openModal('createAssignmentModal')">
+            <span>+</span> Create Assignment
+          </button>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Overview Stats Cards -->
+      <div class="card-grid" style="margin-bottom: 24px;">
+        <div class="stat-card stat-purple">
+          <div class="stat-card-header"><span class="stat-card-title">Total Assignments</span><span class="stat-card-icon">📚</span></div>
+          <div class="stat-card-value" id="totalAssignmentsCount">--</div>
+          <div class="stat-card-desc">Active semester coursework</div>
+        </div>
+
+        <div class="stat-card stat-green">
+          <div class="stat-card-header"><span class="stat-card-title">Completed Submissions</span><span class="stat-card-icon">✅</span></div>
+          <div class="stat-card-value" id="submittedAssignmentsCount">--</div>
+          <div class="stat-card-desc">Delivered to instructor</div>
+        </div>
+
+        <div class="stat-card stat-amber">
+          <div class="stat-card-header"><span class="stat-card-title">Awaiting Evaluation</span><span class="stat-card-icon">⏳</span></div>
+          <div class="stat-card-value" id="pendingEvaluationCount">--</div>
+          <div class="stat-card-desc">Submissions in review</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-header"><span class="stat-card-title">Evaluated / Graded</span><span class="stat-card-icon">🎯</span></div>
+          <div class="stat-card-value" id="evaluatedAssignmentsCount">--</div>
+          <div class="stat-card-desc">Marks out of 10 recorded</div>
+        </div>
+      </div>
+
+      <!-- Student View: My Assignments & Submissions -->
+      <div class="card" id="studentAssignmentsCard" style="margin-bottom: 24px; display: {% if not current_user or current_user.role == 'student' %}block{% else %}none{% endif %};">
+        <div class="card-header-row">
+          <div>
+            <h3>My Assignments & Submissions</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Review assignment requirements, submit your work, and track evaluated marks out of 10</p>
+          </div>
+          <div class="search-input-wrap" style="max-width: 260px;">
+            <input type="text" id="studentAssignmentSearch" placeholder="Search assignments..." style="font-size: 13px;">
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Course</th>
+                <th>Assignment Title</th>
+                <th>Faculty</th>
+                <th>Deadline</th>
+                <th>Max Marks</th>
+                <th>Status</th>
+                <th>Marks (Out of 10)</th>
+                <th>Feedback</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="studentAssignmentsTableBody">
+              <tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">Loading assignments...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Faculty/Admin View: Assignments & Evaluation Management -->
+      <div class="card" id="facultyAssignmentsCard" style="margin-bottom: 24px; display: {% if current_user and current_user.role in ['faculty', 'admin'] %}block{% else %}none{% endif %};">
+        <div class="card-header-row">
+          <div>
+            <h3>Coursework Management & Evaluation</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Manage published assignments, review enrolled student submissions, and record marks</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <select class="form-select" id="facultyCourseFilter" style="width: auto; font-size: 13px;">
+              <option value="all">All Assigned Courses</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Course</th>
+                <th>Division</th>
+                <th>Title</th>
+                <th>Deadline</th>
+                <th>Max Marks</th>
+                <th>Eligible</th>
+                <th>Submissions</th>
+                <th>Awaiting</th>
+                <th>Evaluated</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="facultyAssignmentsTableBody">
+              <tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);">Loading course assignments...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Submissions Evaluation Drawer / Roster View -->
+      <div class="card" id="assignmentSubmissionsCard" style="display: none; margin-bottom: 24px;">
+        <div class="card-header-row">
+          <div>
+            <h3 id="submissionsCardTitle">Submissions Roster</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="submissionsCardSubtitle">Review submitted work and record grades (0 to 10 marks)</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="closeSubmissionsRoster()">✕ Back to Assignments</button>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>PRN</th>
+                <th>Roll No</th>
+                <th>Student Name</th>
+                <th>Submission Time</th>
+                <th>Status</th>
+                <th>Submission Content</th>
+                <th>Marks (Out of 10)</th>
+                <th>Feedback</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="assignmentSubmissionsTableBody">
+              <tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">Loading submissions...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Create Assignment Modal -->
+  <div class="modal-overlay" id="createAssignmentModal">
+    <div class="modal-box" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3>Create New Assignment</h3>
+        <span class="modal-close" onclick="closeModal('createAssignmentModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="createAssignmentError"></div>
+        <div class="form-group">
+          <label>Assignment Title *</label>
+          <input type="text" class="form-input" id="newAssignmentTitle" placeholder="e.g. Lab Exercise 3: SQL Relational Queries" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Course *</label>
+            <select class="form-select" id="newAssignmentCourse" required>
+              <option value="">Select Course...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Target Division *</label>
+            <select class="form-select" id="newAssignmentDivision" required>
+              <option value="A">Division A</option>
+              <option value="B">Division B</option>
+              <option value="C">Division C</option>
+              <option value="D">Division D</option>
+              <option value="ALL">All Divisions</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Submission Deadline *</label>
+            <input type="datetime-local" class="form-input" id="newAssignmentDeadline" required>
+          </div>
+          <div class="form-group">
+            <label>Maximum Marks</label>
+            <input type="number" class="form-input" id="newAssignmentTotalPoints" value="10" readonly style="background-color: var(--bg-hover); font-weight: bold;">
+            <small style="color: var(--text-muted); font-size: 11px;">Fixed at 10 marks per institutional rubric</small>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description & Instructions *</label>
+          <textarea class="form-textarea" id="newAssignmentDescription" rows="4" placeholder="Enter problem statement, submission criteria, and academic references..." required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('createAssignmentModal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnPublishAssignment" onclick="submitCreateAssignment()">Publish Assignment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student Submit Assignment Modal -->
+  <div class="modal-overlay" id="submitAssignmentModal">
+    <div class="modal-box" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 id="submitModalAssignmentTitle">Submit Assignment</h3>
+        <span class="modal-close" onclick="closeModal('submitAssignmentModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="submitAssignmentError"></div>
+        <div style="background-color: var(--bg-hover); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 16px;">
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);" id="submitModalCourseInfo">Course Details</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" id="submitModalDeadlineInfo">Deadline: --</div>
+          <div style="font-size: 13px; margin-top: 8px; color: var(--text-secondary);" id="submitModalInstructions">Instructions</div>
+        </div>
+
+        <input type="hidden" id="submitModalAssignmentId">
+
+        <div class="form-group">
+          <label>Written Answer / Online Submission Text</label>
+          <textarea class="form-textarea" id="submitTextContent" rows="4" placeholder="Enter your written solution, code explanation, or submission remarks..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>File Attachment (PDF, DOC, DOCX, ZIP — Max 25MB)</label>
+          <input type="file" class="form-input" id="submitFileInput" accept=".pdf,.doc,.docx,.zip">
+          <small style="color: var(--text-muted); font-size: 11px;">Supported formats: PDF, DOC, DOCX, ZIP with secure byte verification.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('submitAssignmentModal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnConfirmSubmit" onclick="confirmStudentSubmission()">Submit Work</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Faculty Evaluation Modal -->
+  <div class="modal-overlay" id="evaluateSubmissionModal">
+    <div class="modal-box" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3>Evaluate Student Submission</h3>
+        <span class="modal-close" onclick="closeModal('evaluateSubmissionModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="evaluationError"></div>
+        <input type="hidden" id="evalSubmissionId">
+        <div style="background-color: var(--bg-hover); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between;">
+            <strong id="evalStudentName" style="color: var(--text-primary);">Student Name</strong>
+            <span class="badge badge-info" id="evalStudentPRN">PRN</span>
+          </div>
+          <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;" id="evalAssignmentTitle">Assignment Title</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="evalSubmittedAt">Submitted: --</div>
+        </div>
+
+        <div class="form-group">
+          <label>Submitted Content</label>
+          <div id="evalSubmissionTextPreview" style="background-color: var(--bg-main); padding: 10px; border-radius: var(--radius-sm); font-size: 13px; max-height: 120px; overflow-y: auto; border: 1px solid var(--border-color); white-space: pre-wrap;">No written text provided.</div>
+        </div>
+
+        <div class="form-group" id="evalFileDownloadGroup" style="display: none;">
+          <label>Uploaded Document</label>
+          <div>
+            <a href="#" id="evalDownloadLink" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px;">
+              <span>📥</span> Download Student File
+            </a>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Marks Obtained (0 to 10 Marks) *</label>
+          <input type="number" class="form-input" id="evalMarksInput" min="0" max="10" step="0.5" placeholder="e.g. 8.5" required>
+          <small style="color: var(--text-muted); font-size: 11px;">Must be between 0 and 10 inclusive.</small>
+        </div>
+
+        <div class="form-group">
+          <label>Faculty Feedback & Remarks *</label>
+          <textarea class="form-textarea" id="evalFeedbackInput" rows="3" placeholder="Provide constructive feedback on accuracy, methodology, and improvements..." required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('evaluateSubmissionModal')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="btnSaveEvaluation" onclick="saveSubmissionEvaluation()">Save Evaluation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Campus Connect</p>
+  </footer>
+
+  <script src="js/script.js?v=50"></script>
+</body>
+</html>

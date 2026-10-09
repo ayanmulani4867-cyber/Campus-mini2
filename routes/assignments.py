@@ -62,9 +62,22 @@ def create_assignment():
     if not course:
         return jsonify({"success": False, "error": "Course not found."}), 404
 
+    division = (data.get("division") or "All").strip().upper()
+
     fac_id = None
     if user.role == "faculty":
-        fac_id = user.faculty_profile.id
+        fac = user.faculty_profile
+        fac_id = fac.id
+        # Server-side RBAC: Faculty must be assigned to teach this course and division
+        is_assigned = any(
+            a.course_id == course.id and (a.division.upper() == division or division == "ALL" or a.division.upper() == "ALL")
+            for a in fac.assignments
+        ) or (course.instructor_id == fac.id)
+        if not is_assigned:
+            return jsonify({
+                "success": False,
+                "error": f"You are not assigned to teach course {course.code} for Division {division}."
+            }), 403
     elif user.role == "admin":
         fac_ref = data.get("facultyId") or data.get("faculty_id")
         if fac_ref:
@@ -87,16 +100,25 @@ def create_assignment():
     except (ValueError, TypeError):
         raise ValidationError("Invalid due date format. Use ISO format (YYYY-MM-DDTHH:MM).")
 
+    # Module 7: Default maximum marks for this assignment workflow is 10
+    raw_points = data.get("totalPoints") or data.get("total_points") or data.get("total_marks") or data.get("totalMarks")
+    try:
+        total_points = int(raw_points) if raw_points is not None else 10
+        if total_points <= 0:
+            raise ValidationError("Total marks must be positive.")
+    except (ValueError, TypeError):
+        total_points = 10
+
     assignment = Assignment(
         title=str(data["title"]).strip(),
         description=data.get("description"),
         course_id=course.id,
         faculty_id=fac_id,
-        year_label=data.get("year", f"{course.semester//2 + 1}th Year" if course.semester else "1st Year"),
+        year_label=data.get("year", f"{course.semester//2 + 1}th Year" if course.semester else "3rd Year"),
         semester=course.semester,
-        division=(data.get("division") or "All").strip().upper(),
+        division=division,
         due_date=due_d,
-        total_points=int(data.get("totalPoints") or data.get("total_points") or data.get("total_marks") or data.get("totalMarks") or 100),
+        total_points=total_points,
     )
     db.session.add(assignment)
     db.session.commit()
@@ -157,7 +179,24 @@ def submit_assignment(assignment_id):
                 raise ValidationError(str(e))
 
     if not text_content and not file_bytes:
-        raise ValidationError("Please provide a submission text or upload a file (PDF, PPT, or PPTX).")
+        raise ValidationError("Please provide a submission text or upload a file (PDF, DOC, DOCX, PPT, PPTX, or ZIP).")
+
+    # Verify student is enrolled in this course
+    enrolled = any(e.course_id == assignment.course_id for e in student.enrollments)
+    if not enrolled:
+        return jsonify({"success": False, "error": "You are not enrolled in the course for this assignment."}), 403
+
+    if assignment.division and assignment.division.upper() != "ALL":
+        if student.division and student.division.upper() != assignment.division.upper():
+            return jsonify({"success": False, "error": f"This assignment is restricted to Division {assignment.division}."}), 403
+
+    # Determine whether submission is on-time or late
+    now = datetime.now(timezone.utc)
+    due_dt = assignment.due_date
+    if due_dt and due_dt.tzinfo is None:
+        due_dt = due_dt.replace(tzinfo=timezone.utc)
+    is_late = bool(due_dt and now > due_dt)
+    submission_status = "late" if is_late else "submitted"
 
     existing = AssignmentSubmission.query.filter_by(assignment_id=assignment.id, student_id=student.id).first()
     if existing:
@@ -169,8 +208,8 @@ def submit_assignment(assignment_id):
             existing.file_size_bytes = file_size
             existing.mime_type = mime_type
             existing.file_path = None
-        existing.submitted_at = datetime.now(timezone.utc)
-        existing.status = "submitted"
+        existing.submitted_at = now
+        existing.status = submission_status
         db.session.commit()
         return jsonify({"success": True, "data": existing.to_dict()})
 
@@ -183,13 +222,86 @@ def submit_assignment(assignment_id):
         file_size_bytes=file_size,
         mime_type=mime_type,
         file_path=None,
-        submitted_at=datetime.now(timezone.utc),
-        status="submitted",
+        submitted_at=now,
+        status=submission_status,
     )
     db.session.add(submission)
     db.session.commit()
 
     return jsonify({"success": True, "data": submission.to_dict()}), 201
+
+
+@bp.get("/<int:assignment_id>/evaluation-roster")
+@roles_required("faculty", "admin")
+def get_evaluation_roster(assignment_id):
+    """Returns the full evaluation roster: eligible students with submission and evaluation statuses."""
+    user = current_user()
+    assignment = Assignment.query.get(assignment_id)
+    if not assignment:
+        return jsonify({"success": False, "error": "Assignment not found."}), 404
+
+    if user.role == "faculty":
+        fac = user.faculty_profile
+        is_assigned = any(
+            a.course_id == assignment.course_id and (
+                a.division.upper() == assignment.division.upper() or
+                assignment.division.upper() == "ALL" or
+                a.division.upper() == "ALL"
+            )
+            for a in fac.assignments
+        ) or (assignment.course.instructor_id == fac.id) or (assignment.faculty_id == fac.id)
+        if not is_assigned:
+            return jsonify({"success": False, "error": "Forbidden: You are not assigned to this course/division."}), 403
+
+    eligible_q = Student.query.join(Enrollment, Student.id == Enrollment.student_id).filter(
+        Enrollment.course_id == assignment.course_id
+    )
+    if assignment.division and assignment.division.upper() != "ALL":
+        eligible_q = eligible_q.filter(
+            db.or_(Student.division == assignment.division, Student.division.is_(None))
+        )
+    students = eligible_q.order_by(Student.roll_number.asc(), Student.student_code.asc()).all()
+
+    submissions_by_stu = {s.student_id: s for s in assignment.submissions}
+
+    roster = []
+    for stu in students:
+        sub = submissions_by_stu.get(stu.id)
+        if sub:
+            sub_dict = sub.to_dict()
+        else:
+            sub_dict = {
+                "id": None,
+                "assignmentId": assignment.id,
+                "studentId": stu.student_code,
+                "studentName": stu.user.full_name,
+                "prn": stu.prn or stu.student_code,
+                "rollNumber": stu.roll_number,
+                "division": stu.division,
+                "submissionText": None,
+                "fileName": None,
+                "downloadUrl": None,
+                "submittedAt": None,
+                "status": "not_submitted",
+                "displayStatus": "Not Submitted",
+                "evaluationStatus": "Awaiting Submission",
+                "isEvaluated": False,
+                "grade": None,
+                "marks_obtained": None,
+                "marks_display": None,
+                "feedback": None,
+            }
+        roster.append(sub_dict)
+
+    counts = assignment.get_evaluation_counts()
+    return jsonify({
+        "success": True,
+        "data": {
+            "assignment": assignment.to_dict(),
+            "counts": counts,
+            "roster": roster,
+        }
+    })
 
 
 @bp.get("/<int:assignment_id>/submissions/<int:submission_id>/download")
@@ -270,14 +382,33 @@ def grade_submission_flat(submission_id):
     if not submission:
         return jsonify({"success": False, "error": "Submission not found."}), 404
 
-    grade_val = data.get("grade") or data.get("marks_obtained")
+    # Server-side RBAC for faculty
+    if user.role == "faculty":
+        fac = user.faculty_profile
+        assignment = submission.assignment
+        is_assigned = any(
+            a.course_id == assignment.course_id and (
+                a.division.upper() == assignment.division.upper() or
+                assignment.division.upper() == "ALL" or
+                a.division.upper() == "ALL"
+            )
+            for a in fac.assignments
+        ) or (assignment.course.instructor_id == fac.id) or (assignment.faculty_id == fac.id)
+        if not is_assigned:
+            return jsonify({"success": False, "error": "Forbidden: You are not authorized to grade this assignment."}), 403
+
+    grade_val = data.get("grade") if data.get("grade") is not None else data.get("marks_obtained")
     if grade_val is None:
-        return jsonify({"success": False, "error": "grade or marks_obtained is required."}), 400
+        return jsonify({"success": False, "error": "Marks obtained (grade) is required."}), 400
 
     try:
         grade_val = float(grade_val)
     except (ValueError, TypeError):
-        raise ValidationError("Grade must be a number.")
+        raise ValidationError("Marks must be a valid number.")
+
+    max_allowed = float(assignment.total_points) if assignment.total_points else 10.0
+    if grade_val < 0 or grade_val > max_allowed:
+        raise ValidationError(f"Marks obtained must be between 0 and {int(max_allowed)} inclusive (e.g. 0/{int(max_allowed)}, 10/{int(max_allowed)}).")
 
     submission.grade = grade_val
     submission.feedback = data.get("feedback")
@@ -295,31 +426,59 @@ def grade_submission(assignment_id):
     user = current_user()
     data = request.get_json(silent=True) or {}
 
-    # Support both flat submission_id-based grading and student-lookup grading
-    student_ref = data.get("studentId") or data.get("student_id")
-    if not student_ref:
-        require_fields(data, ["studentId"])
+    assignment = Assignment.query.get(assignment_id)
+    if not assignment:
+        return jsonify({"success": False, "error": "Assignment not found."}), 404
 
-    student = Student.query.filter(
-        db.or_(Student.student_code == student_ref, Student.prn == student_ref)
-    ).first()
-    if not student:
-        return jsonify({"success": False, "error": "Student not found."}), 404
+    # Server-side RBAC for faculty
+    if user.role == "faculty":
+        fac = user.faculty_profile
+        is_assigned = any(
+            a.course_id == assignment.course_id and (
+                a.division.upper() == assignment.division.upper() or
+                assignment.division.upper() == "ALL" or
+                a.division.upper() == "ALL"
+            )
+            for a in fac.assignments
+        ) or (assignment.course.instructor_id == fac.id) or (assignment.faculty_id == fac.id)
+        if not is_assigned:
+            return jsonify({"success": False, "error": "Forbidden: You are not authorized to grade this assignment."}), 403
 
-    submission = AssignmentSubmission.query.filter_by(
-        assignment_id=assignment_id, student_id=student.id
-    ).first()
+    # Support either submissionId directly or student lookup
+    submission = None
+    sub_id = data.get("submissionId") or data.get("submission_id")
+    if sub_id:
+        submission = AssignmentSubmission.query.filter_by(id=int(sub_id), assignment_id=assignment_id).first()
+
     if not submission:
-        return jsonify({"success": False, "error": "Submission not found for this student."}), 404
+        student_ref = data.get("studentId") or data.get("student_id") or data.get("prn")
+        if not student_ref:
+            require_fields(data, ["studentId"])
 
-    grade_val = data.get("grade") or data.get("marks_obtained")
+        student = Student.query.filter(
+            db.or_(Student.student_code == student_ref, Student.prn == student_ref)
+        ).first()
+        if not student:
+            return jsonify({"success": False, "error": "Student not found."}), 404
+
+        submission = AssignmentSubmission.query.filter_by(
+            assignment_id=assignment_id, student_id=student.id
+        ).first()
+        if not submission:
+            return jsonify({"success": False, "error": "Submission not found for this student."}), 404
+
+    grade_val = data.get("grade") if data.get("grade") is not None else data.get("marks_obtained")
     if grade_val is None:
-        return jsonify({"success": False, "error": "grade or marks_obtained is required."}), 400
+        return jsonify({"success": False, "error": "Marks obtained (grade) is required."}), 400
 
     try:
         grade_val = float(grade_val)
     except (ValueError, TypeError):
-        raise ValidationError("Grade must be a number.")
+        raise ValidationError("Marks must be a valid number.")
+
+    max_allowed = float(assignment.total_points) if assignment.total_points else 10.0
+    if grade_val < 0 or grade_val > max_allowed:
+        raise ValidationError(f"Marks obtained must be between 0 and {int(max_allowed)} inclusive (e.g. 0/{int(max_allowed)}, 10/{int(max_allowed)}).")
 
     submission.grade = grade_val
     submission.feedback = data.get("feedback")

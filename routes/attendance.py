@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import (
@@ -21,8 +21,9 @@ def _status_label(pct):
 @bp.get("/summary")
 @login_required
 def attendance_summary():
-    """Subject-wise Held/Attended/Percentage table.
+    """Subject-wise Held/Attended/Percentage table with detailed counts and history.
     Students see their own; faculty/admin can pass ?studentId=STU..."""
+    from flask import current_app
     user = current_user()
     if user.role == "student":
         student = user.student_profile
@@ -30,43 +31,87 @@ def attendance_summary():
         code = request.args.get("studentId")
         if not code:
             raise ValidationError("studentId is required for faculty/admin lookups.")
-        student = Student.query.filter_by(student_code=code).first()
+        student = Student.query.filter(
+            db.or_(Student.student_code == code, Student.prn == code)
+        ).first()
         if not student:
             return jsonify({"success": False, "error": "Student not found."}), 404
 
+    # Configurable Late attendance policy (default 1.0 = counted as attended, 0.5 = half attendance)
+    late_weight = float(current_app.config.get("LATE_ATTENDANCE_WEIGHT", 1.0))
+
     rows = []
+    history = []
     total_held = total_attended = 0
+    total_present = total_absent = total_late = 0
+
     for enr in student.enrollments:
         course = enr.course
         records = (
             AttendanceRecord.query.join(AttendanceSession)
             .filter(AttendanceSession.course_id == course.id, AttendanceRecord.student_id == student.id)
+            .order_by(AttendanceSession.session_date.desc())
             .all()
         )
         held = len(records)
-        attended = sum(1 for r in records if r.status in ("present", "late"))
+        present_count = sum(1 for r in records if r.status == "present")
+        absent_count = sum(1 for r in records if r.status == "absent")
+        late_count = sum(1 for r in records if r.status == "late")
+        attended = round(present_count + (late_count * late_weight), 1)
         pct = round((attended / held) * 100, 1) if held else 0.0
+
         total_held += held
         total_attended += attended
+        total_present += present_count
+        total_absent += absent_count
+        total_late += late_count
+
         rows.append({
             "courseCode": course.code,
             "courseTitle": course.title,
+            "courseName": course.title,
             "instructor": course.instructor.user.full_name if course.instructor and course.instructor.user else None,
             "held": held,
+            "totalConducted": held,
             "attended": attended,
+            "presentCount": present_count,
+            "absentCount": absent_count,
+            "lateCount": late_count,
             "percentage": pct,
             "status": _status_label(pct) if held else "No Data",
         })
 
+        for r in records:
+            history.append({
+                "courseCode": course.code,
+                "courseTitle": course.title,
+                "courseName": course.title,
+                "date": r.session.session_date.isoformat(),
+                "status": r.status,
+                "division": r.session.division,
+                "markedBy": r.session.marked_by.user.full_name if (r.session.marked_by and r.session.marked_by.user) else None,
+            })
+
+    history.sort(key=lambda x: x["date"], reverse=True)
     overall_pct = round((total_attended / total_held) * 100, 1) if total_held else 0.0
+
     return jsonify({
         "success": True,
         "data": {
             "rows": rows,
+            "history": history,
+            "lateAttendancePolicy": {
+                "weight": late_weight,
+                "description": f"Late attendance is weighted as {late_weight}x class credit."
+            },
             "overall": {
                 "percentage": overall_pct,
                 "held": total_held,
+                "totalConducted": total_held,
                 "attended": total_attended,
+                "presentCount": total_present,
+                "absentCount": total_absent,
+                "lateCount": total_late,
                 "missed": total_held - total_attended,
                 "eligible": overall_pct >= 75,
             },
@@ -148,6 +193,8 @@ def get_roll_call():
         roster.append({
             "studentId": s.student_code,
             "prn": s.prn or s.student_code,
+            "rollNumber": s.roll_number,
+            "roll_number": s.roll_number,
             "name": s.user.full_name,
             "department": s.department.name if s.department else None,
             "semester": s.semester,
@@ -155,7 +202,7 @@ def get_roll_call():
             "status": marks_by_student.get(s.id, "present"),
         })
 
-    roster.sort(key=lambda x: str(x.get("prn") or x.get("studentId") or ""))
+    roster.sort(key=lambda x: str(x.get("rollNumber") or x.get("prn") or x.get("studentId") or ""))
 
     return jsonify({
         "success": True,

@@ -470,6 +470,9 @@ function boot(currentPath) {
     case "attendance.html":
       initAttendance(role);
       break;
+    case "assignments.html":
+      initAssignments(role);
+      break;
     case "results.html":
       initResults(role);
       break;
@@ -497,6 +500,7 @@ function boot(currentPath) {
       if (document.getElementById("usersTableBody") || document.getElementById("addUserModal")) initUsers(role);
       if (document.getElementById("postNoticeBtn") || document.getElementById("newNoticeModal")) initNotices(role);
       if (document.querySelector('[data-role="attendance-summary-body"]') || document.getElementById("facultyRollCallCard")) initAttendance(role);
+      if (document.getElementById("studentAssignmentsCard") || document.getElementById("facultyAssignmentsCard")) initAssignments(role);
       if (window.location.pathname.indexOf("events") !== -1) initEvents(role);
       break;
   }
@@ -580,6 +584,8 @@ function setupSidebar(role) {
       { name: "Dashboard", href: "dashboard.html", icon: "📊" },
       { name: "My Profile", href: "profile.html", icon: "👤" },
       { name: "Courses", href: "courses.html", icon: "📚" },
+      { name: "My Attendance", href: "attendance.html", icon: "📅" },
+      { name: "My Assignments", href: "assignments.html", icon: "📋" },
       { name: "My Results", href: "results.html", icon: "📝" },
       { name: "Notices", href: "notices.html", icon: "📢" },
       { name: "Events", href: "events.html", icon: "🎉" },
@@ -592,6 +598,7 @@ function setupSidebar(role) {
       { name: "Faculty Profile", href: "profile.html", icon: "👤" },
       { name: "My Classes", href: "courses.html", icon: "📚" },
       { name: "Mark Attendance", href: "attendance.html", icon: "📅" },
+      { name: "Assignments & Evaluation", href: "assignments.html", icon: "📋" },
       { name: "Enter Marks", href: "results.html", icon: "📝" },
       { name: "Notices", href: "notices.html", icon: "📢" },
       { name: "Events", href: "events.html", icon: "🎉" },
@@ -604,6 +611,8 @@ function setupSidebar(role) {
       { name: "Admin Profile", href: "profile.html", icon: "👤" },
       { name: "User Directory", href: "users.html", icon: "👥" },
       { name: "Courses", href: "courses.html", icon: "📚" },
+      { name: "Attendance Records", href: "attendance.html", icon: "📅" },
+      { name: "Assignments", href: "assignments.html", icon: "📋" },
       { name: "Result Control", href: "results.html", icon: "📝" },
       { name: "Manage Notices", href: "notices.html", icon: "📢" },
       { name: "Manage Events", href: "events.html", icon: "🎉" },
@@ -1479,22 +1488,96 @@ function initSearchAndFilter() {
 }
 
 // ---- Attendance module ------------------------------------------------------------
-function initAttendance(role) {
-  var summaryBody = document.querySelector('[data-role="attendance-summary-body"]');
-  if (summaryBody) {
-    api("/api/attendance/summary").then(function (res) {
-      var rows = res.data.rows;
-      summaryBody.innerHTML = rows.length ? rows.map(function (r) {
-        return '<tr><td><strong>' + r.courseCode + '</strong></td><td>' + r.courseTitle + '</td>' +
-          '<td>' + (r.instructor || '-') + '</td><td>' + r.held + '</td><td>' + r.attended + '</td>' +
-          '<td><strong>' + r.percentage + '%</strong></td>' +
-          '<td><span class="badge ' + (r.percentage >= 75 ? 'badge-success' : 'badge-warning') + '">' + r.status + '</span></td></tr>';
-      }).join("") : '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance data yet.</td></tr>';
+var attendancePollTimer = null;
 
-      var overall = res.data.overall;
+function initAttendance(role) {
+  if (attendancePollTimer) {
+    clearInterval(attendancePollTimer);
+    attendancePollTimer = null;
+  }
+
+  function renderStudentAttendance() {
+    var summaryBody = document.querySelector('[data-role="attendance-summary-body"]');
+    var historyBody = document.getElementById("attendanceHistoryBody");
+    var syncBadge = document.getElementById("attendanceLastUpdated");
+
+    api("/api/attendance/summary").then(function (res) {
+      var rows = (res.data && res.data.rows) || [];
+      var overall = (res.data && res.data.overall) || {};
+      var history = (res.data && res.data.history) || [];
+
+      if (summaryBody) {
+        summaryBody.innerHTML = rows.length ? rows.map(function (r) {
+          var pct = r.percentage !== undefined ? r.percentage : 0;
+          var present = r.presentCount !== undefined ? r.presentCount : r.attended;
+          var late = r.lateCount || 0;
+          var held = r.held || r.totalConducted || 0;
+          var absent = r.absentCount !== undefined ? r.absentCount : Math.max(0, held - (present + late));
+          var isEligible = pct >= 75;
+          return '<tr>' +
+            '<td><strong>' + escapeHtml(r.courseCode) + '</strong></td>' +
+            '<td>' + escapeHtml(r.courseTitle) + '</td>' +
+            '<td>' + escapeHtml(r.instructor || '-') + '</td>' +
+            '<td>' + held + '</td>' +
+            '<td><span style="color:var(--success); font-weight:600;">' + present + '</span></td>' +
+            '<td><span style="color:var(--warning); font-weight:600;">' + late + '</span></td>' +
+            '<td><span style="color:var(--danger); font-weight:600;">' + absent + '</span></td>' +
+            '<td><strong>' + pct + '%</strong></td>' +
+            '<td><span class="badge ' + (isEligible ? 'badge-success' : 'badge-danger') + '">' + (isEligible ? 'Eligible' : 'Shortage') + '</span></td>' +
+            '</tr>';
+        }).join("") : '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance data recorded yet.</td></tr>';
+      }
+
+      if (historyBody) {
+        historyBody.innerHTML = history.length ? history.map(function (h) {
+          var st = (h.status || "").toLowerCase();
+          var cls = st === "present" ? "badge-success" : st === "late" ? "badge-warning" : "badge-danger";
+          var label = st.charAt(0).toUpperCase() + st.slice(1);
+          return '<tr>' +
+            '<td><strong>' + escapeHtml(h.date || '-') + '</strong></td>' +
+            '<td>' + escapeHtml(h.courseCode || '-') + '</td>' +
+            '<td>' + escapeHtml(h.courseName || h.courseTitle || '-') + '</td>' +
+            '<td><span class="badge badge-info">Div ' + escapeHtml(h.division || 'A') + '</span></td>' +
+            '<td><span class="badge ' + cls + '">' + label + '</span></td>' +
+            '<td>' + escapeHtml(h.markedBy || 'Faculty Instructor') + '</td>' +
+            '</tr>';
+        }).join("") : '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance sessions logged.</td></tr>';
+      }
+
+      var histCountBadge = document.getElementById("historyCountBadge");
+      if (histCountBadge) {
+        histCountBadge.textContent = history.length + " Sessions Logged";
+      }
+
+      // Update stat cards
+      var pctEl = document.getElementById("overallAttendancePct");
+      var progBar = document.getElementById("overallProgressBar");
+      var presEl = document.getElementById("classesAttendedCount");
+      var lateEl = document.getElementById("classesLateCount");
+      var absEl = document.getElementById("classesMissedCount");
+      var totalEl = document.getElementById("classesTotalCount");
+      var eligEl = document.getElementById("eligibilityStatus");
       var countEl = document.getElementById("presentCountDisplay");
-      if (countEl && role === "student") {
-        countEl.textContent = "Overall: " + overall.percentage + "% Attendance";
+
+      var overallPct = overall.percentage !== undefined ? overall.percentage : 0;
+      if (pctEl) pctEl.textContent = overallPct + "%";
+      if (progBar) progBar.style.width = Math.min(100, overallPct) + "%";
+      if (presEl) presEl.textContent = overall.presentCount !== undefined ? overall.presentCount : (overall.attended || 0);
+      if (lateEl) lateEl.textContent = overall.lateCount !== undefined ? overall.lateCount : 0;
+      var totalHeld = overall.totalConducted !== undefined ? overall.totalConducted : (overall.held || 0);
+      var totalPres = overall.presentCount !== undefined ? overall.presentCount : (overall.attended || 0);
+      var totalLate = overall.lateCount !== undefined ? overall.lateCount : 0;
+      if (absEl) absEl.textContent = overall.absentCount !== undefined ? overall.absentCount : Math.max(0, totalHeld - (totalPres + totalLate));
+      if (totalEl) totalEl.textContent = totalHeld;
+      if (eligEl) {
+        eligEl.innerHTML = overallPct >= 75
+          ? '<span style="color:var(--success);">Eligible</span>'
+          : '<span style="color:var(--danger);">Defaulter (<75%)</span>';
+      }
+      if (countEl) countEl.textContent = "Overall: " + overallPct + "% Attendance";
+
+      if (syncBadge) {
+        syncBadge.textContent = "Live Synced (" + new Date().toLocaleTimeString() + ")";
       }
     }).catch(function () {});
   }
@@ -1502,18 +1585,29 @@ function initAttendance(role) {
   var facultyCard = document.getElementById("facultyRollCallCard");
   if (role === "student") {
     if (facultyCard) facultyCard.remove();
-  } else if (role === "faculty") {
+    renderStudentAttendance();
+    // Lightweight polling every 7 seconds for real-time attendance ledger updates
+    attendancePollTimer = setInterval(renderStudentAttendance, 7000);
+  } else if (role === "faculty" || role === "admin") {
     if (facultyCard) {
       facultyCard.style.display = "block";
       initFacultyAttendanceControls();
+    }
+    if (document.querySelector('[data-role="attendance-summary-body"]')) {
+      renderStudentAttendance();
     }
   }
 
   function initFacultyAttendanceControls() {
     var courseSelect = document.getElementById("facultyRollCourseSelect");
     var divSelect = document.getElementById("facultyRollDivisionSelect");
-    var tbody = document.getElementById("rollCallTableBody") || (facultyCard ? facultyCard.querySelector(".data-table tbody") : null);
+    var dateInput = document.getElementById("facultyRollDateInput");
+    var tbody = document.getElementById("rollCallTableBody");
     var coursesList = [];
+
+    if (dateInput && !dateInput.value) {
+      dateInput.value = new Date().toISOString().split("T")[0];
+    }
 
     function updateDivisions() {
       if (!divSelect || !courseSelect) return;
@@ -1545,61 +1639,81 @@ function initAttendance(role) {
       loadRollCall();
     });
     if (divSelect) divSelect.addEventListener("change", loadRollCall);
+    if (dateInput) dateInput.addEventListener("change", loadRollCall);
 
     function loadRollCall() {
-      var rollCourse = courseSelect ? courseSelect.value : (facultyCard ? facultyCard.getAttribute("data-course") || "CS601" : "CS601");
+      var rollCourse = courseSelect ? courseSelect.value : "CS601";
       var rollDiv = divSelect ? divSelect.value : "A";
-      api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(rollCourse) + "&division=" + encodeURIComponent(rollDiv)).then(function (res) {
+      var rollDate = dateInput ? dateInput.value : new Date().toISOString().split("T")[0];
+
+      api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(rollCourse) + "&division=" + encodeURIComponent(rollDiv) + "&date=" + encodeURIComponent(rollDate)).then(function (res) {
         if (!tbody) return;
-        var roster = res.data.roster || [];
+        var roster = (res.data && res.data.roster) || [];
         if (!roster.length) {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">No students enrolled in Division ' + escapeHtml(rollDiv) + ' for ' + escapeHtml(rollCourse) + '.</td></tr>';
           return;
         }
         tbody.innerHTML = roster.map(function (s) {
-          var cls = s.status === "present" ? "btn-success" : s.status === "late" ? "btn-warning" : "btn-danger";
-          var label = s.status === "present" ? "Present" : s.status === "late" ? "Late" : "Absent";
+          var status = (s.status || "present").toLowerCase();
+          var rollNum = s.rollNumber || s.roll_number || "-";
+          var prn = s.prn || s.studentId || "-";
           return '<tr data-student-id="' + s.studentId + '">' +
-            '<td><strong>' + escapeHtml(s.prn || s.studentId) + '</strong></td>' +
-            '<td>' + escapeHtml(s.name) + '</td>' +
+            '<td><strong>' + escapeHtml(prn) + '</strong></td>' +
+            '<td><span class="badge badge-secondary">' + escapeHtml(rollNum) + '</span></td>' +
+            '<td><strong>' + escapeHtml(s.name) + '</strong></td>' +
             '<td>' + escapeHtml(s.department || '-') + '</td>' +
             '<td><span class="badge badge-info">Div ' + escapeHtml(s.division || rollDiv) + '</span></td>' +
-            '<td><button type="button" class="btn btn-sm ' + cls + ' attend-toggle">' + label + '</button></td></tr>';
+            '<td>' +
+              '<div class="status-toggle-group" style="display:inline-flex; gap:6px;">' +
+                '<button type="button" class="btn btn-sm attend-btn ' + (status === 'present' ? 'btn-success active' : 'btn-secondary') + '" data-status="present">Present</button>' +
+                '<button type="button" class="btn btn-sm attend-btn ' + (status === 'late' ? 'btn-warning active' : 'btn-secondary') + '" data-status="late">Late</button>' +
+                '<button type="button" class="btn btn-sm attend-btn ' + (status === 'absent' ? 'btn-danger active' : 'btn-secondary') + '" data-status="absent">Absent</button>' +
+              '</div>' +
+            '</td></tr>';
         }).join("");
-        wireAttendanceToggles();
-      }).catch(function () {});
+        wireAttendanceButtons();
+      }).catch(function (err) {
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--danger);">' + escapeHtml(err.message || 'Error loading roster.') + '</td></tr>';
+        }
+      });
     }
 
-    function wireAttendanceToggles() {
+    function wireAttendanceButtons() {
       if (!tbody) return;
-      tbody.querySelectorAll(".attend-toggle").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          if (getActiveRole() !== "faculty") {
-            alert("Permission Denied: Only faculty members can mark attendance.");
-            return;
-          }
-          if (this.classList.contains("btn-success")) {
-            this.className = "btn btn-sm btn-danger attend-toggle";
-            this.textContent = "Absent";
-          } else if (this.classList.contains("btn-danger")) {
-            this.className = "btn btn-sm btn-warning attend-toggle";
-            this.textContent = "Late";
-          } else {
-            this.className = "btn btn-sm btn-success attend-toggle";
-            this.textContent = "Present";
-          }
+      tbody.querySelectorAll("tr[data-student-id]").forEach(function (row) {
+        var buttons = row.querySelectorAll(".attend-btn");
+        buttons.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            if (getActiveRole() !== "faculty" && getActiveRole() !== "admin") {
+              alert("Permission Denied: Only authorized faculty members can mark attendance.");
+              return;
+            }
+            buttons.forEach(function (b) {
+              b.classList.remove("active", "btn-success", "btn-warning", "btn-danger");
+              b.classList.add("btn-secondary");
+            });
+            var st = this.getAttribute("data-status");
+            this.classList.remove("btn-secondary");
+            this.classList.add("active");
+            if (st === "present") this.classList.add("btn-success");
+            else if (st === "late") this.classList.add("btn-warning");
+            else this.classList.add("btn-danger");
+          });
         });
       });
     }
 
     window.saveFacultyAttendance = function () {
-      if (getActiveRole() !== "faculty") {
-        showToast("Access Restricted", "Only faculty members can save attendance.", "warning");
+      var currentRole = getActiveRole();
+      if (currentRole !== "faculty" && currentRole !== "admin") {
+        showToast("Access Restricted", "Only authorized faculty members can save attendance.", "warning");
         return;
       }
-      var saveBtn = document.getElementById("saveAttendanceBtn") || (facultyCard ? facultyCard.querySelector("#saveAttendanceBtn") : null);
+      var saveBtn = document.getElementById("saveAttendanceBtn");
       var rollCourse = courseSelect ? courseSelect.value : "CS601";
       var rollDiv = divSelect ? divSelect.value : "A";
+      var rollDate = dateInput ? dateInput.value : new Date().toISOString().split("T")[0];
       var records = [];
       var presentCount = 0;
       var lateCount = 0;
@@ -1607,23 +1721,20 @@ function initAttendance(role) {
 
       if (tbody) {
         tbody.querySelectorAll("tr[data-student-id]").forEach(function (row) {
-          var btn = row.querySelector(".attend-toggle");
-          if (btn) {
-            var status = btn.classList.contains("btn-success") ? "present" :
-                         btn.classList.contains("btn-warning") ? "late" : "absent";
-            if (status === "present") presentCount++;
-            else if (status === "late") lateCount++;
-            else absentCount++;
-            records.push({ studentId: row.getAttribute("data-student-id"), status: status });
-          }
+          var activeBtn = row.querySelector(".attend-btn.active");
+          var status = activeBtn ? activeBtn.getAttribute("data-status") : "present";
+          if (status === "present") presentCount++;
+          else if (status === "late") lateCount++;
+          else absentCount++;
+          records.push({ studentId: row.getAttribute("data-student-id"), status: status });
         });
       }
 
-      setButtonLoading(saveBtn, "Saving Attendance...");
+      setButtonLoading(saveBtn, "Saving Ledger...");
 
       api("/api/attendance/roll-call", {
         method: "POST",
-        body: { courseCode: rollCourse, division: rollDiv, records: records }
+        body: { courseCode: rollCourse, division: rollDiv, date: rollDate, records: records }
       }).then(function (res) {
         resetButton(saveBtn, '<span class="badge-saved">✓ Attendance Saved</span>');
         setTimeout(function () {
@@ -1631,17 +1742,11 @@ function initAttendance(role) {
         }, 2500);
 
         var bannerContainer = document.getElementById("rollCallStatusBanner");
-        if (!bannerContainer && facultyCard) {
-          bannerContainer = document.createElement("div");
-          bannerContainer.id = "rollCallStatusBanner";
-          var header = facultyCard.querySelector(".card-header-row");
-          if (header) header.insertAdjacentElement("afterend", bannerContainer);
-        }
         if (bannerContainer) {
           bannerContainer.innerHTML =
             '<div class="inline-banner inline-banner-success">' +
-              '<span>✓ Attendance recorded for <strong>' + escapeHtml(rollCourse) + ' (Div ' + escapeHtml(rollDiv) + ')</strong>: ' +
-              '<strong>' + presentCount + ' Present</strong>, <strong>' + absentCount + ' Absent</strong>, <strong>' + lateCount + ' Late</strong>. Records committed to academic ledger.</span>' +
+              '<span>✓ Attendance recorded for <strong>' + escapeHtml(rollCourse) + ' (Div ' + escapeHtml(rollDiv) + ', ' + escapeHtml(rollDate) + ')</strong>: ' +
+              '<strong>' + presentCount + ' Present</strong>, <strong>' + lateCount + ' Late</strong>, <strong>' + absentCount + ' Absent</strong>. Records committed to academic ledger.</span>' +
               '<span class="inline-banner-close" onclick="this.parentElement.remove()">&times;</span>' +
             '</div>';
         }
@@ -1650,7 +1755,7 @@ function initAttendance(role) {
             highlightRow(r, "update");
           });
         }
-        showToast("Attendance Recorded", presentCount + " Present, " + absentCount + " Absent (" + rollCourse + " Div " + rollDiv + ")", "success");
+        showToast("Attendance Recorded", presentCount + " Present, " + lateCount + " Late, " + absentCount + " Absent (" + rollCourse + ")", "success");
       }).catch(function (e) {
         resetButton(saveBtn, "Save Attendance");
         var bannerContainer = document.getElementById("rollCallStatusBanner");
@@ -1662,6 +1767,466 @@ function initAttendance(role) {
             '</div>';
         }
         showToast("Save Failed", e.message || "Could not save attendance.", "error");
+      });
+    };
+  }
+}
+
+// ---- Assignments module ------------------------------------------------------------
+var assignmentsPollTimer = null;
+
+function initAssignments(role) {
+  if (assignmentsPollTimer) {
+    clearInterval(assignmentsPollTimer);
+    assignmentsPollTimer = null;
+  }
+
+  var studentCard = document.getElementById("studentAssignmentsCard");
+  var facultyCard = document.getElementById("facultyAssignmentsCard");
+  var submissionsCard = document.getElementById("assignmentSubmissionsCard");
+  var syncBadge = document.getElementById("assignmentLastUpdated");
+
+  var currentAssignmentsList = [];
+
+  if (role === "student") {
+    if (studentCard) studentCard.style.display = "block";
+    if (facultyCard) facultyCard.style.display = "none";
+    if (submissionsCard) submissionsCard.style.display = "none";
+    loadStudentAssignments();
+    // Real-time polling every 8 seconds for gradebook updates
+    assignmentsPollTimer = setInterval(loadStudentAssignments, 8000);
+  } else {
+    if (studentCard) studentCard.style.display = "none";
+    if (facultyCard) facultyCard.style.display = "block";
+    initFacultyAssignments();
+  }
+
+  function loadStudentAssignments() {
+    var tbody = document.getElementById("studentAssignmentsTableBody");
+    api("/api/assignments").then(function (res) {
+      currentAssignmentsList = res.data || [];
+      var assignments = currentAssignmentsList;
+      var total = assignments.length;
+      var submitted = 0;
+      var pending = 0;
+      var evaluated = 0;
+
+      assignments.forEach(function (a) {
+        var st = (a.submissionStatus || "not_submitted").toLowerCase();
+        if (st === "evaluated" || a.isEvaluated) evaluated++;
+        else if (st === "submitted" || st === "late" || st === "under_review") pending++;
+      });
+      submitted = pending + evaluated;
+
+      var totEl = document.getElementById("totalAssignmentsCount");
+      var subEl = document.getElementById("submittedAssignmentsCount");
+      var penEl = document.getElementById("pendingEvaluationCount");
+      var evaEl = document.getElementById("evaluatedAssignmentsCount");
+
+      if (totEl) totEl.textContent = total;
+      if (subEl) subEl.textContent = submitted;
+      if (penEl) penEl.textContent = pending;
+      if (evaEl) evaEl.textContent = evaluated;
+
+      if (syncBadge) syncBadge.textContent = "Live Synced (" + new Date().toLocaleTimeString() + ")";
+
+      if (!tbody) return;
+      if (!assignments.length) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No assignments published for your courses.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = assignments.map(function (a) {
+        var statusBadge = '';
+        var st = (a.submissionStatus || "not_submitted").toLowerCase();
+        if (a.isEvaluated || st === "evaluated" || st === "graded") {
+          statusBadge = '<span class="badge badge-success">Evaluated</span>';
+        } else if (st === "late") {
+          statusBadge = '<span class="badge badge-warning">Late Submission</span>';
+        } else if (st === "submitted" || st === "under_review") {
+          statusBadge = '<span class="badge badge-primary">Submitted</span>';
+        } else {
+          statusBadge = '<span class="badge badge-secondary">Not Submitted</span>';
+        }
+
+        var marksDisplay = '-';
+        if (a.isEvaluated || (a.marksObtained !== null && a.marksObtained !== undefined)) {
+          marksDisplay = '<strong style="color:var(--success); font-size:14px;">' + a.marksObtained + ' / ' + (a.totalPoints || 10) + '</strong>';
+        }
+
+        var feedbackDisplay = a.feedback ? escapeHtml(a.feedback) : '<span style="color:var(--text-muted);">-</span>';
+        var deadlineStr = a.dueDate ? new Date(a.dueDate).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+
+        var actionBtn = '';
+        if (a.isEvaluated) {
+          actionBtn = '<button class="btn btn-secondary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">View Details</button>';
+        } else if (a.isSubmitted) {
+          actionBtn = '<button class="btn btn-secondary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">Update Work</button>';
+        } else {
+          actionBtn = '<button class="btn btn-primary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">Submit Work</button>';
+        }
+
+        return '<tr data-assignment-id="' + a.id + '">' +
+          '<td><strong>' + escapeHtml(a.courseCode || '-') + '</strong></td>' +
+          '<td><strong>' + escapeHtml(a.title) + '</strong><br><small style="color:var(--text-muted);">' + escapeHtml((a.description || '').substring(0, 50)) + '...</small></td>' +
+          '<td>' + escapeHtml(a.facultyName || 'Course Faculty') + '</td>' +
+          '<td>' + escapeHtml(deadlineStr) + '</td>' +
+          '<td><span class="badge badge-info">' + (a.totalPoints || 10) + ' Marks</span></td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td>' + marksDisplay + '</td>' +
+          '<td style="max-width:200px;">' + feedbackDisplay + '</td>' +
+          '<td>' + actionBtn + '</td>' +
+          '</tr>';
+      }).join("");
+    }).catch(function () {});
+  }
+
+  window.openStudentSubmitModal = function (assignmentId) {
+    var a = currentAssignmentsList.find(function (item) { return item.id === assignmentId; });
+    if (!a) return;
+
+    var modalId = document.getElementById("submitModalAssignmentId");
+    var titleEl = document.getElementById("submitModalAssignmentTitle");
+    var courseInfo = document.getElementById("submitModalCourseInfo");
+    var deadlineInfo = document.getElementById("submitModalDeadlineInfo");
+    var instructions = document.getElementById("submitModalInstructions");
+    var textInput = document.getElementById("submitTextContent");
+    var fileInput = document.getElementById("submitFileInput");
+    var errBox = document.getElementById("submitAssignmentError");
+
+    if (errBox) errBox.innerHTML = "";
+    if (modalId) modalId.value = a.id;
+    if (titleEl) titleEl.textContent = "Submit: " + a.title;
+    if (courseInfo) courseInfo.textContent = (a.courseCode || '') + " — " + (a.courseTitle || 'Coursework');
+    if (deadlineInfo) deadlineInfo.textContent = "Deadline: " + (a.dueDate ? new Date(a.dueDate).toLocaleString() : 'No cutoff');
+    if (instructions) instructions.textContent = a.description || "Submit written answer or attach file.";
+    if (textInput) textInput.value = (a.submission && a.submission.submissionText) ? a.submission.submissionText : "";
+    if (fileInput) fileInput.value = "";
+
+    openModal("submitAssignmentModal");
+  };
+
+  window.confirmStudentSubmission = function () {
+    var assignmentId = document.getElementById("submitModalAssignmentId").value;
+    var textInput = document.getElementById("submitTextContent");
+    var fileInput = document.getElementById("submitFileInput");
+    var btn = document.getElementById("btnConfirmSubmit");
+    var errBox = document.getElementById("submitAssignmentError");
+
+    var textVal = textInput ? textInput.value.trim() : "";
+    var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+
+    if (!textVal && !file) {
+      if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">Please provide either written answers or an attachment file.</div>';
+      return;
+    }
+
+    setButtonLoading(btn, "Submitting...");
+
+    var promise;
+    if (file) {
+      var formData = new FormData();
+      formData.append("submissionText", textVal);
+      formData.append("file", file);
+      var token = sessionStorage.getItem("campus_session_token");
+      promise = fetch("/api/assignments/" + encodeURIComponent(assignmentId) + "/submit", {
+        method: "POST",
+        headers: token ? { "Authorization": "Bearer " + token } : {},
+        body: formData
+      }).then(function (r) {
+        return r.json().then(function (data) {
+          if (!r.ok || !data.success) throw new Error(data.error || "Submission failed");
+          return data;
+        });
+      });
+    } else {
+      promise = api("/api/assignments/" + encodeURIComponent(assignmentId) + "/submit", {
+        method: "POST",
+        body: { submissionText: textVal }
+      });
+    }
+
+    promise.then(function (res) {
+      resetButton(btn, "Submit Work");
+      closeModal("submitAssignmentModal");
+      showToast("Success", "Assignment submitted successfully!", "success");
+      loadStudentAssignments();
+    }).catch(function (err) {
+      resetButton(btn, "Submit Work");
+      if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">' + escapeHtml(err.message || "Failed to submit assignment.") + '</div>';
+    });
+  };
+
+  function initFacultyAssignments() {
+    var courseFilter = document.getElementById("facultyCourseFilter");
+    var newCourseSelect = document.getElementById("newAssignmentCourse");
+    var tbody = document.getElementById("facultyAssignmentsTableBody");
+
+    api("/api/courses").then(function (res) {
+      var courses = res.data || [];
+      if (courseFilter) {
+        courseFilter.innerHTML = '<option value="all">All Assigned Courses</option>' +
+          courses.map(function (c) {
+            return '<option value="' + escapeHtml(c.code) + '">' + escapeHtml(c.code + ' - ' + c.title) + '</option>';
+          }).join("");
+      }
+      if (newCourseSelect) {
+        newCourseSelect.innerHTML = '<option value="">Select Course...</option>' +
+          courses.map(function (c) {
+            return '<option value="' + escapeHtml(c.code) + '">' + escapeHtml(c.code + ' - ' + c.title) + '</option>';
+          }).join("");
+      }
+      loadFacultyAssignmentsList();
+    }).catch(function () {
+      loadFacultyAssignmentsList();
+    });
+
+    if (courseFilter) courseFilter.addEventListener("change", loadFacultyAssignmentsList);
+
+    function loadFacultyAssignmentsList() {
+      var selectedCourse = courseFilter ? courseFilter.value : "all";
+      api("/api/assignments").then(function (res) {
+        var assignments = res.data || [];
+        if (selectedCourse !== "all") {
+          assignments = assignments.filter(function (a) { return a.courseCode === selectedCourse; });
+        }
+        currentAssignmentsList = assignments;
+
+        var total = assignments.length;
+        var totalSubs = 0;
+        var totalPending = 0;
+        var totalEval = 0;
+
+        assignments.forEach(function (a) {
+          var counts = a.evaluationCounts || {};
+          totalSubs += counts.submissions || 0;
+          totalPending += counts.awaiting_evaluation || 0;
+          totalEval += counts.evaluated || 0;
+        });
+
+        var totEl = document.getElementById("totalAssignmentsCount");
+        var subEl = document.getElementById("submittedAssignmentsCount");
+        var penEl = document.getElementById("pendingEvaluationCount");
+        var evaEl = document.getElementById("evaluatedAssignmentsCount");
+
+        if (totEl) totEl.textContent = total;
+        if (subEl) subEl.textContent = totalSubs;
+        if (penEl) penEl.textContent = totalPending;
+        if (evaEl) evaEl.textContent = totalEval;
+
+        if (!tbody) return;
+        if (!assignments.length) {
+          tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);">No assignments found. Click "+ Create Assignment" to publish.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = assignments.map(function (a) {
+          var counts = a.evaluationCounts || {};
+          var deadlineStr = a.dueDate ? new Date(a.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+          return '<tr data-assignment-id="' + a.id + '">' +
+            '<td><strong>' + escapeHtml(a.courseCode || '-') + '</strong></td>' +
+            '<td><span class="badge badge-info">Div ' + escapeHtml(a.division || 'ALL') + '</span></td>' +
+            '<td><strong>' + escapeHtml(a.title) + '</strong></td>' +
+            '<td>' + escapeHtml(deadlineStr) + '</td>' +
+            '<td><span class="badge badge-secondary">' + (a.totalPoints || 10) + ' pts</span></td>' +
+            '<td>' + (counts.eligible_students || 0) + '</td>' +
+            '<td><strong style="color:var(--primary);">' + (counts.submissions || 0) + '</strong></td>' +
+            '<td><strong style="color:var(--warning);">' + (counts.awaiting_evaluation || 0) + '</strong></td>' +
+            '<td><strong style="color:var(--success);">' + (counts.evaluated || 0) + '</strong></td>' +
+            '<td><button class="btn btn-primary btn-sm" onclick="openSubmissionsRoster(' + a.id + ')">Review Submissions</button></td>' +
+            '</tr>';
+        }).join("");
+      }).catch(function () {});
+    }
+
+    window.submitCreateAssignment = function () {
+      var title = document.getElementById("newAssignmentTitle").value.trim();
+      var course = document.getElementById("newAssignmentCourse").value;
+      var division = document.getElementById("newAssignmentDivision").value;
+      var deadline = document.getElementById("newAssignmentDeadline").value;
+      var description = document.getElementById("newAssignmentDescription").value.trim();
+      var errBox = document.getElementById("createAssignmentError");
+      var btn = document.getElementById("btnPublishAssignment");
+
+      if (!title || !course || !deadline || !description) {
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">Please fill in all required fields.</div>';
+        return;
+      }
+
+      setButtonLoading(btn, "Publishing...");
+
+      api("/api/assignments", {
+        method: "POST",
+        body: {
+          title: title,
+          courseCode: course,
+          division: division,
+          dueDate: deadline,
+          description: description,
+          totalPoints: 10
+        }
+      }).then(function (res) {
+        resetButton(btn, "Publish Assignment");
+        closeModal("createAssignmentModal");
+        showToast("Success", "Assignment published successfully!", "success");
+        document.getElementById("newAssignmentTitle").value = "";
+        document.getElementById("newAssignmentDescription").value = "";
+        loadFacultyAssignmentsList();
+      }).catch(function (err) {
+        resetButton(btn, "Publish Assignment");
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">' + escapeHtml(err.message || "Failed to create assignment.") + '</div>';
+      });
+    };
+
+    window.openSubmissionsRoster = function (assignmentId) {
+      var subCard = document.getElementById("assignmentSubmissionsCard");
+      var titleEl = document.getElementById("submissionsCardTitle");
+      var subTitleEl = document.getElementById("submissionsCardSubtitle");
+      var tbody = document.getElementById("assignmentSubmissionsTableBody");
+
+      if (subCard) subCard.style.display = "block";
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">Loading student roster...</td></tr>';
+
+      api("/api/assignments/" + encodeURIComponent(assignmentId) + "/evaluation-roster").then(function (res) {
+        var data = res.data || {};
+        var assignment = data.assignment || {};
+        var roster = data.roster || [];
+        var counts = data.counts || {};
+
+        if (titleEl) titleEl.textContent = "Submissions Roster: " + assignment.title;
+        if (subTitleEl) subTitleEl.textContent = (assignment.courseCode || '') + " (Div " + (assignment.division || 'ALL') + ") — " +
+          counts.submissions + " Submissions (" + counts.awaiting_evaluation + " Awaiting Review, " + counts.evaluated + " Evaluated)";
+
+        if (!tbody) return;
+        if (!roster.length) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No enrolled students found for this assignment cohort.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = roster.map(function (s) {
+          var isSubmitted = s.id !== null && s.id !== undefined;
+          var statusBadge = '';
+          if (s.isEvaluated) {
+            statusBadge = '<span class="badge badge-success">Evaluated</span>';
+          } else if (s.status === "late") {
+            statusBadge = '<span class="badge badge-warning">Late Submission</span>';
+          } else if (isSubmitted) {
+            statusBadge = '<span class="badge badge-primary">Submitted</span>';
+          } else {
+            statusBadge = '<span class="badge badge-secondary">Not Submitted</span>';
+          }
+
+          var marksDisplay = '-';
+          if (s.isEvaluated && s.grade !== null) {
+            marksDisplay = '<strong style="color:var(--success); font-size:14px;">' + s.grade + ' / 10</strong>';
+          }
+
+          var contentPreview = '-';
+          if (isSubmitted) {
+            var parts = [];
+            if (s.submissionText) parts.push('<span title="' + escapeHtml(s.submissionText) + '">📝 ' + escapeHtml(s.submissionText.substring(0, 30)) + '...</span>');
+            if (s.downloadUrl) parts.push('<a href="' + escapeHtml(s.downloadUrl) + '" target="_blank" class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;">📥 ' + escapeHtml(s.fileName || 'File') + '</a>');
+            contentPreview = parts.join(" ") || 'Submitted';
+          }
+
+          var actionBtn = '';
+          if (isSubmitted) {
+            var escapedStudentName = escapeHtml(s.studentName || '').replace(/'/g, "\\'");
+            var escapedPrn = escapeHtml(s.prn || '').replace(/'/g, "\\'");
+            var escapedTitle = escapeHtml(assignment.title || '').replace(/'/g, "\\'");
+            var escapedFeedback = escapeHtml(s.feedback || '').replace(/'/g, "\\'");
+            var escapedText = escapeHtml(s.submissionText || '').replace(/'/g, "\\'");
+            var downloadUrl = s.downloadUrl ? escapeHtml(s.downloadUrl).replace(/'/g, "\\'") : '';
+            var gradeVal = s.grade !== null && s.grade !== undefined ? s.grade : 'null';
+
+            actionBtn = '<button class="btn btn-primary btn-sm" onclick="openEvaluationModal(' + assignmentId + ', ' + s.id + ', \'' + escapedStudentName + '\', \'' + escapedPrn + '\', \'' + escapedTitle + '\', ' + gradeVal + ', \'' + escapedFeedback + '\', \'' + escapedText + '\', \'' + downloadUrl + '\')">' + (s.isEvaluated ? 'Edit Marks' : 'Evaluate') + '</button>';
+          } else {
+            actionBtn = '<span style="color:var(--text-muted); font-size:12px;">Awaiting</span>';
+          }
+
+          return '<tr data-submission-id="' + (s.id || '') + '">' +
+            '<td><strong>' + escapeHtml(s.prn || '-') + '</strong></td>' +
+            '<td><span class="badge badge-secondary">' + escapeHtml(s.rollNumber || '-') + '</span></td>' +
+            '<td><strong>' + escapeHtml(s.studentName || '-') + '</strong></td>' +
+            '<td>' + (s.submittedAt ? new Date(s.submittedAt).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '-') + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td>' + contentPreview + '</td>' +
+            '<td>' + marksDisplay + '</td>' +
+            '<td style="max-width:180px;">' + (s.feedback ? escapeHtml(s.feedback) : '-') + '</td>' +
+            '<td>' + actionBtn + '</td>' +
+            '</tr>';
+        }).join("");
+
+        subCard.scrollIntoView({ behavior: "smooth" });
+      }).catch(function (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">' + escapeHtml(err.message || 'Error loading roster.') + '</td></tr>';
+      });
+    };
+
+    window.closeSubmissionsRoster = function () {
+      var subCard = document.getElementById("assignmentSubmissionsCard");
+      if (subCard) subCard.style.display = "none";
+    };
+
+    window.openEvaluationModal = function (assignmentId, submissionId, studentName, prn, title, existingGrade, existingFeedback, textContent, downloadUrl) {
+      document.getElementById("evalSubmissionId").value = submissionId;
+      document.getElementById("evalStudentName").textContent = studentName;
+      document.getElementById("evalStudentPRN").textContent = prn;
+      document.getElementById("evalAssignmentTitle").textContent = title;
+      document.getElementById("evalSubmissionTextPreview").textContent = textContent || "No written text provided.";
+
+      var dlGroup = document.getElementById("evalFileDownloadGroup");
+      var dlLink = document.getElementById("evalDownloadLink");
+      if (downloadUrl) {
+        if (dlGroup) dlGroup.style.display = "block";
+        if (dlLink) dlLink.href = downloadUrl;
+      } else {
+        if (dlGroup) dlGroup.style.display = "none";
+      }
+
+      var marksInput = document.getElementById("evalMarksInput");
+      var feedbackInput = document.getElementById("evalFeedbackInput");
+      var errBox = document.getElementById("evaluationError");
+
+      if (errBox) errBox.innerHTML = "";
+      if (marksInput) marksInput.value = (existingGrade !== null && existingGrade !== undefined) ? existingGrade : "";
+      if (feedbackInput) feedbackInput.value = existingFeedback || "";
+
+      openModal("evaluateSubmissionModal");
+    };
+
+    window.saveSubmissionEvaluation = function () {
+      var subId = document.getElementById("evalSubmissionId").value;
+      var marksInput = document.getElementById("evalMarksInput");
+      var feedbackInput = document.getElementById("evalFeedbackInput");
+      var btn = document.getElementById("btnSaveEvaluation");
+      var errBox = document.getElementById("evaluationError");
+
+      var marksVal = parseFloat(marksInput ? marksInput.value : "");
+      var feedbackVal = feedbackInput ? feedbackInput.value.trim() : "";
+
+      if (isNaN(marksVal) || marksVal < 0 || marksVal > 10) {
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">Marks must be a valid number between 0 and 10 inclusive.</div>';
+        return;
+      }
+      if (!feedbackVal) {
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">Please provide feedback for the student.</div>';
+        return;
+      }
+
+      setButtonLoading(btn, "Saving Marks...");
+
+      api("/api/assignments/submissions/" + encodeURIComponent(subId) + "/grade", {
+        method: "POST",
+        body: { marks_obtained: marksVal, feedback: feedbackVal }
+      }).then(function (res) {
+        resetButton(btn, "Save Evaluation");
+        closeModal("evaluateSubmissionModal");
+        showToast("Marks Recorded", "Evaluated " + marksVal + "/10 with feedback.", "success");
+        loadFacultyAssignmentsList();
+      }).catch(function (err) {
+        resetButton(btn, "Save Evaluation");
+        if (errBox) errBox.innerHTML = '<div class="inline-banner inline-banner-error">' + escapeHtml(err.message || "Failed to record evaluation.") + '</div>';
       });
     };
   }
@@ -3201,6 +3766,10 @@ function openModal(id) {
   }
   if (id === "uploadMaterialModal" && role === "student") {
     showToast("Access Restricted", "Only Faculty and Administrators can upload study materials.", "warning");
+    return;
+  }
+  if (id === "createAssignmentModal" && role === "student") {
+    showToast("Access Restricted", "Only Faculty and Administrators can create assignments.", "warning");
     return;
   }
   if (id === "addUserModal" && role !== "admin") {

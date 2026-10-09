@@ -12,8 +12,12 @@ class Student(db.Model):
     semester = db.Column(db.Integer, nullable=False, default=1)
     division = db.Column(db.String(10), nullable=False, default="A")  # "A", "B", etc.
     roll_number = db.Column(db.String(30), nullable=True)  # e.g. "32"
-    prn = db.Column(db.String(50), nullable=True)  # Student ID / PRN
+    prn = db.Column(db.String(50), unique=True, nullable=True, index=True)  # Student PRN: 241010XX
     status = db.Column(db.String(20), nullable=False, default="active")
+
+    __table_args__ = (
+        db.UniqueConstraint("prn", name="uq_students_prn"),
+    )
 
     user = db.relationship("User", back_populates="student_profile")
     department = db.relationship("Department", back_populates="students")
