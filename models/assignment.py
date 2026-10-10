@@ -82,6 +82,7 @@ class Assignment(db.Model):
                 "evaluated": counts["evaluatedCount"],
             },
             "isSubmitted": is_sub,
+            "isLocked": stu_sub.get("isLocked", False) if stu_sub else False,
             "isEvaluated": is_eval,
             "submissionStatus": sub_status,
             "marksObtained": marks_obt,
@@ -110,6 +111,12 @@ class AssignmentSubmission(db.Model):
     feedback = db.Column(db.Text, nullable=True)
     graded_by_id = db.Column(db.Integer, db.ForeignKey("faculty.id"), nullable=True)
 
+    # Module 8: Mandatory submission lock
+    is_locked = db.Column(db.Boolean, nullable=False, default=True)
+    unlocked_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    unlocked_at = db.Column(db.DateTime, nullable=True)
+    unlock_reason = db.Column(db.Text, nullable=True)
+
     __table_args__ = (
         db.UniqueConstraint("assignment_id", "student_id", name="uq_assignment_student"),
         db.CheckConstraint("status IN ('submitted', 'graded', 'evaluated', 'late', 'under_review')", name="ck_submission_status"),
@@ -118,6 +125,7 @@ class AssignmentSubmission(db.Model):
     assignment = db.relationship("Assignment", back_populates="submissions")
     student = db.relationship("Student", backref=db.backref("assignment_submissions", cascade="all, delete-orphan"))
     graded_by = db.relationship("Faculty")
+    unlocked_by = db.relationship("User", foreign_keys=[unlocked_by_id])
 
     def to_dict(self):
         stu = self.student
@@ -153,5 +161,8 @@ class AssignmentSubmission(db.Model):
             "marks_display": f"{self.grade:g}/10" if self.grade is not None else None,
             "feedback": self.feedback,
             "gradedBy": self.graded_by.user.full_name if (self.graded_by and self.graded_by.user) else None,
+            "isLocked": bool(self.is_locked),
+            "unlockedAt": self.unlocked_at.isoformat() if self.unlocked_at else None,
+            "unlockReason": self.unlock_reason,
         }
 

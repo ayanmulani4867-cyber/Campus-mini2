@@ -85,35 +85,115 @@
         </div>
       </div>
 
-      <!-- Search & Filters -->
-      <div class="filter-bar">
-        <div class="search-input-wrap">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="globalSearchInput" placeholder="Search by name, ID or department...">
+      <!-- Search & Filters (Module 1) -->
+      <div class="card" style="margin-bottom: 20px; padding: 16px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px;">
+          <div class="search-input-wrap" style="flex: 2; min-width: 260px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="globalSearchInput" placeholder="Search by name, roll, PRN, employee ID, email, or user ID..." style="width: 100%;">
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+            <select class="form-select" id="filterRoleSelect" style="width: 100%;">
+              <option value="all">All Roles</option>
+              <option value="student">Students</option>
+              <option value="faculty">Faculty Members</option>
+              <option value="hod">Heads of Dept (HODs)</option>
+              <option value="admin">Administrators</option>
+            </select>
+          </div>
+          <div style="flex: 1; min-width: 180px;">
+            <select class="form-select" id="filterDeptSelect" style="width: 100%;">
+              <option value="all">All Departments</option>
+              <!-- Dynamically populated from database -->
+            </select>
+          </div>
         </div>
-        <button class="btn btn-primary btn-sm filter-btn active" data-filter="all">All Members</button>
-        <button class="btn btn-secondary btn-sm filter-btn" data-filter="student">Students Only</button>
-        <button class="btn btn-secondary btn-sm filter-btn" data-filter="faculty">Faculty Only</button>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+          <div style="flex: 1; min-width: 130px;">
+            <select class="form-select" id="filterSemesterSelect" style="width: 100%;">
+              <option value="">All Semesters</option>
+              <option value="1">Semester 1</option>
+              <option value="2">Semester 2</option>
+              <option value="3">Semester 3</option>
+              <option value="4">Semester 4</option>
+              <option value="5">Semester 5</option>
+              <option value="6">Semester 6</option>
+              <option value="7">Semester 7</option>
+              <option value="8">Semester 8</option>
+            </select>
+          </div>
+          <div style="flex: 1; min-width: 120px;">
+            <select class="form-select" id="filterDivisionSelect" style="width: 100%;">
+              <option value="">All Divisions</option>
+              <option value="A">Division A</option>
+              <option value="B">Division B</option>
+              <option value="C">Division C</option>
+              <option value="D">Division D</option>
+            </select>
+          </div>
+          <div style="flex: 1; min-width: 120px;">
+            <select class="form-select" id="filterStatusSelect" style="width: 100%;">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary btn-sm" id="applyUserFiltersBtn" onclick="applyUserDirectoryFilters()">Apply Filters</button>
+            <button class="btn btn-secondary btn-sm" id="resetUserFiltersBtn" onclick="resetUserDirectoryFilters()">Reset</button>
+          </div>
+        </div>
       </div>
 
       <!-- User Directory Table -->
-      <div class="table-container">
-        <table class="data-table" id="usersDirectoryTable">
-          <thead>
-            <tr>
-              <th>Member ID / PRN</th>
-              <th>Full Name</th>
-              <th>Role</th>
-              <th>Department</th>
-              <th>Class / Designation</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="usersTableBody">
-            <tr><td colspan="7" style="text-align:center; padding:28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading directory records...</td></tr>
-          </tbody>
-        </table>
+      <div class="card">
+        <div class="card-header-row" style="padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+          <div>
+            <h3>Campus Members Database</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;" id="userDirectoryCountLabel">Loading real records from database...</p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="font-size: 13px; color: var(--text-muted);">Sort by:</span>
+            <select class="form-select" id="userDirectorySortBy" onchange="applyUserDirectoryFilters()" style="width: auto; padding: 4px 8px; font-size: 13px;">
+              <option value="name">Name</option>
+              <option value="id">User ID</option>
+              <option value="role">Role</option>
+              <option value="department">Department</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="usersDirectoryTable">
+            <thead>
+              <tr>
+                <th>Member ID / PRN</th>
+                <th>Full Name & Email</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Class / Designation</th>
+                <th>Status</th>
+                <th>Authorized Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr><td colspan="7" style="text-align:center; padding:28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading directory records...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 10px;">
+          <div style="font-size: 13px; color: var(--text-muted);" id="userPaginationInfo">
+            Page 1 of 1
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-secondary btn-sm" id="userPrevPageBtn" onclick="changeUserDirectoryPage(-1)" disabled>&laquo; Previous</button>
+            <span style="font-size: 13px; font-weight: 600; padding: 0 8px;" id="userCurrentPageBadge">1</span>
+            <button class="btn btn-secondary btn-sm" id="userNextPageBtn" onclick="changeUserDirectoryPage(1)" disabled>Next &raquo;</button>
+          </div>
+        </div>
       </div>
 
     </main>

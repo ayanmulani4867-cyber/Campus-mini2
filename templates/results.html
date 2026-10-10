@@ -3,8 +3,141 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Results - Campus Connect</title>
-  <link rel="stylesheet" href="css/style.css?v=50">
+  <title>Examination Results & Grade Cards - Campus Connect</title>
+  <link rel="stylesheet" href="css/style.css?v=52">
+  <style>
+    /* Premium Result Card & Tab Enhancements */
+    .results-subnav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .results-subnav-btn {
+      background: none;
+      border: none;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+    .results-subnav-btn:hover {
+      color: var(--primary);
+      background: var(--bg-hover);
+    }
+    .results-subnav-btn.active {
+      color: var(--primary);
+      background: rgba(37, 99, 235, 0.1);
+      border-bottom: 2px solid var(--primary);
+    }
+    .result-card-modal-box {
+      max-width: 820px;
+      width: 95%;
+      max-height: 92vh;
+      overflow-y: auto;
+      background: #ffffff;
+      color: #1e293b;
+    }
+    .sitcoe-header {
+      text-align: center;
+      padding-bottom: 16px;
+      border-bottom: 2px double #cbd5e1;
+      margin-bottom: 18px;
+    }
+    .sitcoe-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: #0f172a;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .sitcoe-header p {
+      margin: 4px 0 0 0;
+      font-size: 12.5px;
+      color: #475569;
+    }
+    .card-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 18px;
+      font-size: 13px;
+    }
+    .card-meta-item strong {
+      color: #334155;
+      display: inline-block;
+      width: 100px;
+    }
+    .grade-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 18px;
+      font-size: 13px;
+    }
+    .grade-table th, .grade-table td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: center;
+    }
+    .grade-table th {
+      background: #f1f5f9;
+      color: #1e293b;
+      font-weight: 700;
+    }
+    .grade-table td.text-left {
+      text-align: left;
+    }
+    .card-summary-box {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      background: #f8fafc;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .card-summary-box .val {
+      font-size: 17px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .card-summary-box .lbl {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printableResultCard, #printableResultCard * {
+        visibility: visible;
+      }
+      #printableResultCard {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 20px;
+        box-shadow: none;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
 </head>
 <body>
 
@@ -19,7 +152,7 @@
     </div>
 
     <div class="topbar-actions">
-      <!-- Role Switcher for Demo -->
+      <!-- Role Switcher -->
       <div class="role-switch-box">
         <span>Role:</span>
         <select id="globalRoleSelect">
@@ -51,105 +184,127 @@
     <main class="main-content">
 
       <!-- ==========================================
-           1. STUDENT VIEW: My Results
+           1. STUDENT VIEW: My Results & History
            ========================================== -->
       <div id="studentResultView" style="display: none;">
         <div class="page-header">
           <div>
-            <h2>My Academic Results</h2>
-            <p>Semester-wise grade report, credit scores and performance summary</p>
+            <h2>My Academic Results & Grade Card</h2>
+            <p>Official published examination results, SGPA calculation and multi-semester history</p>
           </div>
           <div class="page-actions">
-            <select class="form-select" id="studentSemSelect" style="width: auto; padding: 6px 12px; font-weight: 600;">
-              <option value="sem6">Semester 6 (Latest)</option>
-              <option value="sem5">Semester 5</option>
-              <option value="sem4">Semester 4</option>
-            </select>
-            <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨️ Print Result</button>
+            <button class="btn btn-secondary btn-sm" onclick="printStudentOwnResultCard()">🖨️ Print Grade Card</button>
           </div>
         </div>
 
-        <!-- Student Summary Cards -->
-        <div class="card-grid" style="margin-bottom: 20px;">
-          <div class="stat-card stat-green">
-            <div class="stat-card-header">Current SGPA</div>
-            <div class="stat-card-value" id="studentSgpa">--</div>
-            <div class="stat-card-desc">Semester Grade Point Average</div>
+        <!-- Student Sub-tabs -->
+        <div class="results-subnav">
+          <button class="results-subnav-btn active" id="btnStudentTabPublished" onclick="switchStudentResultsTab('published')">📜 Current Published Results</button>
+          <button class="results-subnav-btn" id="btnStudentTabHistory" onclick="switchStudentResultsTab('history')">📈 Academic Performance History</button>
+        </div>
+
+        <!-- Tab Content: Current Published Results -->
+        <div id="studentPublishedSection">
+          <!-- Student Summary Cards -->
+          <div class="card-grid" style="margin-bottom: 20px;">
+            <div class="stat-card stat-green">
+              <div class="stat-card-header">Current SGPA</div>
+              <div class="stat-card-value" id="studentSgpa">--</div>
+              <div class="stat-card-desc">Semester Grade Point Average</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-card-header">Cumulative CGPA</div>
+              <div class="stat-card-value" id="studentCgpa">--</div>
+              <div class="stat-card-desc">Overall Academic Score</div>
+            </div>
+
+            <div class="stat-card stat-amber">
+              <div class="stat-card-header">Total Credits</div>
+              <div class="stat-card-value" id="studentCredits">--</div>
+              <div class="stat-card-desc">Credits Cleared</div>
+            </div>
+
+            <div class="stat-card stat-purple">
+              <div class="stat-card-header">Result Status</div>
+              <div class="stat-card-value" id="studentResultStatus" style="font-size: 19px;">--</div>
+              <div class="stat-card-desc">Official Examination Status</div>
+            </div>
           </div>
 
-          <div class="stat-card">
-            <div class="stat-card-header">Cumulative CGPA</div>
-            <div class="stat-card-value" id="studentCgpa">--</div>
-            <div class="stat-card-desc">Overall Academic Score</div>
-          </div>
+          <!-- Student Marks Table (Module 4) -->
+          <div class="card">
+            <div class="card-header-row">
+              <h3>Subject-Wise Grade Card Breakdown</h3>
+              <span class="badge badge-success" id="studentPublishedBadge">Official Published</span>
+            </div>
 
-          <div class="stat-card stat-amber">
-            <div class="stat-card-header">Total Credits</div>
-            <div class="stat-card-value" id="studentCredits">--</div>
-            <div class="stat-card-desc">Credits Cleared</div>
-          </div>
-
-          <div class="stat-card stat-purple">
-            <div class="stat-card-header">Result Status</div>
-            <div class="stat-card-value" id="studentResultStatus" style="color: var(--success); font-size: 20px;">--</div>
-            <div class="stat-card-desc">Official Examination Result</div>
+            <div class="table-container">
+              <table class="data-table" id="studentResultsTable">
+                <thead>
+                  <tr>
+                    <th>Course Code</th>
+                    <th>Subject Name</th>
+                    <th>CA1 (20)</th>
+                    <th>CA2 (20)</th>
+                    <th>Mid-Sem (30)</th>
+                    <th>End-Sem (70)</th>
+                    <th>Total (100)</th>
+                    <th>Grade</th>
+                    <th>Credits</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="studentResultsTableBody">
+                  <tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading academic results...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <!-- Student Marks Table -->
-        <div class="card">
-          <div class="card-header-row">
-            <h3>Subject-Wise Grade Card (Semester 6)</h3>
-            <span class="badge badge-success">Official Published</span>
-          </div>
-
-          <div class="table-container">
-            <table class="data-table" id="studentResultsTable">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Subject Name</th>
-                  <th>Internal (30)</th>
-                  <th>End-Sem (70)</th>
-                  <th>Total (100)</th>
-                  <th>Grade</th>
-                  <th>Credits</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="studentResultsTableBody">
-                <tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading academic results...</td></tr>
-              </tbody>
-            </table>
+        <!-- Tab Content: Academic Performance History (Module 7) -->
+        <div id="studentHistorySection" style="display: none;">
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header-row">
+              <div>
+                <h3>Multi-Semester Academic History & Backlog Log</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Progressive academic record across completed semesters</p>
+              </div>
+            </div>
+            <div id="studentHistoryContainer" style="padding: 16px;">
+              <div style="text-align:center; padding: 24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading performance history...</div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- ==========================================
-           2. FACULTY VIEW: Enter Marks
+           2. FACULTY VIEW: Enter Marks (Module 2)
            ========================================== -->
       <div id="facultyResultView" style="display: none;">
         <div class="page-header">
           <div>
-            <h2>Enter Student Marks & Grades</h2>
-            <p>Input and evaluate examination scores for assigned courses</p>
+            <h2>Continuous Assessment & Examination Marks Entry</h2>
+            <p>Input and submit CA1, CA2, Mid-Sem and End-Sem scores for assigned subjects</p>
           </div>
-          <div class="page-actions">
-            <button class="btn btn-primary btn-sm" onclick="alert('All entered marks saved successfully!')">💾 Save All Marks</button>
+          <div class="page-actions" style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="btnFacultySaveDraft" onclick="saveFacultyAllMarks('save_draft')">💾 Save Draft</button>
+            <button class="btn btn-primary btn-sm" id="btnFacultySubmitMarks" onclick="saveFacultyAllMarks('submit')">🚀 Submit for Review</button>
           </div>
         </div>
 
         <!-- Faculty Filter Bar -->
         <div class="card" style="margin-bottom: 20px; padding: 16px;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end;">
             <div class="form-group" style="margin-bottom: 0;">
-              <label>Select Course</label>
+              <label>Assigned Course *</label>
               <select class="form-select" id="facultyResultCourseSelect">
                 <option value="">Select Course...</option>
               </select>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label>Select Division / Class</label>
+              <label>Select Division *</label>
               <select class="form-select" id="facultyResultDivisionSelect">
                 <option value="A" selected>Division A</option>
                 <option value="B">Division B</option>
@@ -158,20 +313,29 @@
               </select>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label>Assessment Type</label>
+              <label>Assessment View</label>
               <select class="form-select" id="facultyResultAssessmentType">
-                <option value="End-Semester Examination (100 Marks)">End-Semester Examination (100 Marks)</option>
-                <option value="Mid-Semester Test (30 Marks)">Mid-Semester Test (30 Marks)</option>
-                <option value="Lab Practical Evaluation">Lab Practical Evaluation</option>
+                <option value="all">All 4 Assessments (CA1, CA2, Mid, End)</option>
+                <option value="ca1">CA1 — Continuous Assessment 1 (Max 20)</option>
+                <option value="ca2">CA2 — Continuous Assessment 2 (Max 20)</option>
+                <option value="mid_sem">Mid-Semester Examination (Max 30)</option>
+                <option value="end_sem">End-Semester Examination (Max 70)</option>
               </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>Search Student</label>
+              <input type="text" class="form-input" id="facultyRosterSearch" placeholder="Filter by roll or name...">
             </div>
           </div>
         </div>
 
-        <!-- Marks Entry Table -->
+        <!-- Marks Entry Table (Module 2) -->
         <div class="card">
           <div class="card-header-row">
-            <h3>Student Marks Entry Sheet</h3>
+            <div>
+              <h3 id="facultyMarksSheetTitle">Student Marks Entry Sheet</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Raw marks are preserved separately from calculated totals. Normal editing is locked once submitted.</p>
+            </div>
             <span class="badge badge-primary" id="facultyMarksRosterBadge">--</span>
           </div>
 
@@ -179,15 +343,21 @@
             <table class="data-table" id="facultyMarksTable">
               <thead>
                 <tr>
-                  <th>Student ID</th>
+                  <th>Roll / PRN</th>
                   <th>Student Name</th>
-                  <th>Marks (Out of 100)</th>
-                  <th>Assigned Grade</th>
+                  <th>CA1 (20)</th>
+                  <th>CA2 (20)</th>
+                  <th>Mid-Sem (30)</th>
+                  <th>End-Sem (70)</th>
+                  <th>Attendance</th>
+                  <th>Total (100)</th>
+                  <th>Grade</th>
+                  <th>Status</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody id="facultyMarksTableBody">
-                <tr><td colspan="5" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student marks sheet...</td></tr>
+                <tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student marks sheet...</td></tr>
               </tbody>
             </table>
           </div>
@@ -195,111 +365,491 @@
       </div>
 
       <!-- ==========================================
-           3. ADMIN VIEW: Result Control
+           3. ADMIN VIEW: Result Control & Analytics
            ========================================== -->
       <div id="adminResultView" style="display: none;">
         <div class="page-header">
           <div>
-            <h2>Result Publication Control</h2>
-            <p>Manage, review, publish or unpublish examination results campus-wide</p>
+            <h2>Examination Result Management & Publishing</h2>
+            <p>Institutional result lifecycle control, merit lists, student grade cards and real-data analytics</p>
           </div>
           <div class="page-actions">
-            <span class="badge badge-success">Session: Spring 2026</span>
+            <span class="badge badge-success">Academic Session: 2025-2026</span>
           </div>
         </div>
 
-        <!-- Admin Result Stats -->
-        <div class="card-grid" style="margin-bottom: 20px;">
-          <div class="stat-card stat-green">
-            <div class="stat-card-header">Published Results</div>
-            <div class="stat-card-value" id="statAdminPublishedResults">--</div>
-            <div class="stat-card-desc">Visible to Students</div>
+        <!-- Admin Results Subnav -->
+        <div class="results-subnav">
+          <button class="results-subnav-btn active" id="tabAdminLifecycle" onclick="switchAdminTab('lifecycle')">🔄 Result Publication & Lifecycle</button>
+          <button class="results-subnav-btn" id="tabAdminCards" onclick="switchAdminTab('cards')">🎓 Student Result Cards</button>
+          <button class="results-subnav-btn" id="tabAdminToppers" onclick="switchAdminTab('toppers')">🏆 Toppers & Merit Lists</button>
+          <button class="results-subnav-btn" id="tabAdminAnalytics" onclick="switchAdminTab('analytics')">📊 Examination Analytics</button>
+        </div>
+
+        <!-- SUB-TAB 1: LIFECYCLE & BATCH PUBLISHING -->
+        <div id="adminTabSectionLifecycle">
+          <!-- Admin Result Stats -->
+          <div class="card-grid" style="margin-bottom: 20px;">
+            <div class="stat-card stat-green">
+              <div class="stat-card-header">Published Results</div>
+              <div class="stat-card-value" id="statAdminPublishedResults">--</div>
+              <div class="stat-card-desc">Visible to Students</div>
+            </div>
+
+            <div class="stat-card stat-amber">
+              <div class="stat-card-header">Pending Verification</div>
+              <div class="stat-card-value" id="statAdminPendingResults">--</div>
+              <div class="stat-card-desc">Marks Under Review</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-card-header">Total Evaluated</div>
+              <div class="stat-card-value" id="statAdminTotalScorecards">--</div>
+              <div class="stat-card-desc">Student Scorecards</div>
+            </div>
+
+            <div class="stat-card stat-purple">
+              <div class="stat-card-header">Passing Rate</div>
+              <div class="stat-card-value" id="statAdminPassingRate">--</div>
+              <div class="stat-card-desc">Across all departments</div>
+            </div>
           </div>
 
-          <div class="stat-card stat-amber">
-            <div class="stat-card-header">Pending Verification</div>
-            <div class="stat-card-value" id="statAdminPendingResults">--</div>
-            <div class="stat-card-desc">Marks Under Review</div>
+          <!-- Departmental Course Batch Lifecycle Control (Module 3) -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header-row">
+              <div>
+                <h3>Departmental Course Result Batches</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Lifecycle: Draft &rarr; Submitted &rarr; Under Review &rarr; Approved &rarr; Published</p>
+              </div>
+              <span class="badge badge-info">Controller of Examinations</span>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table" id="adminBatchResultsTable">
+                <thead>
+                  <tr>
+                    <th>Department</th>
+                    <th>Semester / Course</th>
+                    <th>Total Students</th>
+                    <th>Lifecycle Status</th>
+                    <th>Audit Details</th>
+                    <th>Authorized Lifecycle Action</th>
+                  </tr>
+                </thead>
+                <tbody id="adminBatchResultsTableBody">
+                  <tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading departmental course results...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div class="stat-card">
-            <div class="stat-card-header">Total Evaluated</div>
-            <div class="stat-card-value" id="statAdminTotalScorecards">--</div>
-            <div class="stat-card-desc">Student Scorecards</div>
-          </div>
+          <!-- All Student Examination Scorecards -->
+          <div class="card">
+            <div class="card-header-row">
+              <h3>Student Examination Scorecards & Marks Roster</h3>
+              <span class="badge badge-info" id="adminResultCountBadge">Live Records</span>
+            </div>
 
-          <div class="stat-card stat-purple">
-            <div class="stat-card-header">Passing Rate</div>
-            <div class="stat-card-value" id="statAdminPassingRate">--</div>
-            <div class="stat-card-desc">Across all departments</div>
+            <div class="table-container">
+              <table class="data-table" id="adminStudentResultsTable">
+                <thead>
+                  <tr>
+                    <th>PRN / Roll</th>
+                    <th>Student Name</th>
+                    <th>Course</th>
+                    <th>CA1</th>
+                    <th>CA2</th>
+                    <th>Mid-Sem</th>
+                    <th>End-Sem</th>
+                    <th>Total</th>
+                    <th>Grade</th>
+                    <th>Status</th>
+                    <th>Result Card</th>
+                  </tr>
+                </thead>
+                <tbody id="adminResultsTableBody">
+                  <tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student examination scorecards...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <!-- Admin Result Management Table -->
-        <div class="card">
-          <div class="card-header-row">
-            <h3>Departmental Result Status</h3>
-            <span class="badge badge-info">Controller of Exams</span>
+        <!-- SUB-TAB 2: ADMIN STUDENT RESULT CARDS (Module 4) -->
+        <div id="adminTabSectionCards" style="display: none;">
+          <div class="card" style="margin-bottom: 20px; padding: 16px;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+              <div class="search-input-wrap" style="flex: 2; min-width: 250px;">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="adminCardStudentSearch" placeholder="Search student by name, PRN, roll number, or ID..." style="width: 100%;">
+              </div>
+              <div style="flex: 1; min-width: 160px;">
+                <select class="form-select" id="adminCardDeptFilter" style="width: 100%;">
+                  <option value="all">All Departments</option>
+                </select>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <select class="form-select" id="adminCardSemFilter" style="width: 100%;">
+                  <option value="all">All Semesters</option>
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                  <option value="3">Semester 3</option>
+                  <option value="4">Semester 4</option>
+                  <option value="5">Semester 5</option>
+                  <option value="6">Semester 6</option>
+                  <option value="7">Semester 7</option>
+                  <option value="8">Semester 8</option>
+                </select>
+              </div>
+              <div>
+                <button class="btn btn-primary btn-sm" onclick="loadAdminResultCardsList()">Search Records</button>
+              </div>
+            </div>
           </div>
 
-          <div class="table-container">
-            <table class="data-table" id="adminBatchResultsTable">
-              <thead>
-                <tr>
-                  <th>Department</th>
-                  <th>Semester / Course</th>
-                  <th>Batch</th>
-                  <th>Total Students</th>
-                  <th>Faculty In-Charge</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="adminBatchResultsTableBody">
-                <tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading departmental course results...</td></tr>
-              </tbody>
-            </table>
+          <div class="card">
+            <div class="card-header-row">
+              <h3>Enrolled Student Result Cards Directory</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Click 'View Result Card' to inspect or print official SITCOE scorecard</p>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>PRN / ID</th>
+                    <th>Roll No</th>
+                    <th>Student Name</th>
+                    <th>Department</th>
+                    <th>Semester</th>
+                    <th>Division</th>
+                    <th>Result Status</th>
+                    <th>Card Action</th>
+                  </tr>
+                </thead>
+                <tbody id="adminCardsListBody">
+                  <tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student cards...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <!-- Student Marks & Results Publication Control -->
-        <div class="card" style="margin-top: 20px;">
-          <div class="card-header-row">
-            <h3>Student Examination Scorecards & Marks</h3>
-            <span class="badge badge-info" id="adminResultCountBadge">Live Records</span>
+        <!-- SUB-TAB 3: TOPPERS & MERIT LIST (Module 5) -->
+        <div id="adminTabSectionToppers" style="display: none;">
+          <div class="card" style="margin-bottom: 20px; padding: 16px;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+              <div style="flex: 1; min-width: 180px;">
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Department</label>
+                <select class="form-select" id="toppersDeptSelect" style="width: 100%;">
+                  <option value="all">All Departments (Campus-wide)</option>
+                </select>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Semester</label>
+                <select class="form-select" id="toppersSemSelect" style="width: 100%;">
+                  <option value="all">All Semesters</option>
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                  <option value="3">Semester 3</option>
+                  <option value="4">Semester 4</option>
+                  <option value="5">Semester 5</option>
+                  <option value="6">Semester 6</option>
+                  <option value="7">Semester 7</option>
+                  <option value="8">Semester 8</option>
+                </select>
+              </div>
+              <div style="flex: 1; min-width: 120px;">
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Rank Limit</label>
+                <select class="form-select" id="toppersLimitSelect" style="width: 100%;">
+                  <option value="10">Top 10</option>
+                  <option value="20">Top 20</option>
+                  <option value="50">Top 50</option>
+                </select>
+              </div>
+              <div style="flex: 2; min-width: 220px;">
+                <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Search in Merit List</label>
+                <input type="text" class="form-input" id="toppersSearchInput" placeholder="Filter by roll, name, PRN...">
+              </div>
+              <div style="align-self: flex-end;">
+                <button class="btn btn-primary btn-sm" onclick="loadToppersMeritList()">Generate Merit List</button>
+              </div>
+            </div>
           </div>
 
-          <div class="table-container">
-            <table class="data-table" id="adminStudentResultsTable">
-              <thead>
-                <tr>
-                  <th>Student ID</th>
-                  <th>Student Name</th>
-                  <th>Course</th>
-                  <th>Internal (30)</th>
-                  <th>End-Sem (70)</th>
-                  <th>Total (100)</th>
-                  <th>Grade</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="adminResultsTableBody">
-                <tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student examination scorecards...</td></tr>
-              </tbody>
-            </table>
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <h3>🏆 Official Academic Merit & Toppers List</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">Calculated strictly from finalized, officially published database results</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨️ Print Merit List</button>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="toppersTable">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>PRN / Roll</th>
+                    <th>Student Name</th>
+                    <th>Department</th>
+                    <th>Sem</th>
+                    <th>Total Marks</th>
+                    <th>Percentage</th>
+                    <th>Grade</th>
+                    <th>Status</th>
+                    <th>Result Card</th>
+                  </tr>
+                </thead>
+                <tbody id="toppersTableBody">
+                  <tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading toppers merit list...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+
+        <!-- SUB-TAB 4: EXAMINATION ANALYTICS (Module 6) -->
+        <div id="adminTabSectionAnalytics" style="display: none;">
+          <div class="card" style="margin-bottom: 20px; padding: 16px;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+              <div style="flex: 1; min-width: 180px;">
+                <select class="form-select" id="analyticsDeptSelect" style="width: 100%;">
+                  <option value="all">All Departments</option>
+                </select>
+              </div>
+              <div style="flex: 1; min-width: 140px;">
+                <select class="form-select" id="analyticsSemSelect" style="width: 100%;">
+                  <option value="all">All Semesters</option>
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                  <option value="3">Semester 3</option>
+                  <option value="4">Semester 4</option>
+                  <option value="5">Semester 5</option>
+                  <option value="6">Semester 6</option>
+                  <option value="7">Semester 7</option>
+                  <option value="8">Semester 8</option>
+                </select>
+              </div>
+              <div>
+                <button class="btn btn-primary btn-sm" onclick="loadAnalyticsDashboard()">Filter Analytics</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analytics KPI Cards -->
+          <div class="card-grid" style="margin-bottom: 24px;">
+            <div class="stat-card stat-green">
+              <div class="stat-card-header">Overall Pass Rate</div>
+              <div class="stat-card-value" id="anaPassPercentage">--</div>
+              <div class="stat-card-desc" id="anaPassDesc">Finalized examinations</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-header">Passed Students</div>
+              <div class="stat-card-value" id="anaPassedCount" style="color: var(--success);">--</div>
+              <div class="stat-card-desc">Met pass threshold</div>
+            </div>
+            <div class="stat-card stat-amber">
+              <div class="stat-card-header">Failed / ATKT</div>
+              <div class="stat-card-value" id="anaFailedCount" style="color: var(--danger);">--</div>
+              <div class="stat-card-desc">Backlog candidates</div>
+            </div>
+            <div class="stat-card stat-purple">
+              <div class="stat-card-header">Average Score</div>
+              <div class="stat-card-value" id="anaAverageScore">--</div>
+              <div class="stat-card-desc" id="anaScoreRange">High: -- • Low: --</div>
+            </div>
+          </div>
+
+          <!-- Grade Distribution & Attendance Status Breakdown -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+            <div class="card">
+              <div class="card-header-row">
+                <h3>Grade Distribution (Published Records)</h3>
+              </div>
+              <div id="anaGradeDistributionList" style="padding: 16px;">
+                <div style="text-align: center; color: var(--text-muted);"><span class="page-spinner"></span> Loading grades...</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-row">
+                <h3>Examination Cohort Breakdown</h3>
+              </div>
+              <div style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                  <span>Total Assessed Records:</span>
+                  <strong id="anaTotalRecords">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                  <span>Officially Published:</span>
+                  <strong id="anaPublishedRecords" style="color: var(--success);">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                  <span>Pending / Unpublished:</span>
+                  <strong id="anaUnpublishedRecords" style="color: var(--warning);">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                  <span>Absent Candidates:</span>
+                  <strong id="anaAbsentRecords">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                  <span>Withheld / Incomplete:</span>
+                  <strong id="anaWithheldRecords">--</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </main>
   </div>
 
+  <!-- =========================================================================
+       MODALS: RESULT CARD, REOPEN REASON & AUDIT
+       ========================================================================= -->
+
+  <!-- Printable Official SITCOE Result Card Modal (Module 4) -->
+  <div class="modal-overlay" id="resultCardModal">
+    <div class="modal-box result-card-modal-box" id="printableResultCard">
+      <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span class="badge badge-info" id="cardModalBadge">Official Examination Ledger</span>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print Result Card</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('resultCardModal')">&times; Close</button>
+        </div>
+      </div>
+
+      <!-- SITCOE Institutional Header -->
+      <div class="sitcoe-header">
+        <h2>Sharad Institute of Technology College of Engineering</h2>
+        <p><strong>Yadrav (Ichalkaranji) - 416 121, Dist. Kolhapur, Maharashtra, India</strong></p>
+        <p>An Autonomous Institute Affiliated to Dr. Babasaheb Ambedkar Technological University (DBATU), Lonere</p>
+        <div style="margin-top: 8px; font-weight: 700; font-size: 14px; text-decoration: underline; color: #1e3a8a;" id="cardModalTitle">
+          OFFICIAL SEMESTER GRADE REPORT CARD
+        </div>
+      </div>
+
+      <!-- Student Identification Meta Grid -->
+      <div class="card-meta-grid" id="cardMetaGrid">
+        <div class="card-meta-item"><strong>Student Name:</strong> <span id="cardStuName">--</span></div>
+        <div class="card-meta-item"><strong>PRN / ID:</strong> <span id="cardStuPRN">--</span></div>
+        <div class="card-meta-item"><strong>Roll Number:</strong> <span id="cardStuRoll">--</span></div>
+        <div class="card-meta-item"><strong>Department:</strong> <span id="cardStuDept">--</span></div>
+        <div class="card-meta-item"><strong>Semester:</strong> <span id="cardStuSem">--</span></div>
+        <div class="card-meta-item"><strong>Division:</strong> <span id="cardStuDiv">--</span></div>
+        <div class="card-meta-item"><strong>Academic Year:</strong> <span id="cardStuYear">2025-2026</span></div>
+        <div class="card-meta-item"><strong>Published:</strong> <span id="cardStuPubDate">--</span></div>
+      </div>
+
+      <!-- Unpublished Notice Banner for Admin View -->
+      <div id="cardUnpublishedWarning" style="display: none; background: #fffbeb; border: 1px solid #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 14px;">
+        ⚠️ <strong>UNPUBLISHED EXAMINATION RECORD:</strong> This scorecard contains draft or unverified marks. Not visible on student portal.
+      </div>
+
+      <!-- Subject-Wise Marks Breakdown Table (CA1, CA2, Mid-Sem, End-Sem) -->
+      <table class="grade-table">
+        <thead>
+          <tr>
+            <th>Course Code</th>
+            <th class="text-left">Course / Subject Name</th>
+            <th>CA1 (20)</th>
+            <th>CA2 (20)</th>
+            <th>Mid-Sem (30)</th>
+            <th>End-Sem (70)</th>
+            <th>Total (100)</th>
+            <th>Credits</th>
+            <th>Grade</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="cardSubjectsTableBody">
+          <tr><td colspan="10" style="text-align:center;">No examination records loaded.</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Summary Statistics Box -->
+      <div class="card-summary-box">
+        <div>
+          <div class="val" id="cardSumTotalMarks">--</div>
+          <div class="lbl">Total Marks</div>
+        </div>
+        <div>
+          <div class="val" id="cardSumPercentage">--</div>
+          <div class="lbl">Percentage</div>
+        </div>
+        <div>
+          <div class="val" id="cardSumGrade">--</div>
+          <div class="lbl">Overall Grade</div>
+        </div>
+        <div>
+          <div class="val" id="cardSumCredits">--</div>
+          <div class="lbl">Credits Earned</div>
+        </div>
+        <div>
+          <div class="val" id="cardSumBacklogs">0</div>
+          <div class="lbl">Backlogs</div>
+        </div>
+        <div>
+          <div class="val" id="cardSumResultStatus" style="color: #16a34a;">PASSED</div>
+          <div class="lbl">Result Status</div>
+        </div>
+      </div>
+
+      <!-- Institutional Sign-Off -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 36px; padding: 0 20px; font-size: 12px; color: #475569;">
+        <div>
+          <div>Generated On: <span id="cardGeneratedDate">--</span></div>
+          <div style="font-size: 11px; color: #94a3b8;">System-authenticated electronic ledger document.</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="border-top: 1px solid #94a3b8; width: 180px; padding-top: 6px; font-weight: 700; color: #1e293b;">
+            Controller of Examinations
+          </div>
+          <div style="font-size: 11px; color: #64748b;">SITCOE, Yadrav</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reopen Published Results Modal with Mandatory Reason (Module 3 & 10) -->
+  <div class="modal-overlay" id="reopenResultsModal">
+    <div class="modal-box" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3>Reopen Published Results</h3>
+        <span class="modal-close" onclick="closeModal('reopenResultsModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(239, 68, 68, 0.08); border-left: 4px solid var(--danger); padding: 12px; border-radius: 4px; margin-bottom: 16px; font-size: 13px; color: var(--text-main);">
+          ⚠️ <strong>Mandatory Security & Audit Record:</strong> Reopening published examination results modifies active academic records. A non-empty official justification is strictly recorded in the audit logs.
+        </div>
+        <input type="hidden" id="reopenCourseCode">
+        <input type="hidden" id="reopenDivision">
+
+        <div class="form-group">
+          <label>Course & Division</label>
+          <input type="text" class="form-input" id="reopenTargetLabel" readonly style="background: var(--bg-hover);">
+        </div>
+
+        <div class="form-group">
+          <label>Mandatory Justification / Reason *</label>
+          <textarea class="form-textarea" id="reopenReasonInput" rows="4" placeholder="State official reason (e.g., Authorized re-evaluation per grievance committee decision Ref #GC-2026/04)..." required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('reopenResultsModal')">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="btnConfirmReopen" onclick="confirmReopenResults()">Confirm Reopen with Audit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="footer">
-    <p>&copy; 2026 Campus Connect</p>
+    <p>&copy; 2026 Sharad Institute of Technology College of Engineering (Campus Connect ERP)</p>
   </footer>
 
-  <script src="js/script.js?v=55"></script>
+  <script src="js/script.js?v=60"></script>
 </body>
 </html>

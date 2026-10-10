@@ -1971,12 +1971,19 @@ function initAssignments(role) {
       tbody.innerHTML = assignments.map(function (a) {
         var statusBadge = '';
         var st = (a.submissionStatus || "not_submitted").toLowerCase();
+        var sub = a.submission || a.mySubmission || {};
+        var isLocked = a.isLocked || sub.isLocked || (a.isSubmitted && sub.isLocked !== false);
+
         if (a.isEvaluated || st === "evaluated" || st === "graded") {
-          statusBadge = '<span class="badge badge-success">Evaluated</span>';
+          statusBadge = '<span class="badge badge-success">Evaluated (' + (a.marksObtained !== null ? a.marksObtained + '/10' : '') + ')</span>';
+        } else if (a.isSubmitted) {
+          if (isLocked) {
+            statusBadge = '<span class="badge badge-success">✓ Submitted (Locked)</span>';
+          } else {
+            statusBadge = '<span class="badge badge-warning">Correction Unlocked</span>';
+          }
         } else if (st === "late") {
           statusBadge = '<span class="badge badge-warning">Late Submission</span>';
-        } else if (st === "submitted" || st === "under_review") {
-          statusBadge = '<span class="badge badge-primary">Submitted</span>';
         } else {
           statusBadge = '<span class="badge badge-secondary">Not Submitted</span>';
         }
@@ -1991,9 +1998,13 @@ function initAssignments(role) {
 
         var actionBtn = '';
         if (a.isEvaluated) {
-          actionBtn = '<button class="btn btn-secondary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">View Details</button>';
+          actionBtn = '<button class="btn btn-secondary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">View Evaluation</button>';
         } else if (a.isSubmitted) {
-          actionBtn = '<button class="btn btn-secondary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">Update Work</button>';
+          if (isLocked) {
+            actionBtn = '<button class="btn btn-secondary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">View Submission (Locked)</button>';
+          } else {
+            actionBtn = '<button class="btn btn-warning btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">Submit Correction</button>';
+          }
         } else {
           actionBtn = '<button class="btn btn-primary btn-sm" onclick="openStudentSubmitModal(' + a.id + ')">Submit Work</button>';
         }
@@ -2027,15 +2038,45 @@ function initAssignments(role) {
     var textInput = document.getElementById("submitTextContent");
     var fileInput = document.getElementById("submitFileInput");
     var errBox = document.getElementById("submitAssignmentError");
+    var btn = document.getElementById("btnConfirmSubmit");
+
+    var sub = a.submission || a.mySubmission || {};
+    var isLocked = a.isLocked || sub.isLocked || (a.isSubmitted && sub.isLocked !== false);
 
     if (errBox) errBox.innerHTML = "";
     if (modalId) modalId.value = a.id;
-    if (titleEl) titleEl.textContent = "Submit: " + a.title;
+    if (titleEl) titleEl.textContent = (isLocked ? "Submission Ledger: " : "Submit: ") + a.title;
     if (courseInfo) courseInfo.textContent = (a.courseCode || '') + " — " + (a.courseTitle || 'Coursework');
     if (deadlineInfo) deadlineInfo.textContent = "Deadline: " + (a.dueDate ? new Date(a.dueDate).toLocaleString() : 'No cutoff');
     if (instructions) instructions.textContent = a.description || "Submit written answer or attach file.";
-    if (textInput) textInput.value = (a.submission && a.submission.submissionText) ? a.submission.submissionText : "";
+    if (textInput) textInput.value = sub.submissionText || "";
     if (fileInput) fileInput.value = "";
+
+    if (a.isSubmitted && isLocked) {
+      if (errBox) {
+        errBox.innerHTML = '<div class="inline-banner" style="margin-bottom:14px; background: rgba(16,185,129,0.08); border-left: 4px solid var(--success); padding: 12px 14px; border-radius: 4px; font-size: 13px; color: var(--text-main);">' +
+          '🔒 <strong>Assignment submitted successfully. Editing and resubmission are disabled.</strong><br>' +
+          '<small style="color:var(--text-muted); display:block; margin-top:4px;">Submitted at: ' + (sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'Recorded') + (sub.fileName ? ' • Attachment: ' + escapeHtml(sub.fileName) : '') + '</small>' +
+          '</div>';
+      }
+      if (textInput) textInput.disabled = true;
+      if (fileInput) fileInput.disabled = true;
+      if (btn) btn.style.display = "none";
+    } else {
+      if (a.isSubmitted && !isLocked) {
+        if (errBox) {
+          errBox.innerHTML = '<div class="inline-banner" style="margin-bottom:14px; background: rgba(245,158,11,0.08); border-left: 4px solid var(--warning); padding: 10px 14px; border-radius: 4px; font-size: 13px; color: var(--text-main);">' +
+            '⚠️ <strong>Exceptional correction unlocked by administration:</strong> ' + escapeHtml(sub.unlockReason || "Permission granted") +
+            '</div>';
+        }
+      }
+      if (textInput) textInput.disabled = false;
+      if (fileInput) fileInput.disabled = false;
+      if (btn) {
+        btn.style.display = "inline-block";
+        resetButton(btn, a.isSubmitted ? "Submit Correction" : "Submit Work");
+      }
+    }
 
     openModal("submitAssignmentModal");
   };
@@ -2063,10 +2104,13 @@ function initAssignments(role) {
       formData.append("submissionText", textVal);
       formData.append("file", file);
       var token = sessionStorage.getItem("campus_session_token");
+      var headers = {};
+      if (token) headers["X-Session-Token"] = token;
       promise = fetch("/api/assignments/" + encodeURIComponent(assignmentId) + "/submit", {
         method: "POST",
-        headers: token ? { "Authorization": "Bearer " + token } : {},
-        body: formData
+        headers: headers,
+        body: formData,
+        credentials: "include"
       }).then(function (r) {
         return r.json().then(function (data) {
           if (!r.ok || !data.success) throw new Error(data.error || "Submission failed");
@@ -2083,7 +2127,7 @@ function initAssignments(role) {
     promise.then(function (res) {
       resetButton(btn, "Submit Work");
       closeModal("submitAssignmentModal");
-      showToast("Success", "Assignment submitted successfully!", "success");
+      showToast("Submission Locked", "Assignment submitted successfully. Editing and resubmission are disabled.", "success", 5000);
       loadStudentAssignments();
     }).catch(function (err) {
       resetButton(btn, "Submit Work");
@@ -2627,11 +2671,7 @@ function initAssignments(role) {
   }
 }
 
-// ---- Results module ----------------------------------------------------------------
-// Note: the three views (student grade-card / faculty marks-entry / admin
-// department publish-control) use genuinely different table shapes in the
-// original design, so each is wired to match its own real columns rather
-// than one generic renderer.
+// ---- Results module (Modules 2, 3, 4, 5, 6, 7) --------------------------------
 function initResults(role) {
   var studentView = document.getElementById("studentResultView");
   var facultyView = document.getElementById("facultyResultView");
@@ -2639,26 +2679,62 @@ function initResults(role) {
   if (!studentView && !facultyView && !adminView) return;
 
   if (role === "student") {
-    if (studentView) { studentView.style.display = "block"; loadStudentResults(studentView); }
+    if (studentView) { studentView.style.display = "block"; loadStudentResults(); }
     if (facultyView) facultyView.remove();
     if (adminView) adminView.remove();
   } else if (role === "faculty") {
-    if (facultyView) { facultyView.style.display = "block"; loadFacultyMarksSheet(facultyView); }
+    if (facultyView) { facultyView.style.display = "block"; loadFacultyMarksSheet(); }
     if (studentView) studentView.remove();
     if (adminView) adminView.remove();
   } else if (role === "admin") {
     if (adminView) {
       adminView.style.display = "block";
-      loadAdminResults(adminView);
+      loadAdminLifecycle();
+      // Populate department dropdowns across admin tabs
+      api("/api/departments").then(function (res) {
+        var depts = res.data || [];
+        ["adminCardDeptFilter", "toppersDeptSelect", "analyticsDeptSelect"].forEach(function (id) {
+          var sel = document.getElementById(id);
+          if (sel && depts.length) {
+            sel.innerHTML = '<option value="all">All Departments</option>' + depts.map(function (d) {
+              return '<option value="' + escapeHtml(d.code || d.name) + '">' + escapeHtml(d.name) + '</option>';
+            }).join("");
+          }
+        });
+      }).catch(function () {});
     }
     if (studentView) studentView.remove();
     if (facultyView) facultyView.remove();
   }
 
-  function loadStudentResults(container) {
-    var tbody = document.getElementById("studentResultsTableBody") || container.querySelector(".data-table tbody");
+  // =========================================================================
+  // 1. STUDENT VIEW LOGIC (Modules 4 & 7)
+  // =========================================================================
+  window.switchStudentResultsTab = function (tab) {
+    var pubSec = document.getElementById("studentPublishedSection");
+    var histSec = document.getElementById("studentHistorySection");
+    var btnPub = document.getElementById("btnStudentTabPublished");
+    var btnHist = document.getElementById("btnStudentTabHistory");
+
+    if (tab === "history") {
+      if (pubSec) pubSec.style.display = "none";
+      if (histSec) histSec.style.display = "block";
+      if (btnPub) btnPub.classList.remove("active");
+      if (btnHist) btnHist.classList.add("active");
+      loadStudentHistory();
+    } else {
+      if (pubSec) pubSec.style.display = "block";
+      if (histSec) histSec.style.display = "none";
+      if (btnPub) btnPub.classList.add("active");
+      if (btnHist) btnHist.classList.remove("active");
+      loadStudentResults();
+    }
+  };
+
+  function loadStudentResults() {
+    var tbody = document.getElementById("studentResultsTableBody");
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading academic results...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading academic results...</td></tr>';
 
     var sgpaEl = document.getElementById("studentSgpa");
     var cgpaEl = document.getElementById("studentCgpa");
@@ -2668,7 +2744,7 @@ function initResults(role) {
     api("/api/results").then(function (res) {
       var rows = res.data || [];
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">No examination results have been published for this semester yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);">No examination results have been officially published for your account yet.</td></tr>';
         if (sgpaEl) sgpaEl.textContent = "N/A";
         if (cgpaEl) cgpaEl.textContent = "N/A";
         if (creditsEl) creditsEl.textContent = "0";
@@ -2680,190 +2756,116 @@ function initResults(role) {
       }
 
       var totalMarks = 0;
+      var totalPossible = 0;
       var totalCredits = 0;
       var passedCount = 0;
 
       tbody.innerHTML = rows.map(function (r) {
-        var pass = r.total >= 40;
-        if (pass) passedCount++;
+        var isPass = r.isPassed;
+        if (isPass) passedCount++;
         totalMarks += (r.total || 0);
+        totalPossible += (r.maxTotal || 100);
         var cred = r.credits || 4;
-        totalCredits += cred;
+        if (isPass) totalCredits += cred;
 
-        return '<tr><td><strong>' + escapeHtml(r.courseCode) + '</strong></td><td>' + escapeHtml(r.courseTitle || '-') + '</td>' +
-          '<td>' + (r.internal !== undefined ? r.internal : '-') + '</td><td>' + (r.endSem !== undefined ? r.endSem : '-') + '</td><td><strong>' + r.total + '</strong></td>' +
-          '<td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(r.grade || (pass ? 'P' : 'F')) + '</span></td>' +
-          '<td>' + cred + '</td><td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + (pass ? 'Pass' : 'Fail') + '</span></td></tr>';
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(r.courseCode) + '</strong></td>' +
+          '<td>' + escapeHtml(r.courseTitle || '-') + '</td>' +
+          '<td>' + (r.ca1 !== undefined ? r.ca1 : '-') + '</td>' +
+          '<td>' + (r.ca2 !== undefined ? r.ca2 : '-') + '</td>' +
+          '<td>' + (r.midSem !== undefined ? r.midSem : '-') + '</td>' +
+          '<td>' + (r.endSem !== undefined ? r.endSem : '-') + '</td>' +
+          '<td><strong>' + r.total + '</strong></td>' +
+          '<td><span class="badge badge-' + (isPass ? 'success' : 'danger') + '">' + escapeHtml(r.grade || (isPass ? 'P' : 'F')) + '</span></td>' +
+          '<td>' + cred + '</td>' +
+          '<td><span class="badge badge-' + (isPass ? 'success' : 'danger') + '">' + (isPass ? 'Pass' : 'Fail') + '</span></td>' +
+          '</tr>';
       }).join("");
 
-      var avgMarks = totalMarks / rows.length;
-      var sgpa = (avgMarks / 10).toFixed(2);
+      var pct = totalPossible > 0 ? (totalMarks / totalPossible) * 100 : 0;
+      var sgpa = (pct / 10).toFixed(2);
       var allPassed = passedCount === rows.length;
 
       if (sgpaEl) sgpaEl.textContent = sgpa;
       if (cgpaEl) cgpaEl.textContent = sgpa;
       if (creditsEl) creditsEl.textContent = String(totalCredits);
       if (statusEl) {
-        statusEl.textContent = allPassed ? "PASSED (First Class)" : "ATKT / Arrear";
+        statusEl.textContent = allPassed ? "PASSED (First Class)" : "ATKT / Backlog (" + (rows.length - passedCount) + ")";
         statusEl.style.color = allPassed ? "var(--success)" : "var(--danger)";
       }
     }).catch(function (err) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--danger);">Failed to load academic results.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--danger);">Failed to load academic results.</td></tr>';
     });
   }
 
-  function loadAdminResults(container) {
-    var tbody = document.getElementById("adminResultsTableBody") || container.querySelector("#adminStudentResultsTable tbody");
-    var batchTbody = document.getElementById("adminBatchResultsTableBody");
-    var countBadge = document.getElementById("adminResultCountBadge");
-    if (!tbody) return;
+  function loadStudentHistory() {
+    var cont = document.getElementById("studentHistoryContainer");
+    if (!cont) return;
+    cont.innerHTML = '<div style="text-align:center; padding: 24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading performance history...</div>';
 
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student scorecards...</td></tr>';
-    if (batchTbody) {
-      batchTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading departmental course results...</td></tr>';
-    }
-
-    Promise.all([
-      api("/api/results"),
-      api("/api/courses")
-    ]).then(function (responses) {
-      var resultsRes = responses[0];
-      var coursesRes = responses[1];
-      var rows = resultsRes.data || [];
-      var courses = coursesRes.data || [];
-
-      if (countBadge) {
-        countBadge.textContent = rows.length + (rows.length === 1 ? " Student Record" : " Student Records");
-      }
-
-      var publishedCount = 0;
-      var pendingCount = 0;
-      var passedCount = 0;
-
-      rows.forEach(function (r) {
-        if (r.isPublished) {
-          publishedCount++;
-        } else {
-          pendingCount++;
-        }
-        if (r.total >= 40) {
-          passedCount++;
-        }
-      });
-
-      var passRate = rows.length ? Math.round((passedCount / rows.length) * 100) + "%" : "0%";
-
-      var pubEl = document.getElementById("statAdminPublishedResults");
-      var pendEl = document.getElementById("statAdminPendingResults");
-      var totalEl = document.getElementById("statAdminTotalScorecards");
-      var rateEl = document.getElementById("statAdminPassingRate");
-
-      if (pubEl) pubEl.textContent = publishedCount + (publishedCount === 1 ? " Record" : " Records");
-      if (pendEl) pendEl.textContent = pendingCount + (pendingCount === 1 ? " Record" : " Records");
-      if (totalEl) totalEl.textContent = String(rows.length);
-      if (rateEl) rateEl.textContent = passRate;
-
-      if (batchTbody) {
-        if (!courses.length) {
-          batchTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);">No academic courses configured.</td></tr>';
-        } else {
-          batchTbody.innerHTML = courses.map(function (c) {
-            var courseResults = rows.filter(function (r) { return r.courseCode === c.code; });
-            var totalInCourse = courseResults.length;
-            var allPub = totalInCourse > 0 && courseResults.every(function (r) { return r.isPublished; });
-
-            var statusBadge = totalInCourse === 0
-              ? '<span class="badge badge-warning">Pending Evaluation</span>'
-              : (allPub ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>');
-
-            var btnText = allPub ? 'Unpublish All' : 'Publish Batch';
-            var btnClass = allPub ? 'btn-warning' : 'btn-success';
-
-            return '<tr>' +
-              '<td><strong>' + escapeHtml(c.department || 'Computer Engineering') + '</strong></td>' +
-              '<td>' + escapeHtml(c.code + ' - ' + c.title) + '</td>' +
-              '<td>' + escapeHtml(c.semester || 'Semester 6') + '</td>' +
-              '<td>' + totalInCourse + ' Students</td>' +
-              '<td>' + escapeHtml(c.facultyName || c.instructor || 'Assigned Faculty') + '</td>' +
-              '<td>' + statusBadge + '</td>' +
-              '<td><button class="btn ' + btnClass + ' btn-sm" onclick="toggleCoursePublish(this, \'' + escapeHtml(c.code) + '\', ' + !allPub + ')">' + btnText + '</button></td>' +
-              '</tr>';
-          }).join("");
-        }
-      }
-
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No student scorecards recorded yet.</td></tr>';
+    var ref = (CURRENT_USER && (CURRENT_USER.prn || CURRENT_USER.studentId || CURRENT_USER.id)) || "me";
+    api("/api/results/history/" + encodeURIComponent(ref)).then(function (res) {
+      var history = res.data || [];
+      if (!history.length) {
+        cont.innerHTML = '<div style="text-align:center; padding: 28px; color: var(--text-muted);">No multi-semester academic progression records found yet.</div>';
         return;
       }
 
-      tbody.innerHTML = rows.map(function (r) {
-        var pass = r.total >= 40;
-        var pubBadge = r.isPublished
-          ? '<span class="badge badge-success result-status-badge">Published</span>'
-          : '<span class="badge badge-warning result-status-badge">Unpublished</span>';
-        var btnClass = r.isPublished ? 'btn-warning' : 'btn-success';
-        var btnText = r.isPublished ? 'Unpublish' : 'Publish';
+      var html = '<div style="display: grid; gap: 16px;">';
+      history.forEach(function (h) {
+        var backlogsBadge = h.backlogs === 0
+          ? '<span class="badge badge-success">0 Backlogs (All Cleared)</span>'
+          : '<span class="badge badge-danger">' + h.backlogs + ' Backlog(s)</span>';
 
-        return '<tr class="filterable-item">' +
-          '<td><strong>' + escapeHtml(r.studentId) + '</strong></td>' +
-          '<td>' + escapeHtml(r.studentName || '-') + '</td>' +
-          '<td>' + escapeHtml(r.courseCode) + ' <span style="font-size:12px; color:var(--text-muted);">(' + escapeHtml(r.courseTitle || '') + ')</span></td>' +
-          '<td>' + r.internal + '</td>' +
-          '<td>' + r.endSem + '</td>' +
-          '<td><strong>' + r.total + '</strong></td>' +
-          '<td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(r.grade) + '</span></td>' +
-          '<td>' + pubBadge + '</td>' +
-          '<td><button class="btn ' + btnClass + ' btn-sm pub-toggle-btn" data-result-id="' + r.id + '" onclick="togglePublish(this)">' + btnText + '</button></td>' +
-          '</tr>';
-      }).join("");
+        html += '<div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">' +
+          '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">' +
+            '<h4 style="margin: 0; font-size: 15px; color: var(--text-main); font-weight: 700;">' + escapeHtml(h.semester) + '</h4>' +
+            '<div style="display: flex; gap: 8px; align-items: center;">' +
+              '<span class="badge badge-primary">SGPA: ' + h.sgpa + '</span>' +
+              '<span class="badge badge-info">' + h.percentage + '%</span>' +
+              backlogsBadge +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-muted);">' +
+            '<div>Total Marks: <strong>' + h.totalMarks + ' / ' + h.maxMarks + '</strong></div>' +
+            '<div>Subjects Evaluated: <strong>' + (h.subjects ? h.subjects.length : 0) + '</strong></div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+      cont.innerHTML = html;
     }).catch(function (err) {
-      console.log("Could not load admin results:", err.message);
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">Failed to load student scorecards.</td></tr>';
-      if (batchTbody) {
-        batchTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--danger);">Failed to load departmental results.</td></tr>';
-      }
+      cont.innerHTML = '<div style="text-align:center; padding: 24px; color: var(--danger);">Failed to load academic history.</div>';
     });
   }
 
-  window.toggleCoursePublish = function (btn, courseCode, willPublish) {
-    if (getActiveRole() !== "admin") {
-      showToast("Access Restricted", "Only Administrators can publish or unpublish examination results.", "warning");
-      return;
+  window.printStudentOwnResultCard = function () {
+    var ref = CURRENT_USER ? (CURRENT_USER.prn || CURRENT_USER.studentId || CURRENT_USER.id) : null;
+    if (ref) {
+      window.openStudentResultCard(ref);
+    } else {
+      window.print();
     }
-    setButtonLoading(btn, willPublish ? "Publishing..." : "Unpublishing...");
-    api("/api/results?courseCode=" + encodeURIComponent(courseCode)).then(function (res) {
-      var list = res.data || [];
-      if (!list.length) {
-        resetButton(btn, willPublish ? "Publish Batch" : "Unpublish All");
-        showToast("No Records", "No student scorecards recorded for course " + courseCode + " yet.", "info");
-        return;
-      }
-      var promises = list.map(function (r) {
-        return api("/api/results/" + r.id + "/publish", { method: "PUT", body: { isPublished: willPublish } });
-      });
-      return Promise.all(promises).then(function () {
-        showToast("Batch Updated", (willPublish ? "Published" : "Unpublished") + " all scorecards for " + courseCode + ".", "success");
-        var container = document.getElementById("adminResultView");
-        if (container) loadAdminResults(container);
-      });
-    }).catch(function (e) {
-      resetButton(btn, willPublish ? "Publish Batch" : "Unpublish All");
-      showToast("Update Failed", e.message || "Could not update batch results.", "error");
-    });
   };
 
-  function loadFacultyMarksSheet(container) {
-    var courseSelect = document.getElementById("facultyResultCourseSelect") || container.querySelector(".form-select");
+  // =========================================================================
+  // 2. FACULTY VIEW LOGIC (Module 2: Complete 4 Assessments Entry)
+  // =========================================================================
+  function loadFacultyMarksSheet() {
+    var courseSelect = document.getElementById("facultyResultCourseSelect");
     var divSelect = document.getElementById("facultyResultDivisionSelect");
-    var tbody = container.querySelector(".data-table tbody");
-    var heading = container.querySelector(".card:last-child h3");
+    var assessSelect = document.getElementById("facultyResultAssessmentType");
+    var searchInput = document.getElementById("facultyRosterSearch");
+    var tbody = document.getElementById("facultyMarksTableBody");
+    var titleEl = document.getElementById("facultyMarksSheetTitle");
+    var rosterBadge = document.getElementById("facultyMarksRosterBadge");
     if (!tbody) return;
+
     var coursesList = [];
 
     function updateDivisions() {
       if (!divSelect || !courseSelect) return;
-      var selectedCode = courseCodeFromSelect();
+      var selectedCode = courseSelect.value;
       var matchedCourse = coursesList.find(function (c) { return c.code === selectedCode; });
       var divs = (matchedCourse && matchedCourse.assignedDivisions && matchedCourse.assignedDivisions.length)
         ? matchedCourse.assignedDivisions
@@ -2881,30 +2883,41 @@ function initResults(role) {
         }).join("");
       }
       updateDivisions();
-      render();
+      renderRoster();
     }).catch(function () {
-      render();
+      renderRoster();
     });
 
     if (courseSelect) courseSelect.addEventListener("change", function () {
       updateDivisions();
-      render();
+      renderRoster();
     });
-    if (divSelect) divSelect.addEventListener("change", render);
+    if (divSelect) divSelect.addEventListener("change", renderRoster);
+    if (assessSelect) assessSelect.addEventListener("change", renderRoster);
+    if (searchInput) searchInput.addEventListener("input", debounce(filterRosterRows, 250));
 
-    function courseCodeFromSelect() {
-      if (!courseSelect) return "CS601";
-      return (courseSelect.value || courseSelect.options[courseSelect.selectedIndex].text).split(" ")[0].trim();
+    function filterRosterRows() {
+      var q = searchInput ? searchInput.value.trim().toLowerCase() : "";
+      tbody.querySelectorAll("tr[data-student-id]").forEach(function (tr) {
+        var text = tr.textContent.toLowerCase();
+        tr.style.display = (!q || text.indexOf(q) !== -1) ? "" : "none";
+      });
     }
 
-    function render() {
-      var courseCode = courseCodeFromSelect();
+    function renderRoster() {
+      var courseCode = courseSelect ? courseSelect.value : "";
       var division = divSelect ? divSelect.value : "A";
-      if (heading) heading.textContent = "Student Marks Entry Sheet (" + courseCode + " - Div " + division + ")";
-      var rosterBadge = document.getElementById("facultyMarksRosterBadge");
+      if (!courseCode) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:var(--text-muted);">Please select a course.</td></tr>';
+        return;
+      }
+
+      if (titleEl) {
+        titleEl.textContent = "Continuous Assessment & Exam Sheet (" + courseCode + " - Div " + division + ")";
+      }
       if (rosterBadge) rosterBadge.textContent = "--";
 
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student marks sheet...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student marks roster...</td></tr>';
 
       Promise.all([
         api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(courseCode) + "&division=" + encodeURIComponent(division)),
@@ -2915,6 +2928,7 @@ function initResults(role) {
         var resultMap = {};
         results.forEach(function (r) {
           resultMap[r.studentId] = r;
+          if (r.prn) resultMap[r.prn] = r;
         });
 
         if (rosterBadge) {
@@ -2922,106 +2936,629 @@ function initResults(role) {
         }
 
         if (!roster.length) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">No students found in ' + escapeHtml(courseCode) + ' (Div ' + escapeHtml(division) + ').</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color:var(--text-muted);">No enrolled students found in course ' + escapeHtml(courseCode) + ' (Div ' + escapeHtml(division) + ').</td></tr>';
           return;
         }
-        tbody.innerHTML = roster.map(function (s) {
-          var existingRes = resultMap[s.studentId] || resultMap[s.prn];
-          var marksVal = existingRes ? existingRes.total : 0;
-          var gradeVal = existingRes ? existingRes.grade : "-";
-          var pass = marksVal >= 40;
-          var gradeHtml = existingRes
-            ? '<span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(gradeVal) + ' (' + marksVal + '/100)</span>'
-            : '<span class="grade-preview">-</span>';
 
-          return '<tr data-student-id="' + s.studentId + '" data-course="' + courseCode + '">' +
-            '<td><strong>' + escapeHtml(s.prn || s.studentId) + '</strong></td>' +
-            '<td>' + escapeHtml(s.name) + '</td>' +
-            '<td><input type="number" class="form-input marks-input" value="' + marksVal + '" style="width: 90px; padding: 6px;" min="0" max="100"></td>' +
-            '<td><span class="grade-preview">' + gradeHtml + '</span></td>' +
-            '<td><button class="btn btn-secondary btn-sm save-marks-btn" type="button">Save</button></td></tr>';
+        tbody.innerHTML = roster.map(function (s) {
+          var r = resultMap[s.studentId] || resultMap[s.prn] || {};
+          var ca1 = r.ca1 !== undefined ? r.ca1 : "";
+          var ca2 = r.ca2 !== undefined ? r.ca2 : "";
+          var mid = r.midSem !== undefined ? r.midSem : "";
+          var end = r.endSem !== undefined ? r.endSem : "";
+          var att = r.attendanceStatus || "present";
+          var total = r.total !== undefined ? r.total : 0;
+          var grade = r.grade || "-";
+          var status = r.status || "draft";
+          var isLocked = status === "submitted" || status === "under_review" || status === "approved" || status === "published";
+
+          var statusBadge = '<span class="badge badge-secondary">Draft</span>';
+          if (status === "submitted") statusBadge = '<span class="badge badge-primary">Submitted</span>';
+          else if (status === "under_review") statusBadge = '<span class="badge badge-warning">Under Review</span>';
+          else if (status === "approved") statusBadge = '<span class="badge badge-info">Approved</span>';
+          else if (status === "published") statusBadge = '<span class="badge badge-success">Published</span>';
+          else if (status === "reopened") statusBadge = '<span class="badge badge-danger">Reopened</span>';
+
+          var disabledAttr = (isLocked && getActiveRole() !== "admin") ? " disabled" : "";
+
+          return '<tr data-student-id="' + escapeHtml(s.studentId || s.prn) + '" data-course="' + escapeHtml(courseCode) + '">' +
+            '<td><strong>' + escapeHtml(s.rollNumber || s.prn || s.studentId) + '</strong></td>' +
+            '<td><span class="stu-name-col">' + escapeHtml(s.name) + '</span></td>' +
+            '<td><input type="number" class="form-input mark-ca1" value="' + ca1 + '" min="0" max="20" step="0.5" style="width:75px; padding:4px;" placeholder="Max 20"' + disabledAttr + '></td>' +
+            '<td><input type="number" class="form-input mark-ca2" value="' + ca2 + '" min="0" max="20" step="0.5" style="width:75px; padding:4px;" placeholder="Max 20"' + disabledAttr + '></td>' +
+            '<td><input type="number" class="form-input mark-mid" value="' + mid + '" min="0" max="30" step="0.5" style="width:75px; padding:4px;" placeholder="Max 30"' + disabledAttr + '></td>' +
+            '<td><input type="number" class="form-input mark-end" value="' + end + '" min="0" max="70" step="0.5" style="width:75px; padding:4px;" placeholder="Max 70"' + disabledAttr + '></td>' +
+            '<td>' +
+              '<select class="form-select mark-att" style="width:auto; padding:4px 6px; font-size:12px;"' + disabledAttr + '>' +
+                '<option value="present"' + (att === 'present' ? ' selected' : '') + '>Present</option>' +
+                '<option value="absent"' + (att === 'absent' ? ' selected' : '') + '>Absent</option>' +
+                '<option value="incomplete"' + (att === 'incomplete' ? ' selected' : '') + '>Incomplete</option>' +
+                '<option value="withheld"' + (att === 'withheld' ? ' selected' : '') + '>Withheld</option>' +
+              '</select>' +
+            '</td>' +
+            '<td><strong class="col-total">' + total + '</strong>/100</td>' +
+            '<td><span class="badge badge-primary col-grade">' + escapeHtml(grade) + '</span></td>' +
+            '<td><span class="col-status-wrap">' + statusBadge + '</span></td>' +
+            '<td><button class="btn btn-secondary btn-sm save-single-row-btn" type="button"' + disabledAttr + '>Save</button></td>' +
+            '</tr>';
         }).join("");
-        wireSaveButtons();
+
+        wireMarksRecalculation();
       }).catch(function (err) {
-        console.error("Error loading roster/results:", err);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--danger);">Error loading student marks sheet.</td></tr>';
+        console.error("Error loading marks roster:", err);
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color:var(--danger);">Error loading student marks roster.</td></tr>';
       });
     }
 
-    function wireSaveButtons() {
-      tbody.querySelectorAll(".save-marks-btn").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          var row = this.closest("tr");
-          var studentId = row.getAttribute("data-student-id");
-          var courseCode = row.getAttribute("data-course");
-          var marksInput = row.querySelector(".marks-input");
-          var marks = marksInput.value;
+    function wireMarksRecalculation() {
+      tbody.querySelectorAll("tr[data-student-id]").forEach(function (row) {
+        var ca1Inp = row.querySelector(".mark-ca1");
+        var ca2Inp = row.querySelector(".mark-ca2");
+        var midInp = row.querySelector(".mark-mid");
+        var endInp = row.querySelector(".mark-end");
+        var totalEl = row.querySelector(".col-total");
+        var gradeEl = row.querySelector(".col-grade");
+        var saveBtn = row.querySelector(".save-single-row-btn");
 
-          setButtonLoading(btn, "Saving...");
-          marksInput.disabled = true;
+        function recalculate() {
+          var c1 = parseFloat(ca1Inp.value) || 0;
+          var c2 = parseFloat(ca2Inp.value) || 0;
+          var m = parseFloat(midInp.value) || 0;
+          var e = parseFloat(endInp.value) || 0;
 
-          api("/api/results", { method: "POST", body: { studentId: studentId, courseCode: courseCode, marks: marks } })
-            .then(function (res) {
-              var pass = res.data.total >= 40;
-              row.querySelector(".grade-preview").innerHTML =
-                '<span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(res.data.grade) + ' (' + res.data.total + '/100)</span>';
+          // Institutional formula: CA avg + MidSem + EndSem or standard combination
+          var internal = Math.round(((c1 + c2) / 40.0 * 15.0) + (m / 30.0 * 15.0));
+          var total = Math.round(internal + e);
+          if (totalEl) totalEl.textContent = String(total);
+          var pct = total;
+          var g = pct >= 90 ? "A+" : (pct >= 80 ? "A" : (pct >= 70 ? "B+" : (pct >= 60 ? "B" : (pct >= 50 ? "C" : (pct >= 40 ? "D" : "F")))));
+          if (gradeEl) {
+            gradeEl.textContent = g;
+            gradeEl.className = "badge badge-" + (pct >= 40 ? "success" : "danger") + " col-grade";
+          }
+        }
+
+        [ca1Inp, ca2Inp, midInp, endInp].forEach(function (inp) {
+          if (inp) inp.addEventListener("input", recalculate);
+        });
+
+        if (saveBtn) {
+          saveBtn.addEventListener("click", function () {
+            var studentId = row.getAttribute("data-student-id");
+            var courseCode = row.getAttribute("data-course");
+            setButtonLoading(saveBtn, "Saving...");
+            api("/api/results/marks", {
+              method: "POST",
+              body: {
+                studentId: studentId,
+                courseCode: courseCode,
+                ca1Marks: ca1Inp.value !== "" ? parseFloat(ca1Inp.value) : null,
+                ca2Marks: ca2Inp.value !== "" ? parseFloat(ca2Inp.value) : null,
+                midSemMarks: midInp.value !== "" ? parseFloat(midInp.value) : null,
+                endSemMarks: endInp.value !== "" ? parseFloat(endInp.value) : null,
+                attendanceStatus: row.querySelector(".mark-att").value,
+                action: "save_draft"
+              }
+            }).then(function (res) {
               highlightRow(row, "update");
-              resetButton(btn, '<span class="badge-saved">✓ Saved</span>');
-              setTimeout(function () {
-                resetButton(btn, "Save");
-              }, 2500);
-              showToast("Marks Recorded", studentId + ": " + res.data.total + "/100 • Grade " + res.data.grade, "success");
-            }).catch(function (e) {
-              resetButton(btn, "Save");
-              showToast("Save Failed", e.message || "Could not save marks.", "error");
-            }).finally(function () {
-              marksInput.disabled = false;
+              resetButton(saveBtn, "✓ Saved");
+              setTimeout(function () { resetButton(saveBtn, "Save"); }, 2000);
+              showToast("Draft Saved", "Marks updated for student " + studentId, "success");
+            }).catch(function (err) {
+              resetButton(saveBtn, "Save");
+              showToast("Save Error", err.message || "Failed to save marks.", "error");
             });
+          });
+        }
+      });
+    }
+
+    window.saveFacultyAllMarks = function (action) {
+      var courseCode = courseSelect ? courseSelect.value : "";
+      var division = divSelect ? divSelect.value : "A";
+      var rows = tbody.querySelectorAll("tr[data-student-id]");
+      if (!rows.length) {
+        showToast("No Records", "No students loaded to save.", "warning");
+        return;
+      }
+
+      var isSubmit = action === "submit";
+      var btn = isSubmit ? document.getElementById("btnFacultySubmitMarks") : document.getElementById("btnFacultySaveDraft");
+      setButtonLoading(btn, isSubmit ? "Submitting..." : "Saving Drafts...");
+
+      var entries = [];
+      rows.forEach(function (row) {
+        var stuId = row.getAttribute("data-student-id");
+        var ca1 = row.querySelector(".mark-ca1").value;
+        var ca2 = row.querySelector(".mark-ca2").value;
+        var mid = row.querySelector(".mark-mid").value;
+        var end = row.querySelector(".mark-end").value;
+        var att = row.querySelector(".mark-att").value;
+
+        entries.push({
+          studentId: stuId,
+          ca1Marks: ca1 !== "" ? parseFloat(ca1) : null,
+          ca2Marks: ca2 !== "" ? parseFloat(ca2) : null,
+          midSemMarks: mid !== "" ? parseFloat(mid) : null,
+          endSemMarks: end !== "" ? parseFloat(end) : null,
+          attendanceStatus: att
         });
       });
-    }
+
+      var promises = entries.map(function (item) {
+        return api("/api/results/marks", {
+          method: "POST",
+          body: Object.assign({}, item, { courseCode: courseCode, action: isSubmit ? "submit" : "save_draft" })
+        });
+      });
+
+      Promise.all(promises).then(function () {
+        resetButton(btn, isSubmit ? "🚀 Submit for Review" : "💾 Save Draft");
+        showToast(
+          isSubmit ? "Marks Submitted" : "Drafts Saved",
+          isSubmit ? "All student marks submitted for HOD review. Editing locked." : "Draft marks saved successfully.",
+          "success"
+        );
+        renderRoster();
+      }).catch(function (err) {
+        resetButton(btn, isSubmit ? "🚀 Submit for Review" : "💾 Save Draft");
+        showToast("Operation Failed", err.message || "Could not process marks entries.", "error");
+      });
+    };
   }
 
-  window.togglePublish = function (btn) {
-    if (getActiveRole() !== "admin") {
-      showToast("Access Restricted", "Only Administrators can publish or unpublish examination results.", "warning");
-      return;
-    }
-    var resultId = btn.getAttribute("data-result-id");
-    var row = btn.closest("tr");
-    var badge = row ? row.querySelector(".result-status-badge") : null;
-    var willPublish = btn.classList.contains("btn-success");
+  // =========================================================================
+  // 3. ADMIN VIEW LOGIC (Modules 3, 4, 5, 6)
+  // =========================================================================
+  window.switchAdminTab = function (tab) {
+    var secLifecycle = document.getElementById("adminTabSectionLifecycle");
+    var secCards = document.getElementById("adminTabSectionCards");
+    var secToppers = document.getElementById("adminTabSectionToppers");
+    var secAnalytics = document.getElementById("adminTabSectionAnalytics");
 
-    function applyVisual(isPublished) {
-      if (isPublished) {
-        btn.className = "btn btn-warning btn-sm pub-toggle-btn";
-        resetButton(btn, "Unpublish");
-        if (badge) { badge.className = "badge badge-success result-status-badge"; badge.textContent = "Published"; }
-      } else {
-        btn.className = "btn btn-success btn-sm pub-toggle-btn";
-        resetButton(btn, "Publish");
-        if (badge) { badge.className = "badge badge-warning result-status-badge"; badge.textContent = "Unpublished"; }
+    var tabLifecycle = document.getElementById("tabAdminLifecycle");
+    var tabCards = document.getElementById("tabAdminCards");
+    var tabToppers = document.getElementById("tabAdminToppers");
+    var tabAnalytics = document.getElementById("tabAdminAnalytics");
+
+    [secLifecycle, secCards, secToppers, secAnalytics].forEach(function (s) { if (s) s.style.display = "none"; });
+    [tabLifecycle, tabCards, tabToppers, tabAnalytics].forEach(function (t) { if (t) t.classList.remove("active"); });
+
+    if (tab === "cards") {
+      if (secCards) secCards.style.display = "block";
+      if (tabCards) tabCards.classList.add("active");
+      loadAdminResultCardsList();
+    } else if (tab === "toppers") {
+      if (secToppers) secToppers.style.display = "block";
+      if (tabToppers) tabToppers.classList.add("active");
+      loadToppersMeritList();
+    } else if (tab === "analytics") {
+      if (secAnalytics) secAnalytics.style.display = "block";
+      if (tabAnalytics) tabAnalytics.classList.add("active");
+      loadAnalyticsDashboard();
+    } else {
+      if (secLifecycle) secLifecycle.style.display = "block";
+      if (tabLifecycle) tabLifecycle.classList.add("active");
+      loadAdminLifecycle();
+    }
+  };
+
+  function loadAdminLifecycle() {
+    var tbody = document.getElementById("adminResultsTableBody");
+    var batchTbody = document.getElementById("adminBatchResultsTableBody");
+    var countBadge = document.getElementById("adminResultCountBadge");
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student scorecards...</td></tr>';
+    if (batchTbody) {
+      batchTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading departmental course batches...</td></tr>';
+    }
+
+    Promise.all([
+      api("/api/results"),
+      api("/api/courses")
+    ]).then(function (responses) {
+      var rows = responses[0].data || [];
+      var courses = responses[1].data || [];
+
+      if (countBadge) {
+        countBadge.textContent = rows.length + (rows.length === 1 ? " Student Record" : " Student Records");
       }
-      if (row) highlightRow(row, "update");
-    }
 
-    if (!resultId) {
-      // Department-level demo row with no backing Result id: visual-only toggle.
-      applyVisual(willPublish);
+      var publishedCount = 0;
+      var pendingCount = 0;
+      var passedCount = 0;
+
+      rows.forEach(function (r) {
+        if (r.isPublished) publishedCount++;
+        else pendingCount++;
+        if (r.isPassed) passedCount++;
+      });
+
+      var passRate = rows.length ? Math.round((passedCount / rows.length) * 100) + "%" : "0%";
+
+      var pubEl = document.getElementById("statAdminPublishedResults");
+      var pendEl = document.getElementById("statAdminPendingResults");
+      var totalEl = document.getElementById("statAdminTotalScorecards");
+      var rateEl = document.getElementById("statAdminPassingRate");
+
+      if (pubEl) pubEl.textContent = publishedCount.toLocaleString();
+      if (pendEl) pendEl.textContent = pendingCount.toLocaleString();
+      if (totalEl) totalEl.textContent = rows.length.toLocaleString();
+      if (rateEl) rateEl.textContent = passRate;
+
+      // Render Departmental Course Batches (Module 3 Lifecycle)
+      if (batchTbody) {
+        if (!courses.length) {
+          batchTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No academic courses configured.</td></tr>';
+        } else {
+          batchTbody.innerHTML = courses.map(function (c) {
+            var courseRes = rows.filter(function (r) { return r.courseCode === c.code; });
+            var totalInCourse = courseRes.length;
+            var anyPub = courseRes.some(function (r) { return r.isPublished; });
+            var allPub = totalInCourse > 0 && courseRes.every(function (r) { return r.isPublished; });
+            var anySubmitted = courseRes.some(function (r) { return r.status === "submitted"; });
+            var anyApproved = courseRes.some(function (r) { return r.status === "approved"; });
+            var anyUnderReview = courseRes.some(function (r) { return r.status === "under_review"; });
+
+            var statusBadge = '<span class="badge badge-secondary">Draft Marks</span>';
+            var actionBtn = '';
+
+            if (totalInCourse === 0) {
+              statusBadge = '<span class="badge badge-secondary">Pending Evaluation</span>';
+              actionBtn = '<span style="color:var(--text-muted);font-size:12px;">Awaiting Faculty Entry</span>';
+            } else if (allPub) {
+              statusBadge = '<span class="badge badge-success">Published to Students</span>';
+              actionBtn = '<button class="btn btn-danger btn-sm" onclick="openReopenModal(\'' + escapeHtml(c.code) + '\', \'ALL\')">Reopen Results</button>';
+            } else if (anyApproved) {
+              statusBadge = '<span class="badge badge-info">Approved by Exam Cell</span>';
+              actionBtn = '<button class="btn btn-success btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'published\')">Publish to Students</button>';
+            } else if (anyUnderReview) {
+              statusBadge = '<span class="badge badge-warning">Under Review</span>';
+              actionBtn = '<button class="btn btn-primary btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'approved\')">Approve Batch</button>';
+            } else if (anySubmitted) {
+              statusBadge = '<span class="badge badge-primary">Submitted by Faculty</span>';
+              actionBtn = '<button class="btn btn-warning btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'under_review\')">Review Batch</button>';
+            } else {
+              statusBadge = '<span class="badge badge-secondary">Draft</span>';
+              actionBtn = '<button class="btn btn-primary btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'submitted\')">Submit Batch</button>';
+            }
+
+            var auditInfo = anyPub
+              ? '<span style="font-size:12px; color:var(--success);">Verified & Published</span>'
+              : (totalInCourse ? '<span style="font-size:12px; color:var(--text-muted);">' + totalInCourse + ' records pending publish</span>' : '<span style="color:var(--text-muted); font-size:12px;">--</span>');
+
+            return '<tr>' +
+              '<td><strong>' + escapeHtml(c.department || 'Computer Engineering') + '</strong></td>' +
+              '<td>' + escapeHtml(c.code + ' - ' + c.title) + '</td>' +
+              '<td>' + totalInCourse + ' Enrolled</td>' +
+              '<td>' + statusBadge + '</td>' +
+              '<td>' + auditInfo + '</td>' +
+              '<td>' + actionBtn + '</td>' +
+              '</tr>';
+          }).join("");
+        }
+      }
+
+      // Render Individual Student Scorecards
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);">No student scorecards recorded yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(function (r) {
+        var isPass = r.isPassed;
+        var pubBadge = r.isPublished
+          ? '<span class="badge badge-success">Published</span>'
+          : '<span class="badge badge-warning">Draft</span>';
+
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(r.studentId || r.prn) + '</strong></td>' +
+          '<td>' + escapeHtml(r.studentName || '-') + '</td>' +
+          '<td>' + escapeHtml(r.courseCode) + '</td>' +
+          '<td>' + (r.ca1 !== undefined ? r.ca1 : '-') + '</td>' +
+          '<td>' + (r.ca2 !== undefined ? r.ca2 : '-') + '</td>' +
+          '<td>' + (r.midSem !== undefined ? r.midSem : '-') + '</td>' +
+          '<td>' + (r.endSem !== undefined ? r.endSem : '-') + '</td>' +
+          '<td><strong>' + r.total + '</strong></td>' +
+          '<td><span class="badge badge-' + (isPass ? 'success' : 'danger') + '">' + escapeHtml(r.grade) + '</span></td>' +
+          '<td>' + pubBadge + '</td>' +
+          '<td><button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(r.studentId || r.prn) + '\')">View Card</button></td>' +
+          '</tr>';
+      }).join("");
+
+    }).catch(function (err) {
+      console.log("Could not load admin lifecycle:", err.message);
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--danger);">Failed to load student scorecards.</td></tr>';
+    });
+  }
+
+  window.transitionBatchStatus = function (courseCode, division, targetStatus) {
+    if (getActiveRole() !== "admin") {
+      showToast("Restricted", "Only Administrators can approve or publish examination results.", "warning");
       return;
     }
 
-    setButtonLoading(btn, willPublish ? "Publishing..." : "Unpublishing...");
+    api("/api/results/batch-status", {
+      method: "POST",
+      body: { courseCode: courseCode, division: division, status: targetStatus }
+    }).then(function (res) {
+      showToast("Batch Updated", res.message || ("Batch transitioned to " + targetStatus), "success");
+      loadAdminLifecycle();
+    }).catch(function (err) {
+      showToast("Update Failed", err.message || "Failed to update batch status.", "error");
+    });
+  };
 
-    api("/api/results/" + resultId + "/publish", { method: "PUT", body: { isPublished: willPublish } })
-      .then(function (res) {
-        applyVisual(res.data.isPublished);
-        showToast("Publication Status Updated", "Scorecard is now " + (res.data.isPublished ? "Published" : "Unpublished") + ".", "info");
-      })
-      .catch(function (e) {
-        resetButton(btn, willPublish ? "Publish" : "Unpublish");
-        showToast("Update Failed", e.message || "Could not update publish status.", "error");
-      });
+  // Reopen Modal Handlers
+  window.openReopenModal = function (courseCode, division) {
+    document.getElementById("reopenCourseCode").value = courseCode;
+    document.getElementById("reopenDivision").value = division;
+    document.getElementById("reopenTargetLabel").value = courseCode + " (Division " + division + ")";
+    document.getElementById("reopenReasonInput").value = "";
+    openModal("reopenResultsModal");
+  };
+
+  window.confirmReopenResults = function () {
+    var cCode = document.getElementById("reopenCourseCode").value;
+    var div = document.getElementById("reopenDivision").value;
+    var reason = document.getElementById("reopenReasonInput").value.trim();
+    var btn = document.getElementById("btnConfirmReopen");
+
+    if (!reason) {
+      showToast("Reason Required", "Please provide a mandatory official reason for reopening published results.", "warning");
+      return;
+    }
+
+    setButtonLoading(btn, "Reopening...");
+    api("/api/results/batch-status", {
+      method: "POST",
+      body: { courseCode: cCode, division: div, status: "reopened", reason: reason }
+    }).then(function (res) {
+      resetButton(btn, "Confirm Reopen with Audit");
+      closeModal("reopenResultsModal");
+      showToast("Results Reopened", "Results reopened with audit trail: " + reason, "info");
+      loadAdminLifecycle();
+    }).catch(function (err) {
+      resetButton(btn, "Confirm Reopen with Audit");
+      showToast("Reopen Failed", err.message || "Could not reopen results.", "error");
+    });
+  };
+
+  // =========================================================================
+  // 4. ADMIN STUDENT RESULT CARDS DIRECTORY (Module 4)
+  // =========================================================================
+  window.loadAdminResultCardsList = function () {
+    var tbody = document.getElementById("adminCardsListBody");
+    var search = document.getElementById("adminCardStudentSearch") ? document.getElementById("adminCardStudentSearch").value.trim() : "";
+    var dept = document.getElementById("adminCardDeptFilter") ? document.getElementById("adminCardDeptFilter").value : "all";
+    var sem = document.getElementById("adminCardSemFilter") ? document.getElementById("adminCardSemFilter").value : "all";
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Searching student result cards...</td></tr>';
+
+    var params = new URLSearchParams();
+    if (search) params.set("q", search);
+    params.set("role", "student");
+    if (dept && dept !== "all") params.set("department", dept);
+    if (sem && sem !== "all") params.set("semester", sem);
+
+    api("/api/users?" + params.toString()).then(function (res) {
+      var students = res.data || [];
+      if (!students.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">No student records matched your search.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = students.map(function (s) {
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(s.publicId || s.prn || s.id) + '</strong></td>' +
+          '<td>' + escapeHtml(s.rollNumber || '-') + '</td>' +
+          '<td>' + escapeHtml(s.name) + '</td>' +
+          '<td>' + escapeHtml(s.department || '-') + '</td>' +
+          '<td>Semester ' + (s.semester || '-') + '</td>' +
+          '<td>Division ' + escapeHtml(s.division || 'A') + '</td>' +
+          '<td><span class="badge badge-success">Active Enrolled</span></td>' +
+          '<td><button class="btn btn-primary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(s.publicId || s.id) + '\')">📄 View Result Card</button></td>' +
+          '</tr>';
+      }).join("");
+    }).catch(function (err) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--danger);">Failed to search student result cards.</td></tr>';
+    });
+  };
+
+  // Open Printable Result Card Modal (Module 4)
+  window.openStudentResultCard = function (studentRef) {
+    api("/api/results/card/" + encodeURIComponent(studentRef)).then(function (res) {
+      var card = res.data || {};
+      var stu = card.student || {};
+      var sum = card.summary || {};
+      var subjects = card.subjects || [];
+
+      var nameEl = document.getElementById("cardStuName");
+      var prnEl = document.getElementById("cardStuPRN");
+      var rollEl = document.getElementById("cardStuRoll");
+      var deptEl = document.getElementById("cardStuDept");
+      var semEl = document.getElementById("cardStuSem");
+      var divEl = document.getElementById("cardStuDiv");
+      var yearEl = document.getElementById("cardStuYear");
+      var pubEl = document.getElementById("cardStuPubDate");
+      var unpubWarn = document.getElementById("cardUnpublishedWarning");
+      var genDateEl = document.getElementById("cardGeneratedDate");
+
+      if (nameEl) nameEl.textContent = stu.name || "-";
+      if (prnEl) prnEl.textContent = stu.prn || stu.studentCode || "-";
+      if (rollEl) rollEl.textContent = stu.rollNumber || "-";
+      if (deptEl) deptEl.textContent = stu.department || "-";
+      if (semEl) semEl.textContent = "Semester " + (stu.semester || "-");
+      if (divEl) divEl.textContent = "Division " + (stu.division || "A");
+      if (yearEl) yearEl.textContent = stu.academicYear || "2025-2026";
+      if (pubEl) pubEl.textContent = sum.publishedAt ? new Date(sum.publishedAt).toLocaleDateString() : "Official Publication Pending";
+      if (genDateEl) genDateEl.textContent = new Date().toLocaleString();
+
+      if (unpubWarn) {
+        unpubWarn.style.display = sum.hasUnpublishedRecords ? "block" : "none";
+      }
+
+      var subTbody = document.getElementById("cardSubjectsTableBody");
+      if (subTbody) {
+        if (!subjects.length) {
+          subTbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:16px;">No examination marks recorded for this student.</td></tr>';
+        } else {
+          subTbody.innerHTML = subjects.map(function (s) {
+            return '<tr>' +
+              '<td><strong>' + escapeHtml(s.courseCode) + '</strong></td>' +
+              '<td class="text-left">' + escapeHtml(s.courseTitle || '-') + '</td>' +
+              '<td>' + (s.ca1 !== undefined ? s.ca1 : '-') + '</td>' +
+              '<td>' + (s.ca2 !== undefined ? s.ca2 : '-') + '</td>' +
+              '<td>' + (s.midSem !== undefined ? s.midSem : '-') + '</td>' +
+              '<td>' + (s.endSem !== undefined ? s.endSem : '-') + '</td>' +
+              '<td><strong>' + s.total + '</strong></td>' +
+              '<td>' + (s.credits || 4) + '</td>' +
+              '<td><strong>' + escapeHtml(s.grade) + '</strong></td>' +
+              '<td><span class="badge badge-' + (s.isPassed ? 'success' : 'danger') + '">' + (s.isPassed ? 'PASS' : 'FAIL') + '</span></td>' +
+              '</tr>';
+          }).join("");
+        }
+      }
+
+      // Populate summary totals
+      var totEl = document.getElementById("cardSumTotalMarks");
+      var pctEl = document.getElementById("cardSumPercentage");
+      var gradeEl = document.getElementById("cardSumGrade");
+      var credEl = document.getElementById("cardSumCredits");
+      var backEl = document.getElementById("cardSumBacklogs");
+      var resEl = document.getElementById("cardSumResultStatus");
+
+      if (totEl) totEl.textContent = sum.aggregateMarks + " / " + sum.maximumMarks;
+      if (pctEl) pctEl.textContent = sum.percentage + "%";
+      if (gradeEl) gradeEl.textContent = sum.grade || "-";
+      if (credEl) credEl.textContent = sum.totalCredits + " / " + sum.maxCredits;
+      if (backEl) backEl.textContent = String(sum.backlogsCount || 0);
+      if (resEl) {
+        resEl.textContent = sum.resultStatus || "PASSED";
+        resEl.style.color = sum.backlogsCount > 0 ? "#dc2626" : "#16a34a";
+      }
+
+      openModal("resultCardModal");
+    }).catch(function (err) {
+      showToast("Card Error", err.message || "Failed to load student result card.", "error");
+    });
+  };
+
+  // =========================================================================
+  // 5. TOPPERS & MERIT LIST (Module 5)
+  // =========================================================================
+  window.loadToppersMeritList = function () {
+    var tbody = document.getElementById("toppersTableBody");
+    var dept = document.getElementById("toppersDeptSelect") ? document.getElementById("toppersDeptSelect").value : "all";
+    var sem = document.getElementById("toppersSemSelect") ? document.getElementById("toppersSemSelect").value : "all";
+    var limit = document.getElementById("toppersLimitSelect") ? document.getElementById("toppersLimitSelect").value : "10";
+    var search = document.getElementById("toppersSearchInput") ? document.getElementById("toppersSearchInput").value.trim() : "";
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Generating official merit list from published results...</td></tr>';
+
+    var params = new URLSearchParams();
+    if (dept && dept !== "all") params.set("department", dept);
+    if (sem && sem !== "all") params.set("semester", sem);
+    params.set("limit", limit);
+    if (search) params.set("q", search);
+
+    api("/api/results/toppers?" + params.toString()).then(function (res) {
+      var meritList = res.data || [];
+      if (!meritList.length) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);">No finalized, published results found matching the selected criteria.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = meritList.map(function (m) {
+        var rankBadge = '<strong>#' + m.rank + '</strong>';
+        if (m.rank === 1) rankBadge = '<span style="font-size:16px;">🥇</span> <strong>#1 (Gold)</strong>';
+        else if (m.rank === 2) rankBadge = '<span style="font-size:16px;">🥈</span> <strong>#2 (Silver)</strong>';
+        else if (m.rank === 3) rankBadge = '<span style="font-size:16px;">🥉</span> <strong>#3 (Bronze)</strong>';
+
+        return '<tr>' +
+          '<td>' + rankBadge + '</td>' +
+          '<td><strong>' + escapeHtml(m.prn || m.studentId) + '</strong></td>' +
+          '<td><strong>' + escapeHtml(m.name) + '</strong></td>' +
+          '<td>' + escapeHtml(m.department) + '</td>' +
+          '<td>Sem ' + (m.semester || '-') + '</td>' +
+          '<td><strong>' + m.totalMarks + '</strong> / ' + m.maxMarks + '</td>' +
+          '<td><strong style="color:var(--primary); font-size:14px;">' + m.percentage + '%</strong></td>' +
+          '<td><span class="badge badge-success">' + escapeHtml(m.grade) + '</span></td>' +
+          '<td><span class="badge badge-success">' + escapeHtml(m.status) + '</span></td>' +
+          '<td><button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(m.prn || m.studentId) + '\')">View Card</button></td>' +
+          '</tr>';
+      }).join("");
+    }).catch(function (err) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--danger);">Failed to calculate merit list.</td></tr>';
+    });
+  };
+
+  // =========================================================================
+  // 6. EXAMINATION ANALYTICS (Module 6)
+  // =========================================================================
+  window.loadAnalyticsDashboard = function () {
+    var dept = document.getElementById("analyticsDeptSelect") ? document.getElementById("analyticsDeptSelect").value : "all";
+    var sem = document.getElementById("analyticsSemSelect") ? document.getElementById("analyticsSemSelect").value : "all";
+
+    var params = new URLSearchParams();
+    if (dept && dept !== "all") params.set("department", dept);
+    if (sem && sem !== "all") params.set("semester", sem);
+
+    api("/api/results/analytics?" + params.toString()).then(function (res) {
+      var d = res.data || {};
+      var passPctEl = document.getElementById("anaPassPercentage");
+      var passDescEl = document.getElementById("anaPassDesc");
+      var passedEl = document.getElementById("anaPassedCount");
+      var failedEl = document.getElementById("anaFailedCount");
+      var avgEl = document.getElementById("anaAverageScore");
+      var rangeEl = document.getElementById("anaScoreRange");
+
+      var totalRecEl = document.getElementById("anaTotalRecords");
+      var pubRecEl = document.getElementById("anaPublishedRecords");
+      var unpubRecEl = document.getElementById("anaUnpublishedRecords");
+      var absentRecEl = document.getElementById("anaAbsentRecords");
+      var withheldRecEl = document.getElementById("anaWithheldRecords");
+
+      if (passPctEl) passPctEl.textContent = d.passPercentage + "%";
+      if (passDescEl) passDescEl.textContent = d.passedCount + " passed out of " + d.publishedCount + " published";
+      if (passedEl) passedEl.textContent = (d.passedCount || 0).toLocaleString();
+      if (failedEl) failedEl.textContent = (d.failedCount || 0).toLocaleString();
+      if (avgEl) avgEl.textContent = (d.averageMarks || 0) + " / 100";
+      if (rangeEl) rangeEl.textContent = "High: " + d.highestMarks + " • Low: " + d.lowestMarks;
+
+      if (totalRecEl) totalRecEl.textContent = (d.totalEvaluated || 0).toLocaleString();
+      if (pubRecEl) pubRecEl.textContent = (d.publishedCount || 0).toLocaleString();
+      if (unpubRecEl) unpubRecEl.textContent = (d.unpublishedCount || 0).toLocaleString();
+      if (absentRecEl) absentRecEl.textContent = (d.absentCount || 0).toLocaleString();
+      if (withheldRecEl) withheldRecEl.textContent = (d.withheldCount || 0).toLocaleString();
+
+      var gradeCont = document.getElementById("anaGradeDistributionList");
+      if (gradeCont && d.gradeDistribution) {
+        var gd = d.gradeDistribution;
+        var totalPub = d.publishedCount || 1;
+        var gHtml = '<div style="display:grid; gap:10px;">';
+        Object.keys(gd).forEach(function (gradeKey) {
+          var count = gd[gradeKey] || 0;
+          var barPct = Math.round((count / totalPub) * 100);
+          gHtml += '<div>' +
+            '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:2px;">' +
+              '<strong>Grade ' + gradeKey + '</strong>' +
+              '<span>' + count + ' students (' + barPct + '%)</span>' +
+            '</div>' +
+            '<div style="height:8px; background:var(--bg-hover); border-radius:4px; overflow:hidden;">' +
+              '<div style="width:' + barPct + '%; height:100%; background:var(--primary); border-radius:4px;"></div>' +
+            '</div>' +
+          '</div>';
+        });
+        gHtml += '</div>';
+        gradeCont.innerHTML = gHtml;
+      }
+    }).catch(function (err) {
+      console.log("Could not load analytics:", err.message);
+    });
   };
 }
 
@@ -3523,6 +4060,12 @@ function initUsers(role) {
   api("/api/departments").then(function (res) {
     var depts = res.data || [];
     var deptSelect = document.getElementById("newMemberDept");
+    var filterDept = document.getElementById("filterDeptSelect");
+    if (filterDept && depts.length) {
+      filterDept.innerHTML = '<option value="all">All Departments</option>' + depts.map(function (d) {
+        return '<option value="' + escapeHtml(d.code || d.name) + '">' + escapeHtml(d.name) + '</option>';
+      }).join('');
+    }
     if (deptSelect && depts.length) {
       var currentVal = deptSelect.value;
       deptSelect.innerHTML = depts.map(function (d) {
@@ -3533,6 +4076,17 @@ function initUsers(role) {
       }
     }
   }).catch(function () {});
+
+  var globalSearch = document.getElementById("globalSearchInput");
+  if (globalSearch) {
+    globalSearch.addEventListener("input", debounce(function () {
+      window.applyUserDirectoryFilters();
+    }, 350));
+  }
+  ["filterRoleSelect", "filterDeptSelect", "filterSemesterSelect", "filterDivisionSelect", "filterStatusSelect"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("change", window.applyUserDirectoryFilters);
+  });
 
   var typeSelect = document.getElementById("newMemberType");
   if (typeSelect) {
@@ -3755,87 +4309,174 @@ function initUsers(role) {
   fetchUsersFromAPI(role);
 }
 
+var _userDirState = {
+  page: 1,
+  limit: 20,
+  q: "",
+  role: "all",
+  department: "all",
+  semester: "",
+  division: "",
+  status: "",
+  sortBy: "name",
+  sortOrder: "asc"
+};
+
 function fetchUsersFromAPI(role) {
   var tbody = document.getElementById("usersTableBody");
   if (!tbody) return;
 
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading directory records...</td></tr>';
 
-  Promise.all([
-    api("/api/students"),
-    api("/api/faculty"),
-    api("/api/departments")
-  ]).then(function (results) {
-    var students = results[0].data || [];
-    var faculty = results[1].data || [];
-    var departments = results[2].data || [];
+  var params = new URLSearchParams();
+  if (_userDirState.q) params.set("q", _userDirState.q);
+  if (_userDirState.role && _userDirState.role !== "all") params.set("role", _userDirState.role);
+  if (_userDirState.department && _userDirState.department !== "all") params.set("department", _userDirState.department);
+  if (_userDirState.semester) params.set("semester", _userDirState.semester);
+  if (_userDirState.division) params.set("division", _userDirState.division);
+  if (_userDirState.status) params.set("status", _userDirState.status);
+  params.set("sort_by", _userDirState.sortBy);
+  params.set("sort_order", _userDirState.sortOrder);
+  params.set("page", _userDirState.page);
+  params.set("limit", _userDirState.limit);
+
+  api("/api/users?" + params.toString()).then(function (res) {
+    var items = res.data || [];
+    var pagination = res.pagination || { total: 0, page: 1, totalPages: 1 };
+    var stats = res.stats || {};
 
     var statStudents = document.getElementById("statTotalStudents");
     var statFaculty = document.getElementById("statTotalFaculty");
     var statDepts = document.getElementById("statTotalDepts");
-    var statDeptsDesc = document.getElementById("statDeptsDesc");
+    var userCountLabel = document.getElementById("userDirectoryCountLabel");
+    var pageInfo = document.getElementById("userPaginationInfo");
+    var pageBadge = document.getElementById("userCurrentPageBadge");
+    var prevBtn = document.getElementById("userPrevPageBtn");
+    var nextBtn = document.getElementById("userNextPageBtn");
 
-    if (statStudents) statStudents.textContent = students.length.toLocaleString();
-    if (statFaculty) statFaculty.textContent = faculty.length.toLocaleString();
-    if (statDepts) statDepts.textContent = departments.length.toLocaleString();
-    if (statDeptsDesc && departments.length) {
-      statDeptsDesc.textContent = departments.map(function (d) { return d.code || d.name; }).join(", ");
+    if (statStudents && stats.totalStudents !== undefined) statStudents.textContent = stats.totalStudents.toLocaleString();
+    if (statFaculty && stats.totalFaculty !== undefined) statFaculty.textContent = stats.totalFaculty.toLocaleString();
+    if (userCountLabel) {
+      userCountLabel.textContent = "Showing " + items.length + " of " + pagination.total + " registered members";
     }
+    if (pageInfo) {
+      pageInfo.textContent = "Page " + pagination.page + " of " + Math.max(1, pagination.totalPages) + " (" + pagination.total + " total records)";
+    }
+    if (pageBadge) pageBadge.textContent = String(pagination.page);
+    if (prevBtn) prevBtn.disabled = pagination.page <= 1;
+    if (nextBtn) nextBtn.disabled = pagination.page >= pagination.totalPages;
 
-    var html = "";
-
-    students.forEach(function (s) {
-      var classBadge = '<span class="badge badge-secondary">' + escapeHtml(s.year || '-') + ' • Sem ' + (s.semester || '-') + ' • Div ' + escapeHtml(s.division || 'A') + '</span>';
-      html += '<tr class="filterable-item" data-category="student" id="member-row-' + escapeHtml(s.id) + '">' +
-        '<td><strong class="col-member-id">' + escapeHtml(s.prn || s.id) + '</strong></td>' +
-        '<td><span class="col-member-name">' + escapeHtml(s.name) + '</span><div class="col-member-email" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(s.email) + '</div></td>' +
-        '<td><span class="badge badge-primary">Student</span></td>' +
-        '<td class="col-member-dept">' + escapeHtml(s.dept || s.deptCode || '-') + '</td>' +
-        '<td class="col-member-class">' + classBadge + '</td>' +
-        '<td><span class="badge badge-success">' + escapeHtml(s.status || 'Active') + '</span></td>' +
-        '<td style="white-space:nowrap;">' +
-          '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'student\', \'' + encodeURIComponent(s.id) + '\')">View</button> ' +
-          '<button class="btn btn-secondary btn-sm" onclick="editDirectoryMember(\'student\', \'' + encodeURIComponent(s.id) + '\')">Edit</button> ' +
-          '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'student\', \'' + encodeURIComponent(s.id) + '\', \'' + escapeHtml(s.name).replace(/'/g, "\\'") + '\', this)">Delete</button>' +
-        '</td>' +
-        '</tr>';
-    });
-
-    faculty.forEach(function (f) {
-      var assignSummary = f.assignedSubjects && f.assignedSubjects.length ? ('<small style="display:block;color:var(--text-muted);margin-top:2px;">' + escapeHtml(f.assignedSubjects.join(', ')) + ' (Div: ' + escapeHtml((f.assignedDivisions || []).join(', ') || 'All') + ')</small>') : '';
-      var classBadge = '<span class="badge badge-secondary">' + escapeHtml(f.designation || 'Faculty') + '</span>' + assignSummary;
-      html += '<tr class="filterable-item" data-category="faculty" id="member-row-' + escapeHtml(f.id) + '">' +
-        '<td><strong class="col-member-id">' + escapeHtml(f.id) + '</strong></td>' +
-        '<td><span class="col-member-name">' + escapeHtml(f.name) + '</span><div class="col-member-email" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(f.email) + '</div></td>' +
-        '<td><span class="badge badge-success">Faculty</span></td>' +
-        '<td class="col-member-dept">' + escapeHtml(f.dept || '-') + '</td>' +
-        '<td class="col-member-class">' + classBadge + '</td>' +
-        '<td><span class="badge badge-success">' + escapeHtml(f.status || 'Active') + '</span></td>' +
-        '<td style="white-space:nowrap;">' +
-          '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'faculty\', \'' + encodeURIComponent(f.id) + '\')">View</button> ' +
-          '<button class="btn btn-secondary btn-sm" onclick="editDirectoryMember(\'faculty\', \'' + encodeURIComponent(f.id) + '\')">Edit</button> ' +
-          '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'faculty\', \'' + encodeURIComponent(f.id) + '\', \'' + escapeHtml(f.name).replace(/'/g, "\\'") + '\', this)">Delete</button>' +
-        '</td>' +
-        '</tr>';
-    });
-
-    if (students.length === 0 && faculty.length === 0) {
+    if (!items.length) {
       renderEmptyState(tbody, {
         icon: "👥",
         title: "No Directory Records Found",
-        message: "There are currently no students or faculty matching your filter criteria.",
-        actionText: role === "admin" ? "Add New Member" : null,
+        message: "No registered members matched your search and filter criteria.",
+        actionText: role === "admin" ? "Enroll New Member" : null,
         onAction: function () { openModal("addUserModal"); },
         colSpan: 7
       });
-    } else {
-      tbody.innerHTML = html;
+      return;
     }
+
+    var html = items.map(function (m) {
+      var roleBadge = '<span class="badge badge-primary">Student</span>';
+      if (m.role === 'admin') roleBadge = '<span class="badge badge-purple">Admin</span>';
+      else if (m.role === 'faculty') roleBadge = m.isHod ? '<span class="badge badge-warning">Faculty (HOD)</span>' : '<span class="badge badge-success">Faculty</span>';
+
+      var classBadge = '-';
+      if (m.role === 'student') {
+        classBadge = '<span class="badge badge-secondary">' + escapeHtml(m.year || '-') + ' • Sem ' + (m.semester || '-') + ' • Div ' + escapeHtml(m.division || 'A') + '</span>';
+      } else if (m.role === 'faculty') {
+        classBadge = '<span class="badge badge-secondary">' + escapeHtml(m.designation || 'Faculty') + '</span>';
+      } else if (m.role === 'admin') {
+        classBadge = '<span class="badge badge-secondary">System Administrator</span>';
+      }
+
+      var statusBadge = m.isActive
+        ? '<span class="badge badge-success">Active</span>'
+        : '<span class="badge badge-danger">Inactive</span>';
+
+      var actionsHtml = '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\')">View</button> ';
+      if (m.role === 'student') {
+        actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(m.publicId || m.id) + '\')" title="View official student result card">Grade Card</button> ';
+      }
+      actionsHtml += '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\', \'' + escapeHtml(m.name).replace(/'/g, "\\'") + '\', this)">Delete</button>';
+
+      return '<tr class="filterable-item" id="member-row-' + escapeHtml(m.id) + '">' +
+        '<td><strong class="col-member-id">' + escapeHtml(m.publicId || m.prn || m.id) + '</strong></td>' +
+        '<td><span class="col-member-name">' + escapeHtml(m.name) + '</span><div class="col-member-email" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(m.email) + '</div></td>' +
+        '<td>' + roleBadge + '</td>' +
+        '<td class="col-member-dept">' + escapeHtml(m.department || '-') + '</td>' +
+        '<td class="col-member-class">' + classBadge + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td style="white-space:nowrap;">' + actionsHtml + '</td>' +
+        '</tr>';
+    }).join("");
+
+    tbody.innerHTML = html;
   }).catch(function (err) {
-    console.log("Could not load directory records:", err.message);
+    console.log("Could not load users:", err.message);
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--danger);">Failed to load directory records.</td></tr>';
   });
 }
+
+window.applyUserDirectoryFilters = function () {
+  var searchInp = document.getElementById("globalSearchInput");
+  var roleSel = document.getElementById("filterRoleSelect");
+  var deptSel = document.getElementById("filterDeptSelect");
+  var semSel = document.getElementById("filterSemesterSelect");
+  var divSel = document.getElementById("filterDivisionSelect");
+  var statSel = document.getElementById("filterStatusSelect");
+  var sortSel = document.getElementById("userDirectorySortBy");
+
+  if (searchInp) _userDirState.q = searchInp.value.trim();
+  if (roleSel) _userDirState.role = roleSel.value;
+  if (deptSel) _userDirState.department = deptSel.value;
+  if (semSel) _userDirState.semester = semSel.value;
+  if (divSel) _userDirState.division = divSel.value;
+  if (statSel) _userDirState.status = statSel.value;
+  if (sortSel) _userDirState.sortBy = sortSel.value;
+
+  _userDirState.page = 1;
+  fetchUsersFromAPI(getActiveRole());
+};
+
+window.resetUserDirectoryFilters = function () {
+  var searchInp = document.getElementById("globalSearchInput");
+  var roleSel = document.getElementById("filterRoleSelect");
+  var deptSel = document.getElementById("filterDeptSelect");
+  var semSel = document.getElementById("filterSemesterSelect");
+  var divSel = document.getElementById("filterDivisionSelect");
+  var statSel = document.getElementById("filterStatusSelect");
+  var sortSel = document.getElementById("userDirectorySortBy");
+
+  if (searchInp) searchInp.value = "";
+  if (roleSel) roleSel.value = "all";
+  if (deptSel) deptSel.value = "all";
+  if (semSel) semSel.value = "";
+  if (divSel) divSel.value = "";
+  if (statSel) statSel.value = "";
+  if (sortSel) sortSel.value = "name";
+
+  _userDirState = {
+    page: 1,
+    limit: 20,
+    q: "",
+    role: "all",
+    department: "all",
+    semester: "",
+    division: "",
+    status: "",
+    sortBy: "name",
+    sortOrder: "asc"
+  };
+  fetchUsersFromAPI(getActiveRole());
+};
+
+window.changeUserDirectoryPage = function (delta) {
+  _userDirState.page = Math.max(1, _userDirState.page + delta);
+  fetchUsersFromAPI(getActiveRole());
+};
 
 // ---- Directory Member Deletion ----------------------------------------------------
 window.deleteDirectoryMember = function (type, code, name, btn) {

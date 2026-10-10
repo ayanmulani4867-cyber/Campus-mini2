@@ -258,7 +258,26 @@ def submit_assignment(assignment_id):
     submission_status = "late" if is_late else "submitted"
 
     existing = AssignmentSubmission.query.filter_by(assignment_id=assignment.id, student_id=student.id).first()
-    if existing:
+    if existing and existing.is_locked:
+        # Module 8 & 10: Reject modification attempts and record audit log
+        from models import log_audit
+        log_audit(
+            action="ASSIGNMENT_LOCKED_ATTEMPT",
+            target_type="AssignmentSubmission",
+            target_id=existing.id,
+            details=f"Student {student.student_code} attempted to edit/resubmit locked assignment {assignment.id} ({assignment.title}).",
+            user=user
+        )
+        return jsonify({
+            "success": False,
+            "error": "Assignment submitted successfully. Editing and resubmission are disabled.",
+            "isLocked": True,
+            "data": existing.to_dict()
+        }), 403
+
+    if existing and not existing.is_locked:
+        # Exceptional correction granted by authorized HOD/admin
+        from models import log_audit
         if text_content:
             existing.submission_text = text_content
         if file_bytes:
@@ -269,9 +288,24 @@ def submit_assignment(assignment_id):
             existing.file_path = None
         existing.submitted_at = now
         existing.status = submission_status
+        existing.is_locked = True  # Re-lock after exceptional resubmission
         db.session.commit()
-        return jsonify({"success": True, "data": existing.to_dict()})
+        log_audit(
+            action="ASSIGNMENT_CORRECTION_SUBMIT",
+            target_type="AssignmentSubmission",
+            target_id=existing.id,
+            reason=existing.unlock_reason,
+            details=f"Exceptional correction submitted for assignment {assignment.id}.",
+            user=user
+        )
+        return jsonify({
+            "success": True,
+            "message": "Assignment submitted successfully. Editing and resubmission are disabled.",
+            "isLocked": True,
+            "data": existing.to_dict()
+        })
 
+    # New submission: lock immediately upon successful save
     submission = AssignmentSubmission(
         assignment_id=assignment.id,
         student_id=student.id,
@@ -283,11 +317,26 @@ def submit_assignment(assignment_id):
         file_path=None,
         submitted_at=now,
         status=submission_status,
+        is_locked=True,
     )
     db.session.add(submission)
     db.session.commit()
 
-    return jsonify({"success": True, "data": submission.to_dict()}), 201
+    from models import log_audit
+    log_audit(
+        action="ASSIGNMENT_SUBMIT",
+        target_type="AssignmentSubmission",
+        target_id=submission.id,
+        details=f"Student {student.student_code} successfully submitted assignment {assignment.id} ({assignment.title}). Submission locked.",
+        user=user
+    )
+
+    return jsonify({
+        "success": True,
+        "message": "Assignment submitted successfully. Editing and resubmission are disabled.",
+        "isLocked": True,
+        "data": submission.to_dict()
+    }), 201
 
 
 @bp.get("/<int:assignment_id>/evaluation-roster")
@@ -689,4 +738,49 @@ def delete_assignment(assignment_id):
     db.session.delete(assignment)
     db.session.commit()
     return jsonify({"success": True, "message": "Assignment deleted."})
+
+
+@bp.post("/<int:assignment_id>/submissions/<int:submission_id>/unlock")
+@roles_required("admin", "faculty")
+def unlock_submission(assignment_id, submission_id):
+    """Module 8: Authorized HOD or Administrator grants an exceptional correction opportunity
+    with mandatory reason and complete audit trail."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        return jsonify({"success": False, "error": "A mandatory reason is required to grant an exceptional correction opportunity."}), 400
+
+    submission = AssignmentSubmission.query.filter_by(id=submission_id, assignment_id=assignment_id).first()
+    if not submission:
+        return jsonify({"success": False, "error": "Submission not found."}), 404
+
+    if user.role == "faculty":
+        fac = user.faculty_profile
+        is_hod = fac and fac.designation and ("hod" in fac.designation.lower() or "head" in fac.designation.lower())
+        if not is_hod:
+            return jsonify({"success": False, "error": "Only Head of Department (HOD) or Administrator can authorize an assignment correction opportunity."}), 403
+
+    submission.is_locked = False
+    submission.unlocked_by_id = user.id
+    submission.unlocked_at = datetime.now(timezone.utc)
+    submission.unlock_reason = reason
+    db.session.commit()
+
+    from models import log_audit
+    log_audit(
+        action="ASSIGNMENT_CORRECTION_UNLOCK",
+        target_type="AssignmentSubmission",
+        target_id=submission.id,
+        reason=reason,
+        details=f"Exceptional correction authorized by {user.role} {user.email} for student {submission.student.student_code if submission.student else None} on assignment {assignment_id}.",
+        user=user
+    )
+
+    return jsonify({
+        "success": True,
+        "message": "Submission unlocked. Student has been granted an exceptional correction opportunity.",
+        "data": submission.to_dict()
+    })
+
 

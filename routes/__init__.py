@@ -2,7 +2,7 @@ def register_blueprints(app):
     from routes import (
         auth, profile, students, faculty, departments, courses,
         attendance, results, notices, materials, events, dashboard,
-        leaves, assignments,
+        leaves, assignments, users, audit,
     )
 
     app.register_blueprint(auth.bp)
@@ -19,3 +19,5 @@ def register_blueprints(app):
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(leaves.bp)
     app.register_blueprint(assignments.bp)
+    app.register_blueprint(users.bp)
+    app.register_blueprint(audit.bp)
