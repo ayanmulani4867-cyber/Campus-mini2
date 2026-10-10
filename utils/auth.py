@@ -4,7 +4,7 @@ from flask import request, session, jsonify
 from extensions import db
 from models import User, UserSession
 
-SESSION_MAX_AGE_HOURS = 8
+SESSION_MAX_AGE_HOURS = 24 * 7  # 7-day session lifetime
 
 
 def get_current_session():
@@ -31,10 +31,18 @@ def get_current_session():
         now = datetime.now(timezone.utc) if last_act.tzinfo is not None else datetime.utcnow()
         if now - last_act > timedelta(hours=SESSION_MAX_AGE_HOURS):
             user_session.is_active = False
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
             return None
-        user_session.last_activity = now
-        db.session.commit()
+        # Throttle activity update to once every 5 minutes to prevent DB lock contention across concurrent requests
+        if now - last_act > timedelta(minutes=5):
+            user_session.last_activity = now
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
     return user_session
 
 
@@ -42,8 +50,8 @@ def current_user():
     """Return the authenticated User for this request.
     
     Priority:
-    1. Tab-isolated session token via X-Session-Token, Authorization Bearer, or query token.
-    2. Fallback to ambient Flask session cookie only if no token was supplied.
+    1. Session token via X-Session-Token, Authorization Bearer, or query token.
+    2. Fallback to ambient Flask session cookie.
     """
     token_supplied = bool(
         request.headers.get("X-Session-Token") or
@@ -56,14 +64,12 @@ def current_user():
         user_session = get_current_session()
         if user_session and user_session.user and user_session.user.is_active:
             return user_session.user
-        # Do not fall back to ambient cookie if client explicitly sent an invalid/expired token
-        return None
 
-    # Fallback for direct cookie-based clients
+    # Cookie-based session fallback
     user_id = session.get("user_id")
     if not user_id:
         return None
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if user and user.is_active:
         return user
     return None

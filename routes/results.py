@@ -456,8 +456,11 @@ def get_student_result_card(student_ref):
     """Module 4: Complete Admin Student Result Card with subject-wise assessment breakdown,
     internal/external totals, percentage, grade, credits, and publication timestamp."""
     user = current_user()
-    student = Student.query.filter(
-        db.or_(Student.student_code == student_ref, Student.prn == student_ref)
+    q_filters = [Student.student_code == student_ref, Student.prn == student_ref]
+    if student_ref.isdigit():
+        q_filters.append(Student.id == int(student_ref))
+    student = Student.query.join(User).filter(
+        db.or_(*q_filters, User.email.ilike(student_ref))
     ).first()
     if not student:
         return jsonify({"success": False, "error": f"Student '{student_ref}' not found."}), 404
@@ -621,7 +624,8 @@ def get_result_analytics():
         if dept:
             q = q.filter(Course.department_id == dept.id)
     if sem_val and str(sem_val).isdigit():
-        q = q.filter(Result.semester == int(sem_val))
+        sem_int = int(sem_val)
+        q = q.filter(db.or_(Result.semester == sem_int, Course.semester == sem_int, Student.semester == sem_int))
     if course_code:
         q = q.filter(Course.code == course_code)
 

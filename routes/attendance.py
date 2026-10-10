@@ -27,6 +27,10 @@ def attendance_summary():
     user = current_user()
     if user.role == "student":
         student = user.student_profile
+        if not student:
+            student = Student.query.filter_by(user_id=user.id).first()
+        if not student:
+            return jsonify({"success": False, "error": "Student profile not found."}), 404
     else:
         code = request.args.get("studentId")
         if not code:
@@ -40,7 +44,7 @@ def attendance_summary():
     # Configurable Late attendance policy (default 1.0 = counted as attended, 0.5 = half attendance)
     late_weight = float(current_app.config.get("LATE_ATTENDANCE_WEIGHT", 1.0))
 
-    # Eager load enrollments and their courses with instructors
+    # 1. Courses from explicit enrollments
     enrollments = (
         Enrollment.query.options(
             db.joinedload(Enrollment.course).joinedload(Course.instructor).joinedload(Faculty.user)
@@ -48,11 +52,22 @@ def attendance_summary():
         .filter_by(student_id=student.id)
         .all()
     )
+    enr_courses = [enr.course for enr in enrollments if enr.course]
 
-    # Fetch all attendance records for this student in a single query with sessions and markers eager-loaded
+    # 2. Courses matching student's department and semester
+    dept_courses = (
+        Course.query.options(
+            db.joinedload(Course.instructor).joinedload(Faculty.user)
+        )
+        .filter_by(department_id=student.department_id, semester=student.semester, status="active")
+        .all()
+    )
+
+    # 3. Fetch all attendance records for this student in a single query with sessions and markers eager-loaded
     all_records = (
         AttendanceRecord.query.options(
-            db.joinedload(AttendanceRecord.session).joinedload(AttendanceSession.marked_by).joinedload(Faculty.user)
+            db.joinedload(AttendanceRecord.session).joinedload(AttendanceSession.marked_by).joinedload(Faculty.user),
+            db.joinedload(AttendanceRecord.session).joinedload(AttendanceSession.course).joinedload(Course.instructor).joinedload(Faculty.user)
         )
         .join(AttendanceSession, AttendanceRecord.session_id == AttendanceSession.id)
         .filter(AttendanceRecord.student_id == student.id)
@@ -61,18 +76,26 @@ def attendance_summary():
     )
 
     records_by_course = {}
+    record_courses = []
     for r in all_records:
-        records_by_course.setdefault(r.session.course_id, []).append(r)
+        if r.session and r.session.course_id:
+            records_by_course.setdefault(r.session.course_id, []).append(r)
+            if r.session.course:
+                record_courses.append(r.session.course)
+
+    # Merge distinct courses: enrollments first, then department semester courses, then any other attended courses
+    courses = []
+    seen_ids = set()
+    for c in enr_courses + dept_courses + record_courses:
+        if c and c.id not in seen_ids:
+            seen_ids.add(c.id)
+            courses.append(c)
 
     rows = []
-    history = []
     total_held = total_attended = 0
     total_present = total_absent = total_late = 0
 
-    for enr in enrollments:
-        course = enr.course
-        if not course:
-            continue
+    for course in courses:
         records = records_by_course.get(course.id, [])
         held = len(records)
         present_count = sum(1 for r in records if r.status == "present")
@@ -102,18 +125,22 @@ def attendance_summary():
             "status": _status_label(pct) if held else "No Data",
         })
 
-        for r in records:
-            history.append({
-                "courseCode": course.code,
-                "courseTitle": course.title,
-                "courseName": course.title,
-                "date": r.session.session_date.isoformat(),
-                "status": r.status,
-                "division": r.session.division,
-                "markedBy": r.session.marked_by.user.full_name if (r.session.marked_by and r.session.marked_by.user) else None,
-            })
+    # History directly from all attendance records
+    history = []
+    for r in all_records:
+        if not r.session or not r.session.course:
+            continue
+        c = r.session.course
+        history.append({
+            "courseCode": c.code,
+            "courseTitle": c.title,
+            "courseName": c.title,
+            "date": r.session.session_date.isoformat(),
+            "status": r.status,
+            "division": r.session.division,
+            "markedBy": r.session.marked_by.user.full_name if (r.session.marked_by and r.session.marked_by.user) else "Faculty Instructor",
+        })
 
-    history.sort(key=lambda x: x["date"], reverse=True)
     overall_pct = round((total_attended / total_held) * 100, 1) if total_held else 0.0
 
     return jsonify({
@@ -134,7 +161,8 @@ def attendance_summary():
                 "absentCount": total_absent,
                 "lateCount": total_late,
                 "missed": total_held - total_attended,
-                "eligible": overall_pct >= 75,
+                "eligible": overall_pct >= 75 if total_held > 0 else True,
+                "hasRecords": total_held > 0,
             },
         },
     })

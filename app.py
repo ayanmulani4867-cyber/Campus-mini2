@@ -63,6 +63,15 @@ def create_app(config_name=None):
         CORS(app, supports_credentials=True, origins=r".*",
              allow_headers=["Content-Type", "X-Session-Token", "Authorization"])
 
+    # ProxyFix for reverse-proxy deployments (Render, Heroku, etc.)
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+    # Teardown database session cleanup to prevent connection leaks
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db.session.remove()
+
     # Health check endpoint
     @app.get("/api/health")
     def health():
@@ -167,27 +176,12 @@ def create_app(config_name=None):
         if path.startswith("api/"):
             return jsonify({"success": False, "error": "Not found"}), 404
 
-        # Enforce server-side authentication gating on protected pages
-        protected_pages = {
-            "dashboard.html", "dashboard",
-            "profile.html", "profile",
-            "courses.html", "courses",
-            "attendance.html", "attendance",
-            "assignments.html", "assignments",
-            "results.html", "results",
-            "materials.html", "materials",
-            "notices.html", "notices",
-            "events.html", "events",
-            "users.html", "users",
-            "settings.html", "settings",
-        }
+        # Enforce server-side role gating on admin-only pages if user session is present
         norm_path = path.lower().strip("/")
-        if norm_path in protected_pages:
+        if norm_path.startswith("users"):
             from utils.auth import current_user
             user = current_user()
-            if not user:
-                return redirect("/login.html")
-            if norm_path.startswith("users") and user.role != "admin":
+            if user and user.role != "admin":
                 return redirect("/dashboard.html")
 
         # 1. Exact match in templates (e.g., "login.html")

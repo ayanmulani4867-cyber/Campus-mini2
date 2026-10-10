@@ -59,7 +59,7 @@
         </div>
       </div>
 
-      {% if not current_user or current_user.role == 'student' %}
+      <div id="studentAttendanceSection" style="display: {% if not current_user or current_user.role == 'student' %}block{% else %}none{% endif %};">
       <!-- Student Attendance Overview Cards -->
       <div class="card-grid" style="margin-bottom: 24px;">
         <div class="stat-card stat-green">
@@ -149,12 +149,12 @@
               </tr>
             </thead>
             <tbody id="attendanceHistoryBody">
-              <tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">Loading attendance logs...</td></tr>
+              <tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading attendance logs...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-      {% endif %}
+      </div>
 
       <!-- Interactive Faculty Roll-Call Section -->
       <div class="card" id="facultyRollCallCard" style="display: {% if current_user and current_user.role in ['faculty', 'admin'] %}block{% else %}none{% endif %};">
@@ -207,6 +207,6 @@
     <p>&copy; 2026 Campus Connect</p>
   </footer>
 
-  <script src="js/script.js?v=55"></script>
+  <script src="js/script.js?v=65"></script>
 </body>
 </html>

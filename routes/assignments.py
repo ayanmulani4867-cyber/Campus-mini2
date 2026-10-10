@@ -211,7 +211,7 @@ def submit_assignment(assignment_id):
     if not student:
         return jsonify({"success": False, "error": "Student profile not found."}), 404
 
-    assignment = Assignment.query.get(assignment_id)
+    assignment = db.session.get(Assignment, assignment_id)
     if not assignment:
         return jsonify({"success": False, "error": "Assignment not found."}), 404
 

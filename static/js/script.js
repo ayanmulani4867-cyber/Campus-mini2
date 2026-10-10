@@ -19,7 +19,7 @@ function api(path, options) {
   }
 
   options.credentials = "include";
-  var token = sessionStorage.getItem("campus_session_token");
+  var token = sessionStorage.getItem("campus_session_token") || localStorage.getItem("campus_session_token");
   var headers = Object.assign({}, options.headers || {});
   if (token) {
     headers["X-Session-Token"] = token;
@@ -407,22 +407,38 @@ document.addEventListener("DOMContentLoaded", function () {
     return;
   }
 
-  // Enforce tab-isolated session: protected pages require this tab's own session token
-  var token = sessionStorage.getItem("campus_session_token");
-  if (!token) {
-    window.location.href = "login.html";
-    return;
+  // Synchronize token between sessionStorage and localStorage for seamless multi-tab navigation
+  var token = sessionStorage.getItem("campus_session_token") || localStorage.getItem("campus_session_token");
+  if (token && !sessionStorage.getItem("campus_session_token")) {
+    sessionStorage.setItem("campus_session_token", token);
   }
 
   api("/api/auth/me")
     .then(function (res) {
       CURRENT_USER = res.data;
+      if (res.data && res.data.role) {
+        sessionStorage.setItem("campus_user_role", res.data.role);
+        localStorage.setItem("campus_user_role", res.data.role);
+      }
       boot(currentPath);
     })
-    .catch(function () {
-      sessionStorage.removeItem("campus_session_token");
-      sessionStorage.removeItem("campus_user_role");
-      window.location.href = "login.html";
+    .catch(function (err) {
+      // Only redirect to login if authentication was explicitly rejected with HTTP 401
+      if (err && err.status === 401) {
+        sessionStorage.removeItem("campus_session_token");
+        sessionStorage.removeItem("campus_user_role");
+        localStorage.removeItem("campus_session_token");
+        localStorage.removeItem("campus_user_role");
+        window.location.href = "login.html";
+        return;
+      }
+      // On network timeout or server glitch, do NOT logout the user
+      console.warn("Auth verification check deferred:", err);
+      var banner = document.createElement("div");
+      banner.id = "connectionRetryBanner";
+      banner.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#e11d48;color:#fff;padding:8px 18px;border-radius:6px;z-index:99999;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.2);display:flex;align-items:center;gap:10px;";
+      banner.innerHTML = "<span>⚠️ Server connection delayed. Retrying...</span><button style='background:#fff;color:#111;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:700;' onclick='window.location.reload()'>🔄 Retry</button>";
+      document.body.appendChild(banner);
     });
 });
 
@@ -670,6 +686,9 @@ window.logoutUser = function (e) {
     sessionStorage.removeItem("campus_session_token");
     sessionStorage.removeItem("campus_user_role");
     sessionStorage.removeItem("campus_role");
+    localStorage.removeItem("campus_session_token");
+    localStorage.removeItem("campus_user_role");
+    localStorage.removeItem("campus_role");
     CURRENT_USER = null;
     window.location.href = "login.html";
   });
@@ -730,9 +749,11 @@ function initLogin() {
     }).then(function (res) {
       if (res.sessionToken) {
         sessionStorage.setItem("campus_session_token", res.sessionToken);
+        localStorage.setItem("campus_session_token", res.sessionToken);
       }
       if (res.data && res.data.role) {
         sessionStorage.setItem("campus_user_role", res.data.role);
+        localStorage.setItem("campus_user_role", res.data.role);
       }
       window.location.href = "dashboard.html";
     }).catch(function (e) {
@@ -1648,7 +1669,7 @@ function initAttendance(role) {
             '<td><strong>' + pct + '%</strong></td>' +
             '<td><span class="badge ' + (isEligible ? 'badge-success' : 'badge-danger') + '">' + (isEligible ? 'Eligible' : 'Shortage') + '</span></td>' +
             '</tr>';
-        }).join("") : '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance data recorded yet.</td></tr>';
+        }).join("") : '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance records available.</td></tr>';
       }
 
       if (historyBody) {
@@ -1664,7 +1685,7 @@ function initAttendance(role) {
             '<td><span class="badge ' + cls + '">' + label + '</span></td>' +
             '<td>' + escapeHtml(h.markedBy || 'Faculty Instructor') + '</td>' +
             '</tr>';
-        }).join("") : '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance sessions logged.</td></tr>';
+        }).join("") : '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance records available.</td></tr>';
       }
 
       var histCountBadge = document.getElementById("historyCountBadge");
@@ -1683,48 +1704,55 @@ function initAttendance(role) {
       var countEl = document.getElementById("presentCountDisplay");
 
       var overallPct = overall.percentage !== undefined ? overall.percentage : 0;
-      if (pctEl) pctEl.textContent = overallPct + "%";
-      if (progBar) progBar.style.width = Math.min(100, overallPct) + "%";
-      if (presEl) presEl.textContent = overall.presentCount !== undefined ? overall.presentCount : (overall.attended || 0);
-      if (lateEl) lateEl.textContent = overall.lateCount !== undefined ? overall.lateCount : 0;
       var totalHeld = overall.totalConducted !== undefined ? overall.totalConducted : (overall.held || 0);
       var totalPres = overall.presentCount !== undefined ? overall.presentCount : (overall.attended || 0);
       var totalLate = overall.lateCount !== undefined ? overall.lateCount : 0;
+
+      if (pctEl) pctEl.textContent = overallPct + "%";
+      if (progBar) progBar.style.width = Math.min(100, overallPct) + "%";
+      if (presEl) presEl.textContent = totalPres;
+      if (lateEl) lateEl.textContent = totalLate;
       if (absEl) absEl.textContent = overall.absentCount !== undefined ? overall.absentCount : Math.max(0, totalHeld - (totalPres + totalLate));
       if (totalEl) totalEl.textContent = totalHeld;
       if (eligEl) {
-        eligEl.innerHTML = overallPct >= 75
-          ? '<span style="color:var(--success);">Eligible</span>'
-          : '<span style="color:var(--danger);">Defaulter (<75%)</span>';
+        eligEl.innerHTML = totalHeld === 0
+          ? '<span style="color:var(--text-muted);">No Classes Conducted</span>'
+          : (overallPct >= 75
+              ? '<span style="color:var(--success);">Eligible</span>'
+              : '<span style="color:var(--danger);">Defaulter (<75%)</span>');
       }
       if (countEl) countEl.textContent = "Overall: " + overallPct + "% Attendance";
 
       if (syncBadge) {
         syncBadge.textContent = "Live Synced (" + new Date().toLocaleTimeString() + ")";
       }
-    }).catch(function () {});
+    }).catch(function (err) {
+      if (summaryBody) {
+        summaryBody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">' +
+          'Failed to load attendance records. <button class="btn btn-sm btn-outline-primary" onclick="renderStudentAttendance()" style="margin-left:8px;">🔄 Retry</button></td></tr>';
+      }
+      if (historyBody) {
+        historyBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--danger);">' +
+          'Failed to load attendance logs. <button class="btn btn-sm btn-outline-primary" onclick="renderStudentAttendance()" style="margin-left:8px;">🔄 Retry</button></td></tr>';
+      }
+    });
   }
 
+  window.renderStudentAttendance = renderStudentAttendance;
+
+  var studentSec = document.getElementById("studentAttendanceSection");
   var facultyCard = document.getElementById("facultyRollCallCard");
   if (role === "student") {
-    if (facultyCard) facultyCard.remove();
+    if (studentSec) studentSec.style.display = "block";
+    if (facultyCard) facultyCard.style.display = "none";
     renderStudentAttendance();
     // Lightweight polling every 7 seconds for real-time attendance ledger updates
     attendancePollTimer = setInterval(renderStudentAttendance, 7000);
   } else if (role === "faculty" || role === "admin") {
+    if (studentSec) studentSec.style.display = "none";
     if (facultyCard) {
       facultyCard.style.display = "block";
       initFacultyAttendanceControls();
-    }
-    var summaryBody = document.querySelector('[data-role="attendance-summary-body"]');
-    if (summaryBody) {
-      var sc = summaryBody.closest(".card");
-      if (sc) sc.style.display = "none";
-    }
-    var histBody = document.getElementById("attendanceHistoryBody");
-    if (histBody) {
-      var hc = histBody.closest(".card");
-      if (hc) hc.style.display = "none";
     }
   }
 

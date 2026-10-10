@@ -36,9 +36,10 @@ class Config:
     }
 
     # Session-based auth settings
+    SESSION_COOKIE_NAME = "campus_session"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
 
     # Allowed frontend origins for CORS
     CORS_ORIGINS = [

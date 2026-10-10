@@ -10,7 +10,7 @@ var CURRENT_USER = null; // populated by bootstrap() from /api/auth/me
 function api(path, options) {
   options = options || {};
   options.credentials = "include";
-  var token = sessionStorage.getItem("campus_session_token");
+  var token = sessionStorage.getItem("campus_session_token") || localStorage.getItem("campus_session_token");
   var headers = Object.assign({}, options.headers || {});
   if (token) {
     headers["X-Session-Token"] = token;
@@ -376,22 +376,32 @@ document.addEventListener("DOMContentLoaded", function () {
     return;
   }
 
-  // Enforce tab-isolated session: protected pages require this tab's own session token
-  var token = sessionStorage.getItem("campus_session_token");
-  if (!token) {
-    window.location.href = "login.html";
-    return;
+  // Synchronize token between sessionStorage and localStorage for seamless multi-tab navigation
+  var token = sessionStorage.getItem("campus_session_token") || localStorage.getItem("campus_session_token");
+  if (token && !sessionStorage.getItem("campus_session_token")) {
+    sessionStorage.setItem("campus_session_token", token);
   }
 
   api("/api/auth/me")
     .then(function (res) {
       CURRENT_USER = res.data;
+      if (res.data && res.data.role) {
+        sessionStorage.setItem("campus_user_role", res.data.role);
+        localStorage.setItem("campus_user_role", res.data.role);
+      }
       boot(currentPath);
     })
-    .catch(function () {
-      sessionStorage.removeItem("campus_session_token");
-      sessionStorage.removeItem("campus_user_role");
-      window.location.href = "login.html";
+    .catch(function (err) {
+      // Only redirect to login if authentication was explicitly rejected with HTTP 401
+      if (err && err.status === 401) {
+        sessionStorage.removeItem("campus_session_token");
+        sessionStorage.removeItem("campus_user_role");
+        localStorage.removeItem("campus_session_token");
+        localStorage.removeItem("campus_user_role");
+        window.location.href = "login.html";
+        return;
+      }
+      console.warn("Auth verification check deferred:", err);
     });
 });
 
@@ -635,6 +645,9 @@ window.logoutUser = function (e) {
     sessionStorage.removeItem("campus_session_token");
     sessionStorage.removeItem("campus_user_role");
     sessionStorage.removeItem("campus_role");
+    localStorage.removeItem("campus_session_token");
+    localStorage.removeItem("campus_user_role");
+    localStorage.removeItem("campus_role");
     CURRENT_USER = null;
     window.location.href = "login.html";
   });
@@ -695,9 +708,11 @@ function initLogin() {
     }).then(function (res) {
       if (res.sessionToken) {
         sessionStorage.setItem("campus_session_token", res.sessionToken);
+        localStorage.setItem("campus_session_token", res.sessionToken);
       }
       if (res.data && res.data.role) {
         sessionStorage.setItem("campus_user_role", res.data.role);
+        localStorage.setItem("campus_user_role", res.data.role);
       }
       window.location.href = "dashboard.html";
     }).catch(function (e) {
@@ -1487,33 +1502,60 @@ function initSearchAndFilter() {
 
 // ---- Attendance module ------------------------------------------------------------
 function initAttendance(role) {
-  var summaryBody = document.querySelector('[data-role="attendance-summary-body"]');
-  if (summaryBody) {
-    api("/api/attendance/summary").then(function (res) {
-      var rows = res.data.rows;
-      summaryBody.innerHTML = rows.length ? rows.map(function (r) {
-        return '<tr><td><strong>' + r.courseCode + '</strong></td><td>' + r.courseTitle + '</td>' +
-          '<td>' + (r.instructor || '-') + '</td><td>' + r.held + '</td><td>' + r.attended + '</td>' +
-          '<td><strong>' + r.percentage + '%</strong></td>' +
-          '<td><span class="badge ' + (r.percentage >= 75 ? 'badge-success' : 'badge-warning') + '">' + r.status + '</span></td></tr>';
-      }).join("") : '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance data yet.</td></tr>';
-
-      var overall = res.data.overall;
-      var countEl = document.getElementById("presentCountDisplay");
-      if (countEl && role === "student") {
-        countEl.textContent = "Overall: " + overall.percentage + "% Attendance";
-      }
-    }).catch(function () {});
-  }
-
+  var studentSec = document.getElementById("studentAttendanceSection");
   var facultyCard = document.getElementById("facultyRollCallCard");
+
   if (role === "student") {
-    if (facultyCard) facultyCard.remove();
-  } else if (role === "faculty") {
+    if (studentSec) studentSec.style.display = "block";
+    if (facultyCard) facultyCard.style.display = "none";
+    renderStudentAttendanceApp();
+  } else {
+    if (studentSec) studentSec.style.display = "none";
     if (facultyCard) {
       facultyCard.style.display = "block";
       initFacultyAttendanceControls();
     }
+  }
+
+  function renderStudentAttendanceApp() {
+    var summaryBody = document.querySelector('[data-role="attendance-summary-body"]');
+    var historyBody = document.getElementById("attendanceHistoryBody");
+    if (!summaryBody && !historyBody) return;
+
+    api("/api/attendance/summary").then(function (res) {
+      var rows = (res.data && res.data.rows) || [];
+      var overall = (res.data && res.data.overall) || {};
+      var history = (res.data && res.data.history) || [];
+
+      if (summaryBody) {
+        summaryBody.innerHTML = rows.length ? rows.map(function (r) {
+          var pct = r.percentage !== undefined ? r.percentage : 0;
+          return '<tr><td><strong>' + escapeHtml(r.courseCode) + '</strong></td><td>' + escapeHtml(r.courseTitle) + '</td>' +
+            '<td>' + escapeHtml(r.instructor || '-') + '</td><td>' + (r.held || 0) + '</td><td>' + (r.attended || 0) + '</td>' +
+            '<td><strong>' + pct + '%</strong></td>' +
+            '<td><span class="badge ' + (pct >= 75 ? 'badge-success' : 'badge-warning') + '">' + (r.status || 'No Data') + '</span></td></tr>';
+        }).join("") : '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance records available.</td></tr>';
+      }
+
+      if (historyBody) {
+        historyBody.innerHTML = history.length ? history.map(function (h) {
+          var st = (h.status || "").toLowerCase();
+          var cls = st === "present" ? "badge-success" : st === "late" ? "badge-warning" : "badge-danger";
+          return '<tr><td><strong>' + escapeHtml(h.date || '-') + '</strong></td><td>' + escapeHtml(h.courseCode || '-') + '</td>' +
+            '<td>' + escapeHtml(h.courseName || h.courseTitle || '-') + '</td><td><span class="badge badge-info">Div ' + escapeHtml(h.division || 'A') + '</span></td>' +
+            '<td><span class="badge ' + cls + '">' + escapeHtml(h.status) + '</span></td><td>' + escapeHtml(h.markedBy || 'Faculty Instructor') + '</td></tr>';
+        }).join("") : '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No attendance records available.</td></tr>';
+      }
+
+      var countEl = document.getElementById("presentCountDisplay");
+      if (countEl) {
+        countEl.textContent = "Overall: " + (overall.percentage || 0) + "% Attendance";
+      }
+    }).catch(function () {
+      if (summaryBody) {
+        summaryBody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">Failed to load attendance records. <button class="btn btn-sm btn-outline-primary" onclick="renderStudentAttendanceApp()">🔄 Retry</button></td></tr>';
+      }
+    });
   }
 
   function initFacultyAttendanceControls() {
