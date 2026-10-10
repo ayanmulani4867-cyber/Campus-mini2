@@ -51,7 +51,7 @@ def get_faculty(faculty_code):
     return jsonify({"success": True, "data": fac.to_dict()})
 
 
-def _resolve_or_create_course(course_ref, dept_id, sem_val, fac_id=None):
+def _resolve_course(course_ref):
     if not course_ref:
         return None
     from models import Course
@@ -73,24 +73,8 @@ def _resolve_or_create_course(course_ref, dept_id, sem_val, fac_id=None):
     if course:
         return course
 
-    # 4. If not found, create a new course record
-    dept = Department.query.get(dept_id)
-    dept_code = dept.code[:2] if dept and dept.code else "CS"
-    count = Course.query.count() + 1
-    generated_code = f"{dept_code}{sem_val}{count:02d}"
-    course = Course(
-        code=generated_code,
-        title=course_ref,
-        credits=4,
-        category="core",
-        semester=sem_val,
-        department_id=dept_id,
-        instructor_id=fac_id,
-        syllabus_coverage=80
-    )
-    db.session.add(course)
-    db.session.flush()
-    return course
+    # Never fabricate records if lookup fails
+    return None
 
 
 @bp.post("")
@@ -149,7 +133,10 @@ def create_faculty():
         except (ValueError, TypeError):
             sem_val = 1
 
-        course = _resolve_or_create_course(course_ref, dept.id, sem_val, fac.id)
+        course = _resolve_course(course_ref)
+        if not course:
+            db.session.rollback()
+            return jsonify({"success": False, "error": f"Referenced course '{course_ref}' was not found. Cannot invent unverified academic records."}), 400
 
         raw_divs = item.get("divisions") or item.get("division") or ["A"]
         if isinstance(raw_divs, str):
@@ -230,7 +217,10 @@ def update_faculty(faculty_code):
             except (ValueError, TypeError):
                 sem_val = 1
 
-            course = _resolve_or_create_course(course_ref, fac.department_id, sem_val, fac.id)
+            course = _resolve_course(course_ref)
+            if not course:
+                db.session.rollback()
+                return jsonify({"success": False, "error": f"Referenced course '{course_ref}' was not found. Cannot invent unverified academic records."}), 400
 
             raw_divs = item.get("divisions") or item.get("division") or ["A"]
             if isinstance(raw_divs, str):

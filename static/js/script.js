@@ -816,6 +816,59 @@ function initDashboard(user, role) {
         '<a href="settings.html" class="btn btn-secondary btn-sm">⚙️ Settings</a>';
     }
   }
+
+  // Dynamically load top 3 recent notices from database for dashboard
+  var noticesList = document.getElementById("dashboardRecentNotices");
+  if (noticesList) {
+    api("/api/notices").then(function (res) {
+      var notices = (res.data || []).slice(0, 3);
+      if (!notices.length) {
+        noticesList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No announcements on the notice board.</div>';
+        return;
+      }
+      noticesList.innerHTML = notices.map(function (n) {
+        var dateStr = n.createdAt ? new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+        var cat = escapeHtml(n.category || "General");
+        var badgeClass = cat.toLowerCase() === "exam" ? "badge-danger" : cat.toLowerCase() === "academic" ? "badge-primary" : "badge-info";
+        return '<div class="list-item">' +
+          '<div class="list-item-main">' +
+            '<span class="badge ' + badgeClass + '" style="margin-bottom: 3px;">' + cat + '</span>' +
+            '<h4>' + escapeHtml(n.title) + '</h4>' +
+            '<p>' + escapeHtml(n.body ? (n.body.length > 90 ? n.body.substring(0, 90) + '...' : n.body) : '') + '</p>' +
+          '</div>' +
+          '<div class="list-item-date">' + dateStr + '</div>' +
+        '</div>';
+      }).join("");
+    }).catch(function () {
+      if (noticesList) noticesList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Could not load notices.</div>';
+    });
+  }
+
+  // Dynamically load top 3 upcoming events from database for dashboard
+  var eventsList = document.getElementById("dashboardRecentEvents");
+  if (eventsList) {
+    api("/api/events").then(function (res) {
+      var events = (res.data || []).slice(0, 3);
+      if (!events.length) {
+        eventsList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No upcoming campus events scheduled.</div>';
+        return;
+      }
+      eventsList.innerHTML = events.map(function (ev) {
+        var cat = escapeHtml(ev.category || "General");
+        var badgeClass = cat.toLowerCase() === "workshop" ? "badge-success" : cat.toLowerCase() === "sports" ? "badge-warning" : "badge-info";
+        return '<div class="list-item">' +
+          '<div class="list-item-main">' +
+            '<span class="badge ' + badgeClass + '" style="margin-bottom: 3px;">' + cat + '</span>' +
+            '<h4>' + escapeHtml(ev.title) + '</h4>' +
+            '<p>' + escapeHtml(ev.location || "Campus Center") + '</p>' +
+          '</div>' +
+          '<div class="list-item-date">' + escapeHtml(ev.date || 'Upcoming') + '</div>' +
+        '</div>';
+      }).join("");
+    }).catch(function () {
+      if (eventsList) eventsList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Could not load events.</div>';
+    });
+  }
 }
 
 // ---- Courses module ----------------------------------------------------------------
@@ -886,14 +939,25 @@ function initCourses(role) {
 }
 
 function loadCoursesList() {
+  var tableBody = document.getElementById("adminCoursesTableBody");
+  var container = document.getElementById("coursesContainer");
+  if (tableBody && !_allCoursesCache.length) {
+    tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading curriculum catalog...</td></tr>';
+  }
+  if (container && !_allCoursesCache.length) {
+    container.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding: 36px; color: var(--text-muted);"><span class="page-spinner"></span> Loading curriculum courses...</div>';
+  }
+
   api("/api/courses").then(function (res) {
     _allCoursesCache = res.data || [];
     updateAdminCourseStats(_allCoursesCache);
     filterAndRenderCourses();
   }).catch(function (err) {
-    var container = document.getElementById("coursesContainer");
     if (container) {
-      container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align:center; color: var(--text-muted); padding: 32px;">Could not load courses: ' + escapeHtml(err.message || "Network error") + '</div>';
+      container.innerHTML = '<div class="card" style="grid-column: 1 / -1; text-align:center; color: var(--danger); padding: 32px;">Could not load courses: ' + escapeHtml(err.message || "Network error") + '</div>';
+    }
+    if (tableBody) {
+      tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 28px; color: var(--danger);">Could not load courses: ' + escapeHtml(err.message || "Network error") + '</td></tr>';
     }
   });
 }
@@ -1690,9 +1754,20 @@ function initAttendance(role) {
     if (dateInput) dateInput.addEventListener("change", loadRollCall);
 
     function loadRollCall() {
-      var rollCourse = courseSelect ? courseSelect.value : "CS601";
+      var rollCourse = courseSelect ? courseSelect.value : "";
       var rollDiv = divSelect ? divSelect.value : "A";
       var rollDate = dateInput ? dateInput.value : new Date().toISOString().split("T")[0];
+
+      if (!rollCourse) {
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">Please select a course to view attendance roster.</td></tr>';
+        }
+        return;
+      }
+
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-muted);"><span class="page-spinner"></span> Loading roll-call roster...</td></tr>';
+      }
 
       api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(rollCourse) + "&division=" + encodeURIComponent(rollDiv) + "&date=" + encodeURIComponent(rollDate)).then(function (res) {
         if (!tbody) return;
@@ -1859,6 +1934,7 @@ function initAssignments(role) {
       }
       return;
     }
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading assignments...</td></tr>';
     api("/api/assignments").then(function (res) {
       currentAssignmentsList = res.data || [];
       var assignments = currentAssignmentsList;
@@ -1934,7 +2010,9 @@ function initAssignments(role) {
           '<td>' + actionBtn + '</td>' +
           '</tr>';
       }).join("");
-    }).catch(function () {});
+    }).catch(function (err) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">Failed to load assignments.</td></tr>';
+    });
   }
 
   window.openStudentSubmitModal = function (assignmentId) {
@@ -2041,6 +2119,7 @@ function initAssignments(role) {
 
     function loadFacultyAssignmentsList() {
       var selectedCourse = courseFilter ? courseFilter.value : "all";
+      if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading course assignments...</td></tr>';
       api("/api/assignments").then(function (res) {
         var assignments = res.data || [];
         if (selectedCourse !== "all") {
@@ -2092,7 +2171,9 @@ function initAssignments(role) {
             '<td><button class="btn btn-primary btn-sm" onclick="openSubmissionsRoster(' + a.id + ')">Review Submissions</button></td>' +
             '</tr>';
         }).join("");
-      }).catch(function () {});
+      }).catch(function (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--danger);">Failed to load assignments.</td></tr>';
+      });
     }
 
     window.submitCreateAssignment = function () {
@@ -2141,7 +2222,7 @@ function initAssignments(role) {
       var tbody = document.getElementById("assignmentSubmissionsTableBody");
 
       if (subCard) subCard.style.display = "block";
-      if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">Loading student roster...</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student roster...</td></tr>';
 
       api("/api/assignments/" + encodeURIComponent(assignmentId) + "/evaluation-roster").then(function (res) {
         var data = res.data || {};
@@ -2577,36 +2658,145 @@ function initResults(role) {
   function loadStudentResults(container) {
     var tbody = document.getElementById("studentResultsTableBody") || container.querySelector(".data-table tbody");
     if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading academic results...</td></tr>';
+
+    var sgpaEl = document.getElementById("studentSgpa");
+    var cgpaEl = document.getElementById("studentCgpa");
+    var creditsEl = document.getElementById("studentCredits");
+    var statusEl = document.getElementById("studentResultStatus");
+
     api("/api/results").then(function (res) {
       var rows = res.data || [];
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">Results have not been published yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">No examination results have been published for this semester yet.</td></tr>';
+        if (sgpaEl) sgpaEl.textContent = "N/A";
+        if (cgpaEl) cgpaEl.textContent = "N/A";
+        if (creditsEl) creditsEl.textContent = "0";
+        if (statusEl) {
+          statusEl.textContent = "Awaiting Publication";
+          statusEl.style.color = "var(--text-muted)";
+        }
         return;
       }
+
+      var totalMarks = 0;
+      var totalCredits = 0;
+      var passedCount = 0;
+
       tbody.innerHTML = rows.map(function (r) {
         var pass = r.total >= 40;
-        return '<tr><td><strong>' + escapeHtml(r.courseCode) + '</strong></td><td>' + escapeHtml(r.courseTitle) + '</td>' +
-          '<td>' + r.internal + '</td><td>' + r.endSem + '</td><td><strong>' + r.total + '</strong></td>' +
-          '<td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(r.grade) + '</span></td>' +
-          '<td>-</td><td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + (pass ? 'Pass' : 'Fail') + '</span></td></tr>';
+        if (pass) passedCount++;
+        totalMarks += (r.total || 0);
+        var cred = r.credits || 4;
+        totalCredits += cred;
+
+        return '<tr><td><strong>' + escapeHtml(r.courseCode) + '</strong></td><td>' + escapeHtml(r.courseTitle || '-') + '</td>' +
+          '<td>' + (r.internal !== undefined ? r.internal : '-') + '</td><td>' + (r.endSem !== undefined ? r.endSem : '-') + '</td><td><strong>' + r.total + '</strong></td>' +
+          '<td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + escapeHtml(r.grade || (pass ? 'P' : 'F')) + '</span></td>' +
+          '<td>' + cred + '</td><td><span class="badge badge-' + (pass ? 'success' : 'danger') + '">' + (pass ? 'Pass' : 'Fail') + '</span></td></tr>';
       }).join("");
-    }).catch(function () {});
+
+      var avgMarks = totalMarks / rows.length;
+      var sgpa = (avgMarks / 10).toFixed(2);
+      var allPassed = passedCount === rows.length;
+
+      if (sgpaEl) sgpaEl.textContent = sgpa;
+      if (cgpaEl) cgpaEl.textContent = sgpa;
+      if (creditsEl) creditsEl.textContent = String(totalCredits);
+      if (statusEl) {
+        statusEl.textContent = allPassed ? "PASSED (First Class)" : "ATKT / Arrear";
+        statusEl.style.color = allPassed ? "var(--success)" : "var(--danger)";
+      }
+    }).catch(function (err) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--danger);">Failed to load academic results.</td></tr>';
+    });
   }
 
   function loadAdminResults(container) {
     var tbody = document.getElementById("adminResultsTableBody") || container.querySelector("#adminStudentResultsTable tbody");
+    var batchTbody = document.getElementById("adminBatchResultsTableBody");
     var countBadge = document.getElementById("adminResultCountBadge");
     if (!tbody) return;
 
-    api("/api/results").then(function (res) {
-      var rows = res.data || [];
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student scorecards...</td></tr>';
+    if (batchTbody) {
+      batchTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading departmental course results...</td></tr>';
+    }
+
+    Promise.all([
+      api("/api/results"),
+      api("/api/courses")
+    ]).then(function (responses) {
+      var resultsRes = responses[0];
+      var coursesRes = responses[1];
+      var rows = resultsRes.data || [];
+      var courses = coursesRes.data || [];
+
       if (countBadge) {
         countBadge.textContent = rows.length + (rows.length === 1 ? " Student Record" : " Student Records");
       }
+
+      var publishedCount = 0;
+      var pendingCount = 0;
+      var passedCount = 0;
+
+      rows.forEach(function (r) {
+        if (r.isPublished) {
+          publishedCount++;
+        } else {
+          pendingCount++;
+        }
+        if (r.total >= 40) {
+          passedCount++;
+        }
+      });
+
+      var passRate = rows.length ? Math.round((passedCount / rows.length) * 100) + "%" : "0%";
+
+      var pubEl = document.getElementById("statAdminPublishedResults");
+      var pendEl = document.getElementById("statAdminPendingResults");
+      var totalEl = document.getElementById("statAdminTotalScorecards");
+      var rateEl = document.getElementById("statAdminPassingRate");
+
+      if (pubEl) pubEl.textContent = publishedCount + (publishedCount === 1 ? " Record" : " Records");
+      if (pendEl) pendEl.textContent = pendingCount + (pendingCount === 1 ? " Record" : " Records");
+      if (totalEl) totalEl.textContent = String(rows.length);
+      if (rateEl) rateEl.textContent = passRate;
+
+      if (batchTbody) {
+        if (!courses.length) {
+          batchTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);">No academic courses configured.</td></tr>';
+        } else {
+          batchTbody.innerHTML = courses.map(function (c) {
+            var courseResults = rows.filter(function (r) { return r.courseCode === c.code; });
+            var totalInCourse = courseResults.length;
+            var allPub = totalInCourse > 0 && courseResults.every(function (r) { return r.isPublished; });
+
+            var statusBadge = totalInCourse === 0
+              ? '<span class="badge badge-warning">Pending Evaluation</span>'
+              : (allPub ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>');
+
+            var btnText = allPub ? 'Unpublish All' : 'Publish Batch';
+            var btnClass = allPub ? 'btn-warning' : 'btn-success';
+
+            return '<tr>' +
+              '<td><strong>' + escapeHtml(c.department || 'Computer Engineering') + '</strong></td>' +
+              '<td>' + escapeHtml(c.code + ' - ' + c.title) + '</td>' +
+              '<td>' + escapeHtml(c.semester || 'Semester 6') + '</td>' +
+              '<td>' + totalInCourse + ' Students</td>' +
+              '<td>' + escapeHtml(c.facultyName || c.instructor || 'Assigned Faculty') + '</td>' +
+              '<td>' + statusBadge + '</td>' +
+              '<td><button class="btn ' + btnClass + ' btn-sm" onclick="toggleCoursePublish(this, \'' + escapeHtml(c.code) + '\', ' + !allPub + ')">' + btnText + '</button></td>' +
+              '</tr>';
+          }).join("");
+        }
+      }
+
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No student scorecards recorded yet.</td></tr>';
         return;
       }
+
       tbody.innerHTML = rows.map(function (r) {
         var pass = r.total >= 40;
         var pubBadge = r.isPublished
@@ -2629,8 +2819,39 @@ function initResults(role) {
       }).join("");
     }).catch(function (err) {
       console.log("Could not load admin results:", err.message);
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">Failed to load student scorecards.</td></tr>';
+      if (batchTbody) {
+        batchTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--danger);">Failed to load departmental results.</td></tr>';
+      }
     });
   }
+
+  window.toggleCoursePublish = function (btn, courseCode, willPublish) {
+    if (getActiveRole() !== "admin") {
+      showToast("Access Restricted", "Only Administrators can publish or unpublish examination results.", "warning");
+      return;
+    }
+    setButtonLoading(btn, willPublish ? "Publishing..." : "Unpublishing...");
+    api("/api/results?courseCode=" + encodeURIComponent(courseCode)).then(function (res) {
+      var list = res.data || [];
+      if (!list.length) {
+        resetButton(btn, willPublish ? "Publish Batch" : "Unpublish All");
+        showToast("No Records", "No student scorecards recorded for course " + courseCode + " yet.", "info");
+        return;
+      }
+      var promises = list.map(function (r) {
+        return api("/api/results/" + r.id + "/publish", { method: "PUT", body: { isPublished: willPublish } });
+      });
+      return Promise.all(promises).then(function () {
+        showToast("Batch Updated", (willPublish ? "Published" : "Unpublished") + " all scorecards for " + courseCode + ".", "success");
+        var container = document.getElementById("adminResultView");
+        if (container) loadAdminResults(container);
+      });
+    }).catch(function (e) {
+      resetButton(btn, willPublish ? "Publish Batch" : "Unpublish All");
+      showToast("Update Failed", e.message || "Could not update batch results.", "error");
+    });
+  };
 
   function loadFacultyMarksSheet(container) {
     var courseSelect = document.getElementById("facultyResultCourseSelect") || container.querySelector(".form-select");
@@ -2680,6 +2901,10 @@ function initResults(role) {
       var courseCode = courseCodeFromSelect();
       var division = divSelect ? divSelect.value : "A";
       if (heading) heading.textContent = "Student Marks Entry Sheet (" + courseCode + " - Div " + division + ")";
+      var rosterBadge = document.getElementById("facultyMarksRosterBadge");
+      if (rosterBadge) rosterBadge.textContent = "--";
+
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student marks sheet...</td></tr>';
 
       Promise.all([
         api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(courseCode) + "&division=" + encodeURIComponent(division)),
@@ -2691,6 +2916,10 @@ function initResults(role) {
         results.forEach(function (r) {
           resultMap[r.studentId] = r;
         });
+
+        if (rosterBadge) {
+          rosterBadge.textContent = roster.length + (roster.length === 1 ? " Student" : " Students");
+        }
 
         if (!roster.length) {
           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">No students found in ' + escapeHtml(courseCode) + ' (Div ' + escapeHtml(division) + ').</td></tr>';
@@ -2715,6 +2944,7 @@ function initResults(role) {
         wireSaveButtons();
       }).catch(function (err) {
         console.error("Error loading roster/results:", err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--danger);">Error loading student marks sheet.</td></tr>';
       });
     }
 
@@ -2876,6 +3106,7 @@ function initNotices(role) {
   if (list) loadNotices();
 
   function loadNotices() {
+    list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading announcements...</div>';
     api("/api/notices").then(function (res) {
       var notices = res.data || [];
       if (!notices.length) {
@@ -2908,7 +3139,9 @@ function initNotices(role) {
           '<div style="font-size: 12.5px; color: var(--text-light);">Issued by: ' + escapeHtml(n.postedBy || "Campus Admin") + '</div>' +
         '</div>';
       }).join("");
-    }).catch(function () {});
+    }).catch(function (err) {
+      list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--danger);">Failed to load announcements.</div>';
+    });
   }
 }
 
@@ -3084,6 +3317,8 @@ function initMaterials(role) {
     var targetBody = document.getElementById("materialsTableBody");
     if (!targetBody) return;
 
+    targetBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading study materials...</td></tr>';
+
     api("/api/materials").then(function (res) {
       var items = res.data || [];
       if (!items.length) {
@@ -3123,6 +3358,7 @@ function initMaterials(role) {
       }).join("");
     }).catch(function (err) {
       console.log("Could not load study materials:", err.message);
+      targetBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--danger);">Failed to load study materials.</td></tr>';
     });
   }
 }
@@ -3523,17 +3759,28 @@ function fetchUsersFromAPI(role) {
   var tbody = document.getElementById("usersTableBody");
   if (!tbody) return;
 
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading directory records...</td></tr>';
+
   Promise.all([
     api("/api/students"),
-    api("/api/faculty")
+    api("/api/faculty"),
+    api("/api/departments")
   ]).then(function (results) {
     var students = results[0].data || [];
     var faculty = results[1].data || [];
+    var departments = results[2].data || [];
 
     var statStudents = document.getElementById("statTotalStudents");
     var statFaculty = document.getElementById("statTotalFaculty");
+    var statDepts = document.getElementById("statTotalDepts");
+    var statDeptsDesc = document.getElementById("statDeptsDesc");
+
     if (statStudents) statStudents.textContent = students.length.toLocaleString();
     if (statFaculty) statFaculty.textContent = faculty.length.toLocaleString();
+    if (statDepts) statDepts.textContent = departments.length.toLocaleString();
+    if (statDeptsDesc && departments.length) {
+      statDeptsDesc.textContent = departments.map(function (d) { return d.code || d.name; }).join(", ");
+    }
 
     var html = "";
 
@@ -3586,6 +3833,7 @@ function fetchUsersFromAPI(role) {
     }
   }).catch(function (err) {
     console.log("Could not load directory records:", err.message);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--danger);">Failed to load directory records.</td></tr>';
   });
 }
 
@@ -3987,6 +4235,7 @@ function initEvents(role) {
 
   function loadEvents() {
     if (!grid) return;
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading campus events...</div>';
     api("/api/events").then(function (res) {
       var events = res.data || [];
       if (!events.length) {
@@ -4029,7 +4278,9 @@ function initEvents(role) {
           actionBtn +
         '</div>';
       }).join("");
-    }).catch(function () {});
+    }).catch(function (err) {
+      grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--danger);">Failed to load events.</div>';
+    });
   }
 }
 

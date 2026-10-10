@@ -71,88 +71,10 @@
       </div>
 
       <!-- Notices List -->
-      <div class="item-list">
-        
-        <!-- Notice 1 -->
-        <div class="card filterable-item" data-category="exam">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-danger">Urgent Notice</span>
-              <span class="badge badge-primary" style="margin-left: 4px;">Examinations</span>
-            </div>
-            <span class="list-item-date">Published: Feb 24, 2026</span>
-          </div>
-          <h3 style="font-size: 18px; margin-bottom: 8px;">Mid-Semester Theory & Practical Examination Schedule</h3>
-          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
-            The Mid-Term examinations for all B.Tech 2nd, 3rd, and 4th-year students will officially commence from March 15th, 2026.
-            Students must carry their college identity cards to the examination halls. The detailed timetable is available for download on the notice board.
-          </p>
-          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
-            <span>Issued by: Controller of Examinations</span>
-            <button class="btn btn-secondary btn-sm" onclick="alert('Downloading Schedule PDF (Demo)...')">📥 Download Timetable</button>
-          </div>
+      <div class="item-list" id="noticesContainer">
+        <div style="text-align:center; padding: 36px; color: var(--text-muted);">
+          <span class="page-spinner"></span> Loading campus notices...
         </div>
-
-        <!-- Notice 2 -->
-        <div class="card filterable-item" data-category="academic">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-primary">Academic</span>
-              <span class="badge badge-info" style="margin-left: 4px;">Project Deliverables</span>
-            </div>
-            <span class="list-item-date">Published: Feb 22, 2026</span>
-          </div>
-          <h3 style="font-size: 18px; margin-bottom: 8px;">Submission Deadline for 50% Mini-Project Milestone</h3>
-          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
-            All 3rd-year engineering groups must submit their intermediate project report and functional UI walkthrough
-            to their respective project mentors before Friday, 5:00 PM. No further extensions will be granted.
-          </p>
-          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
-            <span>Issued by: Department of Computer Science</span>
-            <button class="btn btn-secondary btn-sm" onclick="alert('Submission portal active for enrolled groups.')">ℹ️ Guidelines</button>
-          </div>
-        </div>
-
-        <!-- Notice 3 -->
-        <div class="card filterable-item" data-category="event">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-success">Event</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">Annual Fest</span>
-            </div>
-            <span class="list-item-date">Published: Feb 20, 2026</span>
-          </div>
-          <h3 style="font-size: 18px; margin-bottom: 8px;">Auditions Open for Annual Cultural Fest 'TechWave 2026'</h3>
-          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
-            Auditions for music, dance, drama, and debate societies will take place this weekend in the Main Auditorium.
-            Interested students may register their names with the student activity council coordinators.
-          </p>
-          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
-            <span>Issued by: Student Affairs Committee</span>
-            <a href="events.html" class="btn btn-secondary btn-sm">Explore Events</a>
-          </div>
-        </div>
-
-        <!-- Notice 4 -->
-        <div class="card filterable-item" data-category="academic">
-          <div class="card-header-row">
-            <div>
-              <span class="badge badge-info">Library</span>
-              <span class="badge badge-secondary" style="margin-left: 4px;">General</span>
-            </div>
-            <span class="list-item-date">Published: Feb 18, 2026</span>
-          </div>
-          <h3 style="font-size: 18px; margin-bottom: 8px;">Extended Digital Library & Reading Room Hours</h3>
-          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px;">
-            In view of upcoming semester tests, the central library will remain operational from 8:00 AM to 10:00 PM on all working days and Saturdays.
-            Free access to IEEE and ACM digital portals is enabled on the campus Wi-Fi network.
-          </p>
-          <div style="font-size: 12.5px; color: var(--text-light); display: flex; justify-content: space-between; align-items: center;">
-            <span>Issued by: Chief Librarian</span>
-            <span class="badge badge-success">Active Service</span>
-          </div>
-        </div>
-
       </div>
 
     </main>
@@ -196,6 +118,6 @@
     <p>&copy; 2026 Campus Connect</p>
   </footer>
 
-  <script src="js/script.js?v=50"></script>
+  <script src="js/script.js?v=55"></script>
 </body>
 </html>

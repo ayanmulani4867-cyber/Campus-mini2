@@ -62,20 +62,20 @@
       <div class="card-grid" style="margin-bottom: 24px;">
         <div class="stat-card stat-green">
           <div class="stat-card-header"><span class="stat-card-title">Enrolled Students</span><span class="stat-card-icon">🎓</span></div>
-          <div class="stat-card-value" id="statTotalStudents">1,250</div>
+          <div class="stat-card-value" id="statTotalStudents">--</div>
           <div class="stat-card-desc">Undergraduate & Postgrad</div>
         </div>
 
         <div class="stat-card">
           <div class="stat-card-header"><span class="stat-card-title">Teaching Faculty</span><span class="stat-card-icon">👨‍🏫</span></div>
-          <div class="stat-card-value" id="statTotalFaculty">85</div>
+          <div class="stat-card-value" id="statTotalFaculty">--</div>
           <div class="stat-card-desc">Permanent & Visiting</div>
         </div>
 
         <div class="stat-card stat-amber">
           <div class="stat-card-header"><span class="stat-card-title">Engineering Depts</span><span class="stat-card-icon">🏛️</span></div>
-          <div class="stat-card-value">6</div>
-          <div class="stat-card-desc">CSE, ECE, ME, CE, EEE, IT</div>
+          <div class="stat-card-value" id="statTotalDepts">--</div>
+          <div class="stat-card-desc" id="statDeptsDesc">Academic Departments</div>
         </div>
 
         <div class="stat-card stat-purple">
@@ -111,7 +111,7 @@
             </tr>
           </thead>
           <tbody id="usersTableBody">
-            <!-- Populated dynamically via API -->
+            <tr><td colspan="7" style="text-align:center; padding:28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading directory records...</td></tr>
           </tbody>
         </table>
       </div>
@@ -273,6 +273,6 @@
     <p>&copy; 2026 Campus Connect</p>
   </footer>
 
-  <script src="js/script.js?v=50"></script>
+  <script src="js/script.js?v=55"></script>
 </body>
 </html>

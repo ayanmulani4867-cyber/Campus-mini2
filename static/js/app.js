@@ -1537,8 +1537,12 @@ function initAttendance(role) {
     if (divSelect) divSelect.addEventListener("change", loadRollCall);
 
     function loadRollCall() {
-      var rollCourse = courseSelect ? courseSelect.value : (facultyCard ? facultyCard.getAttribute("data-course") || "CS601" : "CS601");
+      var rollCourse = courseSelect ? courseSelect.value : "";
       var rollDiv = divSelect ? divSelect.value : "A";
+      if (!rollCourse) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">Please select a course to view attendance roster.</td></tr>';
+        return;
+      }
       api("/api/attendance/roll-call?courseCode=" + encodeURIComponent(rollCourse) + "&division=" + encodeURIComponent(rollDiv)).then(function (res) {
         if (!tbody) return;
         var roster = res.data.roster || [];

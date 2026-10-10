@@ -123,6 +123,7 @@
               </tr>
             </thead>
             <tbody data-role="attendance-summary-body">
+              <tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading attendance summary...</td></tr>
             </tbody>
           </table>
         </div>
@@ -132,7 +133,7 @@
       <div class="card" style="margin-bottom: 24px;">
         <div class="card-header-row">
           <h3>Detailed Attendance Session History</h3>
-          <span class="badge badge-secondary" id="historyCountBadge">0 Sessions Logged</span>
+          <span class="badge badge-secondary" id="historyCountBadge">-- Sessions Logged</span>
         </div>
 
         <div class="table-container">
@@ -165,8 +166,7 @@
           <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <input type="date" class="form-input" id="facultyRollDateInput" style="width: auto; font-size: 13px; font-weight: 600; padding: 6px 10px;">
             <select class="form-select" id="facultyRollCourseSelect" style="width: auto; font-size: 13px; font-weight: 600;">
-              <option value="CS601">CS601 - Database Management Systems</option>
-              <option value="CS691">CS691 - Database Practical Lab</option>
+              <option value="">-- Select Course --</option>
             </select>
             <select class="form-select" id="facultyRollDivisionSelect" style="width: auto; font-size: 13px; font-weight: 600;">
               <option value="A" selected>Division A</option>
@@ -193,7 +193,7 @@
               </tr>
             </thead>
             <tbody id="rollCallTableBody">
-              <!-- Populated dynamically via API -->
+              <tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading roll-call roster...</td></tr>
             </tbody>
           </table>
         </div>
@@ -207,6 +207,6 @@
     <p>&copy; 2026 Campus Connect</p>
   </footer>
 
-  <script src="js/script.js?v=50"></script>
+  <script src="js/script.js?v=55"></script>
 </body>
 </html>

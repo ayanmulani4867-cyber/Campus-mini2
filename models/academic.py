@@ -50,6 +50,12 @@ class Department(db.Model):
             "civil engineering": ("Civil Engineering", "CE"),
             "civil": ("Civil Engineering", "CE"),
             "ce": ("Civil Engineering", "CE"),
+            "electrical engineering": ("Electrical Engineering", "EE"),
+            "electrical": ("Electrical Engineering", "EE"),
+            "ee": ("Electrical Engineering", "EE"),
+            "mechatronics engineering": ("Mechatronics Engineering", "MTRX"),
+            "mechatronics": ("Mechatronics Engineering", "MTRX"),
+            "mtrx": ("Mechatronics Engineering", "MTRX"),
         }
 
         clean_key = identifier.lower().replace("&amp;", "&").strip()
