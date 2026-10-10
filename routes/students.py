@@ -60,6 +60,10 @@ def get_student(student_code):
     student = Student.query.filter(
         db.or_(Student.student_code == student_code, Student.prn == student_code)
     ).first()
+    if not student and student_code.isdigit():
+        student = Student.query.filter(
+            db.or_(Student.id == int(student_code), Student.user_id == int(student_code))
+        ).first()
     if not student:
         return jsonify({"success": False, "error": "Student not found."}), 404
     if user.role == "student" and user.student_profile.id != student.id:
@@ -223,7 +227,12 @@ def delete_student(student_code):
     )
     if student_code.isdigit():
         q = Student.query.filter(
-            db.or_(Student.id == int(student_code), Student.student_code == student_code, Student.prn == student_code)
+            db.or_(
+                Student.id == int(student_code),
+                Student.user_id == int(student_code),
+                Student.student_code == student_code,
+                Student.prn == student_code
+            )
         )
     student = q.first()
     if not student:

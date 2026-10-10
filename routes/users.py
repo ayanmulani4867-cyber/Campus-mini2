@@ -8,7 +8,53 @@ from utils.validators import ValidationError
 bp = Blueprint("users", __name__, url_prefix="/api/users")
 
 
-@bp.get("")
+@bp.get("/filters")
+@roles_required("admin")
+def get_user_filters():
+    """Module 1: Get available filters (departments, roles, semesters, divisions, statuses) and directory summary stats."""
+    depts = Department.query.order_by(Department.name).all()
+    dept_list = [{"id": d.id, "name": d.name, "code": d.code} for d in depts]
+
+    total_students = Student.query.count()
+    total_faculty = Faculty.query.count()
+    total_admins = User.query.filter_by(role="admin").count()
+    total_users_all = User.query.count()
+    total_departments = len(depts)
+
+    filter_data = {
+        "departments": dept_list,
+        "roles": [
+            {"value": "all", "label": "All Roles"},
+            {"value": "student", "label": "Students"},
+            {"value": "faculty", "label": "Faculty Members"},
+            {"value": "hod", "label": "Heads of Dept (HODs)"},
+            {"value": "admin", "label": "Administrators"}
+        ],
+        "semesters": [1, 2, 3, 4, 5, 6, 7, 8],
+        "divisions": ["A", "B", "C", "D"],
+        "statuses": [
+            {"value": "active", "label": "Active"},
+            {"value": "inactive", "label": "Inactive"}
+        ],
+        "stats": {
+            "totalUsers": total_users_all,
+            "totalStudents": total_students,
+            "totalFaculty": total_faculty,
+            "totalAdmin": total_admins,
+            "totalDepartments": total_departments,
+        }
+    }
+
+    return jsonify({
+        "success": True,
+        "data": filter_data,
+        "departments": dept_list,
+        "roles": filter_data["roles"],
+        "stats": filter_data["stats"],
+    })
+
+
+@bp.route("", methods=["GET"], strict_slashes=False)
 @roles_required("admin")
 def list_users():
     """Module 1: Searchable, filterable User Directory for Administrators with server-side pagination,
@@ -27,17 +73,19 @@ def list_users():
         Department, db.or_(Student.department_id == Department.id, Faculty.department_id == Department.id)
     )
 
-    # 1. Search filter: name, roll number, PRN/enrollment, employee ID, email, user ID
+    # 1. Search filter: name, roll number, PRN/enrollment, employee ID, email, phone, designation, user ID
     search = (request.args.get("q") or request.args.get("search") or "").strip()
     if search:
         search_like = f"%{search}%"
         search_conditions = [
             User.full_name.ilike(search_like),
             User.email.ilike(search_like),
+            User.phone.ilike(search_like),
             Student.student_code.ilike(search_like),
             Student.prn.ilike(search_like),
             Student.roll_number.ilike(search_like),
             Faculty.faculty_code.ilike(search_like),
+            Faculty.designation.ilike(search_like),
         ]
         if search.isdigit():
             search_conditions.append(User.id == int(search))
@@ -46,22 +94,26 @@ def list_users():
     # 2. Role filter: All, Students, Faculty, Administrators, HODs
     role = (request.args.get("role") or "").strip().lower()
     if role and role not in ("all", "all users"):
-        if role == "hod" or role == "hods":
+        if role in ("hod", "hods", "head of department"):
             q = q.filter(User.role == "faculty", Faculty.designation.ilike("%HOD%"))
         elif role in ("student", "students"):
             q = q.filter(User.role == "student")
-        elif role in ("faculty",):
+        elif role in ("faculty", "faculties", "faculty member", "faculty members"):
             q = q.filter(User.role == "faculty")
         elif role in ("admin", "administrator", "administrators"):
             q = q.filter(User.role == "admin")
 
-    # 3. Dynamic Department filter
+    # 3. Dynamic Department filter (handles ID, code, name, and canonical alias via Department.resolve)
     dept_ref = (request.args.get("department") or request.args.get("dept") or "").strip()
     if dept_ref and dept_ref.lower() not in ("all", "all departments", ""):
         if dept_ref.isdigit():
             q = q.filter(Department.id == int(dept_ref))
         else:
-            q = q.filter(db.or_(Department.code.ilike(dept_ref), Department.name.ilike(dept_ref)))
+            resolved_dept = Department.resolve(dept_ref)
+            if resolved_dept:
+                q = q.filter(Department.id == resolved_dept.id)
+            else:
+                q = q.filter(db.or_(Department.code.ilike(f"%{dept_ref}%"), Department.name.ilike(f"%{dept_ref}%")))
 
     # 4. Semester filter
     sem_val = request.args.get("semester")
@@ -195,6 +247,7 @@ def list_users():
     total_faculty = Faculty.query.count()
     total_admins = User.query.filter_by(role="admin").count()
     total_users_all = User.query.count()
+    total_departments = Department.query.count()
 
     return jsonify({
         "success": True,
@@ -210,6 +263,7 @@ def list_users():
             "totalStudents": total_students,
             "totalFaculty": total_faculty,
             "totalAdmin": total_admins,
+            "totalDepartments": total_departments,
         }
     })
 
@@ -218,7 +272,7 @@ def list_users():
 @roles_required("admin")
 def get_user_detail(user_id):
     """Retrieve full member profile, enrollments, or subject assignments."""
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"success": False, "error": "User not found."}), 404
 

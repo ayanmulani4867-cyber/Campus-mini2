@@ -46,6 +46,10 @@ def list_faculty():
 @roles_required("admin")
 def get_faculty(faculty_code):
     fac = Faculty.query.filter_by(faculty_code=faculty_code).first()
+    if not fac and faculty_code.isdigit():
+        fac = Faculty.query.filter(
+            db.or_(Faculty.id == int(faculty_code), Faculty.user_id == int(faculty_code))
+        ).first()
     if not fac:
         return jsonify({"success": False, "error": "Faculty member not found."}), 404
     return jsonify({"success": True, "data": fac.to_dict()})
@@ -259,7 +263,7 @@ def delete_faculty(faculty_code):
     q = Faculty.query.filter_by(faculty_code=faculty_code)
     if faculty_code.isdigit():
         q = Faculty.query.filter(
-            db.or_(Faculty.id == int(faculty_code), Faculty.faculty_code == faculty_code)
+            db.or_(Faculty.id == int(faculty_code), Faculty.user_id == int(faculty_code), Faculty.faculty_code == faculty_code)
         )
     fac = q.first()
     if not fac:

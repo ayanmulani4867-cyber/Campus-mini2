@@ -12,8 +12,8 @@ bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 def login():
     data = request.get_json(silent=True) or {}
     
-    # Accept either 'email' or 'username' identifier in request payload
-    identifier = (data.get("email") or data.get("username") or "").strip()
+    # Accept 'email', 'username', 'loginId', or 'id' identifier in request payload
+    identifier = (data.get("email") or data.get("username") or data.get("loginId") or data.get("id") or "").strip()
     if not identifier:
         return jsonify({"success": False, "error": "Missing required field: email or username"}), 400
     password = str(data.get("password") or "")

@@ -66,7 +66,9 @@ function debounce(fn, delay) {
 }
 
 function getActiveRole() {
-  return CURRENT_USER ? CURRENT_USER.role : null;
+  if (CURRENT_USER && CURRENT_USER.role) return CURRENT_USER.role.toLowerCase();
+  var stored = sessionStorage.getItem("campus_user_role") || localStorage.getItem("campus_user_role");
+  return stored ? stored.toLowerCase() : null;
 }
 
 function getUserProfile() {
@@ -444,10 +446,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function boot(currentPath) {
   var user = CURRENT_USER;
-  var role = user.role;
+  var role = (user && user.role) ? user.role.toLowerCase() : (getActiveRole() || "");
 
   // 1. Client-side RBAC gate (server also enforces this on every API call)
-  if (currentPath === "users.html" && role !== "admin") {
+  if ((currentPath === "users.html" || currentPath === "users") && role !== "admin") {
     alert("Access Denied: The User Directory is restricted to Administrators only.");
     window.location.href = "dashboard.html";
     return;
@@ -530,6 +532,7 @@ function boot(currentPath) {
       initMaterials(role);
       break;
     case "users.html":
+    case "users":
       initUsers(role);
       break;
     case "events.html":
@@ -4099,7 +4102,8 @@ function initUsers(role) {
   // Page guard: only run on User Directory page
   if (!usersTable && !usersBody && !addBtn && !modal) return;
 
-  if (role !== "admin") {
+  var normRole = (role || getActiveRole() || (CURRENT_USER && CURRENT_USER.role) || sessionStorage.getItem("campus_user_role") || "").toLowerCase().trim();
+  if (normRole !== "admin" && normRole !== "administrator") {
     if (addBtn) addBtn.remove();
     if (modal) modal.remove();
     return;
@@ -4108,9 +4112,11 @@ function initUsers(role) {
   // Setup initial toggle state
   window.toggleMemberTypeFields();
 
-  // Dynamically load departments from backend database
-  api("/api/departments").then(function (res) {
-    var depts = res.data || [];
+  // Dynamically load directory filters and department options from /api/users/filters
+  api("/api/users/filters").then(function (res) {
+    var filterData = res.data || res;
+    var depts = filterData.departments || [];
+    var stats = filterData.stats || {};
     var deptSelect = document.getElementById("newMemberDept");
     var filterDept = document.getElementById("filterDeptSelect");
     if (filterDept && depts.length) {
@@ -4127,7 +4133,30 @@ function initUsers(role) {
         deptSelect.value = currentVal;
       }
     }
-  }).catch(function () {});
+    var statStudents = document.getElementById("statTotalStudents");
+    var statFaculty = document.getElementById("statTotalFaculty");
+    var statDepts = document.getElementById("statTotalDepts");
+    if (statStudents && stats.totalStudents !== undefined) statStudents.textContent = stats.totalStudents.toLocaleString();
+    if (statFaculty && stats.totalFaculty !== undefined) statFaculty.textContent = stats.totalFaculty.toLocaleString();
+    if (statDepts && stats.totalDepartments !== undefined) statDepts.textContent = stats.totalDepartments.toLocaleString();
+  }).catch(function () {
+    // Fallback to /api/departments if filters endpoint is unavailable
+    api("/api/departments").then(function (res) {
+      var depts = res.data || [];
+      var deptSelect = document.getElementById("newMemberDept");
+      var filterDept = document.getElementById("filterDeptSelect");
+      if (filterDept && depts.length) {
+        filterDept.innerHTML = '<option value="all">All Departments</option>' + depts.map(function (d) {
+          return '<option value="' + escapeHtml(d.code || d.name) + '">' + escapeHtml(d.name) + '</option>';
+        }).join('');
+      }
+      if (deptSelect && depts.length) {
+        deptSelect.innerHTML = depts.map(function (d) {
+          return '<option value="' + escapeHtml(d.name) + '">' + escapeHtml(d.name) + '</option>';
+        }).join('');
+      }
+    }).catch(function () {});
+  });
 
   var globalSearch = document.getElementById("globalSearchInput");
   if (globalSearch) {
@@ -4408,6 +4437,7 @@ function fetchUsersFromAPI(role) {
 
     if (statStudents && stats.totalStudents !== undefined) statStudents.textContent = stats.totalStudents.toLocaleString();
     if (statFaculty && stats.totalFaculty !== undefined) statFaculty.textContent = stats.totalFaculty.toLocaleString();
+    if (statDepts && stats.totalDepartments !== undefined) statDepts.textContent = stats.totalDepartments.toLocaleString();
     if (userCountLabel) {
       userCountLabel.textContent = "Showing " + items.length + " of " + pagination.total + " registered members";
     }
@@ -4423,7 +4453,7 @@ function fetchUsersFromAPI(role) {
         icon: "👥",
         title: "No Directory Records Found",
         message: "No registered members matched your search and filter criteria.",
-        actionText: role === "admin" ? "Enroll New Member" : null,
+        actionText: (role === "admin" || getActiveRole() === "admin") ? "Enroll New Member" : null,
         onAction: function () { openModal("addUserModal"); },
         colSpan: 7
       });
@@ -4452,7 +4482,9 @@ function fetchUsersFromAPI(role) {
       if (m.role === 'student') {
         actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(m.publicId || m.id) + '\')" title="View official student result card">Grade Card</button> ';
       }
-      actionsHtml += '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\', \'' + escapeHtml(m.name).replace(/'/g, "\\'") + '\', this)">Delete</button>';
+      if (m.role !== 'admin') {
+        actionsHtml += '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\', \'' + escapeHtml(m.name).replace(/'/g, "\\'") + '\', this)">Delete</button>';
+      }
 
       return '<tr class="filterable-item" id="member-row-' + escapeHtml(m.id) + '">' +
         '<td><strong class="col-member-id">' + escapeHtml(m.publicId || m.prn || m.id) + '</strong></td>' +
@@ -4468,7 +4500,10 @@ function fetchUsersFromAPI(role) {
     tbody.innerHTML = html;
   }).catch(function (err) {
     console.log("Could not load users:", err.message);
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--danger);">Failed to load directory records.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--danger);">' +
+      '<div style="margin-bottom:10px;">⚠️ Failed to load directory records: ' + escapeHtml(err.message || "Request failed") + '</div>' +
+      '<button class="btn btn-primary btn-sm" onclick="fetchUsersFromAPI(getActiveRole())">🔄 Retry</button>' +
+      '</td></tr>';
   });
 }
 
@@ -4572,7 +4607,7 @@ window.deleteDirectoryMember = function (type, code, name, btn) {
 
 // ---- Directory detail viewer -------------------------------------------------------
 window.viewDirectoryMember = function (type, code) {
-  var endpoint = type === "faculty" ? "/api/faculty/" : "/api/students/";
+  var endpoint = (type === "faculty") ? "/api/faculty/" : ((type === "admin") ? "/api/users/" : "/api/students/");
   api(endpoint + encodeURIComponent(code)).then(function (res) {
     var d = res.data || {};
     var html = "";
@@ -4597,6 +4632,27 @@ window.viewDirectoryMember = function (type, code) {
         return '<div style="display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;">' +
           '<strong style="color:var(--text-main);">' + escapeHtml(x[0]) + '</strong>' +
           '<span style="color:var(--text-muted);">' + escapeHtml(x[1]) + '</span>' +
+        '</div>';
+      }).join("");
+
+    } else if (type === "admin") {
+      var adminDetails = [
+        ["Full Name", d.name || d.full_name],
+        ["Email / Login ID", d.email],
+        ["Phone Number", d.phone || "Not provided"],
+        ["Role", "System Administrator"],
+        ["Public ID", d.publicId || ("ADM" + String(d.id).padStart(6, "0"))],
+        ["Department", "Administration"],
+        ["Status", d.isActive ? "Active" : "Inactive"]
+      ];
+      html = '<div style="margin-bottom:12px;padding:10px;background:var(--bg-subtle);border-radius:var(--radius-sm);border:1px solid var(--border);">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:4px;">🏛️ Administrator Profile</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);">' + escapeHtml(d.name || d.full_name) + ' (System Administrator)</div>' +
+      '</div>';
+      html += adminDetails.map(function (x) {
+        return '<div style="display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;">' +
+          '<strong style="color:var(--text-main);">' + escapeHtml(x[0]) + '</strong>' +
+          '<span style="color:var(--text-muted);text-align:right;">' + escapeHtml(x[1]) + '</span>' +
         '</div>';
       }).join("");
 

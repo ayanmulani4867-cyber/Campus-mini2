@@ -2413,10 +2413,18 @@ function initUsers(role) {
   // Setup initial toggle state
   window.toggleMemberTypeFields();
 
-  // Dynamically load departments from backend database
-  api("/api/departments").then(function (res) {
-    var depts = res.data || [];
+  // Dynamically load directory filters and department options from /api/users/filters
+  api("/api/users/filters").then(function (res) {
+    var filterData = res.data || res;
+    var depts = filterData.departments || [];
+    var stats = filterData.stats || {};
     var deptSelect = document.getElementById("newMemberDept");
+    var filterDept = document.getElementById("filterDeptSelect");
+    if (filterDept && depts.length) {
+      filterDept.innerHTML = '<option value="all">All Departments</option>' + depts.map(function (d) {
+        return '<option value="' + escapeHtml(d.code || d.name) + '">' + escapeHtml(d.name) + '</option>';
+      }).join('');
+    }
     if (deptSelect && depts.length) {
       var currentVal = deptSelect.value;
       deptSelect.innerHTML = depts.map(function (d) {
@@ -2426,7 +2434,29 @@ function initUsers(role) {
         deptSelect.value = currentVal;
       }
     }
-  }).catch(function () {});
+    var statStudents = document.getElementById("statTotalStudents");
+    var statFaculty = document.getElementById("statTotalFaculty");
+    var statDepts = document.getElementById("statTotalDepts");
+    if (statStudents && stats.totalStudents !== undefined) statStudents.textContent = stats.totalStudents.toLocaleString();
+    if (statFaculty && stats.totalFaculty !== undefined) statFaculty.textContent = stats.totalFaculty.toLocaleString();
+    if (statDepts && stats.totalDepartments !== undefined) statDepts.textContent = stats.totalDepartments.toLocaleString();
+  }).catch(function () {
+    api("/api/departments").then(function (res) {
+      var depts = res.data || [];
+      var deptSelect = document.getElementById("newMemberDept");
+      var filterDept = document.getElementById("filterDeptSelect");
+      if (filterDept && depts.length) {
+        filterDept.innerHTML = '<option value="all">All Departments</option>' + depts.map(function (d) {
+          return '<option value="' + escapeHtml(d.code || d.name) + '">' + escapeHtml(d.name) + '</option>';
+        }).join('');
+      }
+      if (deptSelect && depts.length) {
+        deptSelect.innerHTML = depts.map(function (d) {
+          return '<option value="' + escapeHtml(d.name) + '">' + escapeHtml(d.name) + '</option>';
+        }).join('');
+      }
+    }).catch(function () {});
+  });
 
   var typeSelect = document.getElementById("newMemberType");
   if (typeSelect) {
@@ -2653,69 +2683,82 @@ function fetchUsersFromAPI(role) {
   var tbody = document.getElementById("usersTableBody");
   if (!tbody) return;
 
-  Promise.all([
-    api("/api/students"),
-    api("/api/faculty")
-  ]).then(function (results) {
-    var students = results[0].data || [];
-    var faculty = results[1].data || [];
+  var normRole = (role || getActiveRole() || "admin").toLowerCase().trim();
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--text-muted);"><span class="page-spinner"></span> Loading directory records...</td></tr>';
+
+  api("/api/users").then(function (res) {
+    var items = res.data || [];
+    var stats = res.stats || {};
+    var pagination = res.pagination || { total: items.length, page: 1, totalPages: 1 };
 
     var statStudents = document.getElementById("statTotalStudents");
     var statFaculty = document.getElementById("statTotalFaculty");
-    if (statStudents) statStudents.textContent = students.length.toLocaleString();
-    if (statFaculty) statFaculty.textContent = faculty.length.toLocaleString();
+    var statDepts = document.getElementById("statTotalDepts");
+    var userCountLabel = document.getElementById("userDirectoryCountLabel");
 
-    var html = "";
+    if (statStudents && stats.totalStudents !== undefined) statStudents.textContent = stats.totalStudents.toLocaleString();
+    if (statFaculty && stats.totalFaculty !== undefined) statFaculty.textContent = stats.totalFaculty.toLocaleString();
+    if (statDepts && stats.totalDepartments !== undefined) statDepts.textContent = stats.totalDepartments.toLocaleString();
+    if (userCountLabel) {
+      userCountLabel.textContent = "Showing " + items.length + " of " + pagination.total + " registered members";
+    }
 
-    students.forEach(function (s) {
-      var classBadge = '<span class="badge badge-secondary">' + escapeHtml(s.year || '-') + ' • Sem ' + (s.semester || '-') + ' • Div ' + escapeHtml(s.division || 'A') + '</span>';
-      html += '<tr class="filterable-item" data-category="student" id="member-row-' + escapeHtml(s.id) + '">' +
-        '<td><strong class="col-member-id">' + escapeHtml(s.prn || s.id) + '</strong></td>' +
-        '<td><span class="col-member-name">' + escapeHtml(s.name) + '</span><div class="col-member-email" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(s.email) + '</div></td>' +
-        '<td><span class="badge badge-primary">Student</span></td>' +
-        '<td class="col-member-dept">' + escapeHtml(s.dept || s.deptCode || '-') + '</td>' +
-        '<td class="col-member-class">' + classBadge + '</td>' +
-        '<td><span class="badge badge-success">' + escapeHtml(s.status || 'Active') + '</span></td>' +
-        '<td style="white-space:nowrap;">' +
-          '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'student\', \'' + encodeURIComponent(s.id) + '\')">View</button> ' +
-          '<button class="btn btn-secondary btn-sm" onclick="editDirectoryMember(\'student\', \'' + encodeURIComponent(s.id) + '\')">Edit</button> ' +
-          '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'student\', \'' + encodeURIComponent(s.id) + '\', \'' + escapeHtml(s.name).replace(/'/g, "\\'") + '\', this)">Delete</button>' +
-        '</td>' +
-        '</tr>';
-    });
-
-    faculty.forEach(function (f) {
-      var assignSummary = f.assignedSubjects && f.assignedSubjects.length ? ('<small style="display:block;color:var(--text-muted);margin-top:2px;">' + escapeHtml(f.assignedSubjects.join(', ')) + ' (Div: ' + escapeHtml((f.assignedDivisions || []).join(', ') || 'All') + ')</small>') : '';
-      var classBadge = '<span class="badge badge-secondary">' + escapeHtml(f.designation || 'Faculty') + '</span>' + assignSummary;
-      html += '<tr class="filterable-item" data-category="faculty" id="member-row-' + escapeHtml(f.id) + '">' +
-        '<td><strong class="col-member-id">' + escapeHtml(f.id) + '</strong></td>' +
-        '<td><span class="col-member-name">' + escapeHtml(f.name) + '</span><div class="col-member-email" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(f.email) + '</div></td>' +
-        '<td><span class="badge badge-success">Faculty</span></td>' +
-        '<td class="col-member-dept">' + escapeHtml(f.dept || '-') + '</td>' +
-        '<td class="col-member-class">' + classBadge + '</td>' +
-        '<td><span class="badge badge-success">' + escapeHtml(f.status || 'Active') + '</span></td>' +
-        '<td style="white-space:nowrap;">' +
-          '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'faculty\', \'' + encodeURIComponent(f.id) + '\')">View</button> ' +
-          '<button class="btn btn-secondary btn-sm" onclick="editDirectoryMember(\'faculty\', \'' + encodeURIComponent(f.id) + '\')">Edit</button> ' +
-          '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'faculty\', \'' + encodeURIComponent(f.id) + '\', \'' + escapeHtml(f.name).replace(/'/g, "\\'") + '\', this)">Delete</button>' +
-        '</td>' +
-        '</tr>';
-    });
-
-    if (students.length === 0 && faculty.length === 0) {
+    if (!items.length) {
       renderEmptyState(tbody, {
         icon: "👥",
         title: "No Directory Records Found",
-        message: "There are currently no students or faculty matching your filter criteria.",
-        actionText: role === "admin" ? "Add New Member" : null,
+        message: "No registered members matched your search and filter criteria.",
+        actionText: (role === "admin" || getActiveRole() === "admin") ? "Enroll New Member" : null,
         onAction: function () { openModal("addUserModal"); },
         colSpan: 7
       });
-    } else {
-      tbody.innerHTML = html;
+      return;
     }
+
+    var html = items.map(function (m) {
+      var roleBadge = '<span class="badge badge-primary">Student</span>';
+      if (m.role === 'admin') roleBadge = '<span class="badge badge-purple">Admin</span>';
+      else if (m.role === 'faculty') roleBadge = m.isHod ? '<span class="badge badge-warning">Faculty (HOD)</span>' : '<span class="badge badge-success">Faculty</span>';
+
+      var classBadge = '-';
+      if (m.role === 'student') {
+        classBadge = '<span class="badge badge-secondary">' + escapeHtml(m.year || '-') + ' • Sem ' + (m.semester || '-') + ' • Div ' + escapeHtml(m.division || 'A') + '</span>';
+      } else if (m.role === 'faculty') {
+        classBadge = '<span class="badge badge-secondary">' + escapeHtml(m.designation || 'Faculty') + '</span>';
+      } else if (m.role === 'admin') {
+        classBadge = '<span class="badge badge-secondary">System Administrator</span>';
+      }
+
+      var statusBadge = m.isActive
+        ? '<span class="badge badge-success">Active</span>'
+        : '<span class="badge badge-danger">Inactive</span>';
+
+      var actionsHtml = '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\')">View</button> ';
+      if (m.role === 'student') {
+        actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(m.publicId || m.id) + '\')" title="View official student result card">Grade Card</button> ';
+      }
+      if (m.role !== 'admin') {
+        actionsHtml += '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\', \'' + escapeHtml(m.name).replace(/'/g, "\\'") + '\', this)">Delete</button>';
+      }
+
+      return '<tr class="filterable-item" id="member-row-' + escapeHtml(m.id) + '">' +
+        '<td><strong class="col-member-id">' + escapeHtml(m.publicId || m.prn || m.id) + '</strong></td>' +
+        '<td><span class="col-member-name">' + escapeHtml(m.name) + '</span><div class="col-member-email" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(m.email) + '</div></td>' +
+        '<td>' + roleBadge + '</td>' +
+        '<td class="col-member-dept">' + escapeHtml(m.department || '-') + '</td>' +
+        '<td class="col-member-class">' + classBadge + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td style="white-space:nowrap;">' + actionsHtml + '</td>' +
+        '</tr>';
+    }).join("");
+
+    tbody.innerHTML = html;
   }).catch(function (err) {
-    console.log("Could not load directory records:", err.message);
+    console.log("Could not load users:", err.message);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color: var(--danger);">' +
+      '<div style="margin-bottom:10px;">⚠️ Failed to load directory records: ' + escapeHtml(err.message || "Request failed") + '</div>' +
+      '<button class="btn btn-primary btn-sm" onclick="fetchUsersFromAPI(getActiveRole())">🔄 Retry</button>' +
+      '</td></tr>';
   });
 }
 
@@ -2761,7 +2804,7 @@ window.deleteDirectoryMember = function (type, code, name, btn) {
 
 // ---- Directory detail viewer -------------------------------------------------------
 window.viewDirectoryMember = function (type, code) {
-  var endpoint = type === "faculty" ? "/api/faculty/" : "/api/students/";
+  var endpoint = (type === "faculty") ? "/api/faculty/" : ((type === "admin") ? "/api/users/" : "/api/students/");
   api(endpoint + encodeURIComponent(code)).then(function (res) {
     var d = res.data || {};
     var html = "";
@@ -2786,6 +2829,27 @@ window.viewDirectoryMember = function (type, code) {
         return '<div style="display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;">' +
           '<strong style="color:var(--text-main);">' + escapeHtml(x[0]) + '</strong>' +
           '<span style="color:var(--text-muted);">' + escapeHtml(x[1]) + '</span>' +
+        '</div>';
+      }).join("");
+
+    } else if (type === "admin") {
+      var adminDetails = [
+        ["Full Name", d.name || d.full_name],
+        ["Email / Login ID", d.email],
+        ["Phone Number", d.phone || "Not provided"],
+        ["Role", "System Administrator"],
+        ["Public ID", d.publicId || ("ADM" + String(d.id).padStart(6, "0"))],
+        ["Department", "Administration"],
+        ["Status", d.isActive ? "Active" : "Inactive"]
+      ];
+      html = '<div style="margin-bottom:12px;padding:10px;background:var(--bg-subtle);border-radius:var(--radius-sm);border:1px solid var(--border);">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:4px;">🏛️ Administrator Profile</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);">' + escapeHtml(d.name || d.full_name) + ' (System Administrator)</div>' +
+      '</div>';
+      html += adminDetails.map(function (x) {
+        return '<div style="display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;">' +
+          '<strong style="color:var(--text-main);">' + escapeHtml(x[0]) + '</strong>' +
+          '<span style="color:var(--text-muted);text-align:right;">' + escapeHtml(x[1]) + '</span>' +
         '</div>';
       }).join("");
 
