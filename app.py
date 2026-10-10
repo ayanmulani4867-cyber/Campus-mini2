@@ -97,11 +97,15 @@ def create_app(config_name=None):
     # Static asset convenience routes (handles relative paths like href="css/style.css")
     @app.get("/css/<path:filename>")
     def serve_css(filename):
-        return send_from_directory(os.path.join(app.static_folder, "css"), filename)
+        resp = send_from_directory(os.path.join(app.static_folder, "css"), filename)
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate, max-age=0"
+        return resp
 
     @app.get("/js/<path:filename>")
     def serve_js(filename):
-        return send_from_directory(os.path.join(app.static_folder, "js"), filename)
+        resp = send_from_directory(os.path.join(app.static_folder, "js"), filename)
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate, max-age=0"
+        return resp
 
     @app.get("/images/<path:filename>")
     def serve_images(filename):

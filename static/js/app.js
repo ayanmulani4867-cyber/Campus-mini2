@@ -1954,12 +1954,14 @@ function initNotices(role) {
   if (list) loadNotices();
 
   function loadNotices() {
+    if (!list) return;
+    list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading campus notices...</div>';
     api("/api/notices").then(function (res) {
-      var notices = res.data || [];
+      var notices = (res && res.data ? res.data : []);
       if (!notices.length) {
         renderEmptyState(list, {
           icon: "📢",
-          title: "No Notices Posted",
+          title: "No notices available.",
           message: "There are currently no announcements on the campus notice board.",
           actionText: (role === "admin" || role === "faculty") ? "Post Notice" : null,
           onAction: function () { openModal("newNoticeModal"); }
@@ -1986,8 +1988,16 @@ function initNotices(role) {
           '<div style="font-size: 12.5px; color: var(--text-light);">Issued by: ' + escapeHtml(n.postedBy || "Campus Admin") + '</div>' +
         '</div>';
       }).join("");
-    }).catch(function () {});
+    }).catch(function (err) {
+      list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--danger);">' +
+        '<div style="font-size:32px; margin-bottom:8px;">⚠️</div>' +
+        '<h4 style="margin-bottom:6px;">Failed to load notices</h4>' +
+        '<p style="color:var(--text-muted); font-size:13px; margin-bottom:14px;">' + escapeHtml((err && err.message) || "Unable to retrieve notices from server.") + '</p>' +
+        '<button class="btn btn-secondary btn-sm" onclick="loadNotices()">🔄 Retry</button>' +
+      '</div>';
+    });
   }
+  window.loadNotices = loadNotices;
 }
 
 window.deleteNotice = function (id, title, btn) {
@@ -3065,12 +3075,13 @@ function initEvents(role) {
 
   function loadEvents() {
     if (!grid) return;
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading campus events...</div>';
     api("/api/events").then(function (res) {
-      var events = res.data || [];
+      var events = (res && res.data ? res.data : []);
       if (!events.length) {
         renderEmptyState(grid, {
           icon: "🎉",
-          title: "No Events Scheduled",
+          title: "No events available.",
           message: "There are currently no upcoming events or workshops on the campus calendar.",
           actionText: (role === "admin" || role === "faculty") ? "Post Event" : null,
           onAction: function () { openModal("newEventModal"); }
@@ -3107,8 +3118,16 @@ function initEvents(role) {
           actionBtn +
         '</div>';
       }).join("");
-    }).catch(function () {});
+    }).catch(function (err) {
+      grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--danger);">' +
+        '<div style="font-size:32px; margin-bottom:8px;">⚠️</div>' +
+        '<h4 style="margin-bottom:6px;">Failed to load events</h4>' +
+        '<p style="color:var(--text-muted); font-size:13px; margin-bottom:14px;">' + escapeHtml((err && err.message) || "Unable to retrieve events from server.") + '</p>' +
+        '<button class="btn btn-secondary btn-sm" onclick="loadEvents()">🔄 Retry</button>' +
+      '</div>';
+    });
   }
+  window.loadEvents = loadEvents;
 }
 
 window.registerForEvent = function (btn, eventTitle) {

@@ -75,14 +75,19 @@ def run_flashing_data_audit():
     with open(js_file, "r", encoding="utf-8") as f:
         js_content = f.read()
 
-    # Verify no mock arrays
+    # Verify no mock arrays and exact required empty states & retry mechanisms
+    assert "No notices available." in js_content, "Missing required empty state 'No notices available.' in script.js"
+    assert "No events available." in js_content, "Missing required empty state 'No events available.' in script.js"
+    assert "Retry" in js_content, "script.js must provide Retry button on API failure"
+    assert "loadNotices" in js_content, "script.js must provide loadNotices function"
+    assert "loadEvents" in js_content, "script.js must provide loadEvents function"
     assert "loadStudentResults" in js_content, "Missing loadStudentResults"
-    assert "loadAdminResults" in js_content, "Missing loadAdminResults"
+    assert "loadAdminLifecycle" in js_content or "loadAdminResults" in js_content, "Missing loadAdminLifecycle in script.js"
     assert "page-spinner" in js_content, "script.js must inject page-spinner on fetch start"
     assert "Awaiting Publication" in js_content, "script.js must handle unpopulated student results"
-    assert "toggleCoursePublish" in js_content, "script.js must provide toggleCoursePublish"
+    assert "transitionBatchStatus" in js_content or "toggleCoursePublish" in js_content, "script.js must provide lifecycle batch publishing"
     assert "statTotalDepts" in js_content, "script.js must update statTotalDepts dynamically"
-    print("  [PASS] script.js: Initial spinners, live dynamic data calculation, and empty states confirmed.")
+    print("  [PASS] script.js: Initial spinners, 'No notices available.' & 'No events available.' empty states, and Retry buttons confirmed.")
 
     # 4. Backend API Integration & Role Authentication Test
     print("\n[CHECK 4] Testing Backend APIs with clean empty database state...")
@@ -94,7 +99,16 @@ def run_flashing_data_audit():
     assert login_res.status_code == 200, f"Admin login failed: {login_res.get_json()}"
     print("  [PASS] Admin authenticated.")
 
-    # Verify API responses return structured data without demo fallback
+    # Verify Notice & Event APIs return structured data without demo fallback
+    res_notices = client.get("/api/notices")
+    assert res_notices.status_code == 200 and res_notices.get_json()["success"] is True
+    assert isinstance(res_notices.get_json()["data"], list)
+
+    res_events = client.get("/api/events")
+    assert res_events.status_code == 200 and res_events.get_json()["success"] is True
+    assert isinstance(res_events.get_json()["data"], list)
+
+    # Verify other core APIs
     res_students = client.get("/api/students")
     assert res_students.status_code == 200 and res_students.get_json()["success"] is True
     assert isinstance(res_students.get_json()["data"], list)
@@ -109,7 +123,17 @@ def run_flashing_data_audit():
     res_summary = client.get("/api/dashboard/summary")
     assert res_summary.status_code == 200 and res_summary.get_json()["success"] is True
 
-    print("  [PASS] All APIs (/api/students, /api/results, /api/courses, /api/dashboard/summary) respond correctly.")
+    # 5. Verify Cache-Control header prevents stale cached mock data
+    print("\n[CHECK 5] Auditing Cache-Control headers on HTML and JS endpoints...")
+    resp_html = client.get("/notices.html")
+    assert "no-store" in resp_html.headers.get("Cache-Control", ""), "notices.html must have no-store"
+
+    resp_events = client.get("/events.html")
+    assert "no-store" in resp_events.headers.get("Cache-Control", ""), "events.html must have no-store"
+
+    resp_js = client.get("/js/script.js")
+    assert "no-cache" in resp_js.headers.get("Cache-Control", ""), "script.js must revalidate (no-cache)"
+    print("  [PASS] Cache-Control headers enforce immediate revalidation (no-store for HTML, no-cache for scripts).")
 
     print("\n" + "=" * 70)
     print("ALL FLASHING MOCK/DEMO DATA ELIMINATION CHECKS PASSED (100% SUCCESS)!")

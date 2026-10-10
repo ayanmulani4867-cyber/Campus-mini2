@@ -819,11 +819,13 @@ function initDashboard(user, role) {
 
   // Dynamically load top 3 recent notices from database for dashboard
   var noticesList = document.getElementById("dashboardRecentNotices");
-  if (noticesList) {
+  function loadDashboardNotices() {
+    if (!noticesList) return;
+    noticesList.innerHTML = '<div style="text-align:center; padding: 24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading recent notices...</div>';
     api("/api/notices").then(function (res) {
-      var notices = (res.data || []).slice(0, 3);
+      var notices = (res && res.data ? res.data : []).slice(0, 3);
       if (!notices.length) {
-        noticesList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No announcements on the notice board.</div>';
+        noticesList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No notices available.</div>';
         return;
       }
       noticesList.innerHTML = notices.map(function (n) {
@@ -839,18 +841,27 @@ function initDashboard(user, role) {
           '<div class="list-item-date">' + dateStr + '</div>' +
         '</div>';
       }).join("");
-    }).catch(function () {
-      if (noticesList) noticesList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Could not load notices.</div>';
+    }).catch(function (err) {
+      if (noticesList) {
+        noticesList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--danger);">' +
+          '<p style="font-size:13px; margin-bottom:8px;">Failed to load notices.</p>' +
+          '<button class="btn btn-secondary btn-sm" onclick="loadDashboardNotices()">🔄 Retry</button>' +
+        '</div>';
+      }
     });
   }
+  window.loadDashboardNotices = loadDashboardNotices;
+  if (noticesList) loadDashboardNotices();
 
   // Dynamically load top 3 upcoming events from database for dashboard
   var eventsList = document.getElementById("dashboardRecentEvents");
-  if (eventsList) {
+  function loadDashboardEvents() {
+    if (!eventsList) return;
+    eventsList.innerHTML = '<div style="text-align:center; padding: 24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading upcoming events...</div>';
     api("/api/events").then(function (res) {
-      var events = (res.data || []).slice(0, 3);
+      var events = (res && res.data ? res.data : []).slice(0, 3);
       if (!events.length) {
-        eventsList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No upcoming campus events scheduled.</div>';
+        eventsList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No events available.</div>';
         return;
       }
       eventsList.innerHTML = events.map(function (ev) {
@@ -865,10 +876,17 @@ function initDashboard(user, role) {
           '<div class="list-item-date">' + escapeHtml(ev.date || 'Upcoming') + '</div>' +
         '</div>';
       }).join("");
-    }).catch(function () {
-      if (eventsList) eventsList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Could not load events.</div>';
+    }).catch(function (err) {
+      if (eventsList) {
+        eventsList.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--danger);">' +
+          '<p style="font-size:13px; margin-bottom:8px;">Failed to load events.</p>' +
+          '<button class="btn btn-secondary btn-sm" onclick="loadDashboardEvents()">🔄 Retry</button>' +
+        '</div>';
+      }
     });
   }
+  window.loadDashboardEvents = loadDashboardEvents;
+  if (eventsList) loadDashboardEvents();
 }
 
 // ---- Courses module ----------------------------------------------------------------
@@ -3566,7 +3584,7 @@ function initResults(role) {
 function initNotices(role) {
   var postBtn = document.getElementById("postNoticeBtn");
   var modal = document.getElementById("newNoticeModal");
-  var list = document.querySelector(".item-list");
+  var list = document.getElementById("noticesContainer") || document.querySelector(".item-list");
 
   if (role === "student") {
     if (postBtn) postBtn.remove();
@@ -3640,16 +3658,15 @@ function initNotices(role) {
     }
   }
 
-  if (list) loadNotices();
-
   function loadNotices() {
-    list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading announcements...</div>';
+    if (!list) return;
+    list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading campus notices...</div>';
     api("/api/notices").then(function (res) {
-      var notices = res.data || [];
+      var notices = (res && res.data ? res.data : []);
       if (!notices.length) {
         renderEmptyState(list, {
           icon: "📢",
-          title: "No Notices Posted",
+          title: "No notices available.",
           message: "There are currently no announcements on the campus notice board.",
           actionText: (role === "admin" || role === "faculty") ? "Post Notice" : null,
           onAction: function () { openModal("newNoticeModal"); }
@@ -3677,9 +3694,16 @@ function initNotices(role) {
         '</div>';
       }).join("");
     }).catch(function (err) {
-      list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--danger);">Failed to load announcements.</div>';
+      list.innerHTML = '<div style="text-align:center; padding:36px; color:var(--danger);">' +
+        '<div style="font-size:32px; margin-bottom:8px;">⚠️</div>' +
+        '<h4 style="margin-bottom:6px;">Failed to load notices</h4>' +
+        '<p style="color:var(--text-muted); font-size:13px; margin-bottom:14px;">' + escapeHtml((err && err.message) || "Unable to retrieve notices from server.") + '</p>' +
+        '<button class="btn btn-secondary btn-sm" onclick="loadNotices()">🔄 Retry</button>' +
+      '</div>';
     });
   }
+  window.loadNotices = loadNotices;
+  if (list) loadNotices();
 }
 
 window.deleteNotice = function (id, title, btn) {
@@ -4773,7 +4797,7 @@ window.editDirectoryMember = function (type, code) {
 
 // ---- Campus Events Module ---------------------------------------------------------
 function initEvents(role) {
-  var grid = document.querySelector(".grid-3");
+  var grid = document.getElementById("eventsContainer") || document.querySelector(".grid-3");
   var pageActions = document.querySelector(".page-actions");
 
   if (pageActions && (role === "admin" || role === "faculty")) {
@@ -4872,17 +4896,15 @@ function initEvents(role) {
     });
   }
 
-  loadEvents();
-
   function loadEvents() {
     if (!grid) return;
     grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--text-muted);"><span class="page-spinner"></span> Loading campus events...</div>';
     api("/api/events").then(function (res) {
-      var events = res.data || [];
+      var events = (res && res.data ? res.data : []);
       if (!events.length) {
         renderEmptyState(grid, {
           icon: "🎉",
-          title: "No Events Scheduled",
+          title: "No events available.",
           message: "There are currently no upcoming events or workshops on the campus calendar.",
           actionText: (role === "admin" || role === "faculty") ? "Post Event" : null,
           onAction: function () { openModal("newEventModal"); }
@@ -4920,9 +4942,16 @@ function initEvents(role) {
         '</div>';
       }).join("");
     }).catch(function (err) {
-      grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--danger);">Failed to load events.</div>';
+      grid.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:36px; color:var(--danger);">' +
+        '<div style="font-size:32px; margin-bottom:8px;">⚠️</div>' +
+        '<h4 style="margin-bottom:6px;">Failed to load events</h4>' +
+        '<p style="color:var(--text-muted); font-size:13px; margin-bottom:14px;">' + escapeHtml((err && err.message) || "Unable to retrieve events from server.") + '</p>' +
+        '<button class="btn btn-secondary btn-sm" onclick="loadEvents()">🔄 Retry</button>' +
+      '</div>';
     });
   }
+  window.loadEvents = loadEvents;
+  if (grid) loadEvents();
 }
 
 window.registerForEvent = function (btn, eventTitle) {

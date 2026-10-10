@@ -881,79 +881,13 @@ def seed_leave_requests(students, admin_user):
 
 
 def seed_notices(admin_user, departments):
-    """Provisions target notices across divisions plus general institutional notices."""
-    cse = departments["CSE"]
-    notices_spec = [
-        ("Internal Assessment-II Schedule (Odd Sem 2026-27)", "Academic",
-         "Internal Assessment Test 2 for B.Tech CSE 3rd Year Semester 6 will commence from next Monday. Attendance is strictly compulsory.",
-         cse.id, "3rd Year", 6, "A"),
-        ("End Semester Examination Form Submission Notice", "Examination",
-         "All CSE Semester 6 Division A students must submit exam verification forms along with clearance receipts to the exam cell.",
-         cse.id, "3rd Year", 6, "A"),
-        ("Mandatory Assignment Submission Deadline Reminder", "Academic",
-         "CS601 (DBMS) and CS602 (Networks) coursework assignments must be uploaded to the portal before 11:59 PM next Friday.",
-         cse.id, "3rd Year", 6, "All"),
-        ("Campus Placement & Technical Internship Orientation", "Placement",
-         "Training and Placement Cell (T&P) session on pre-placement interviews and algorithmic tests scheduled in Seminar Hall 1.",
-         cse.id, "3rd Year", 6, "All"),
-        ("National Smart Campus Hackathon 2026 Registration Open", "Event",
-         "Teams of 4 from all engineering departments are invited to register for the 36-hour National Hackathon before deadline.",
-         None, None, None, "All"),
-        ("Central Library Extended Hours During Mid-Term Examinations", "General",
-         "The Central Library and Digital Reading Rooms will remain open until 11:00 PM on all working weekdays through the examination session.",
-         None, None, None, "All"),
-    ]
-
-    for title, cat, body, dept_id, yr, sem, div in notices_spec:
-        notice = Notice.query.filter_by(title=title).first()
-        if not notice:
-            notice = Notice(
-                title=title,
-                category=cat,
-                body=body,
-                department_id=dept_id,
-                year_label=yr,
-                semester=sem,
-                division=div,
-                posted_by_id=admin_user.id,
-            )
-            db.session.add(notice)
-
-    db.session.commit()
+    """Zero-mock policy: Notices are populated only via legitimate portal interactions or official imports."""
+    pass
 
 
 def seed_events(admin_user):
-    """Provisions campus events."""
-    today = date.today()
-    events_spec = [
-        ("Annual Tech Fest - TechnoVision 2026",
-         "Inter-college national tech fest featuring hackathons, paper presentations, and robotics arena.",
-         "Technical", today + timedelta(days=18), "Main Campus Auditorium & Labs"),
-        ("Inter-College 36-Hour Hackathon 2026",
-         "Sprint innovation challenge focused on Smart City, EdTech, and Healthcare AI solutions.",
-         "Technical", today + timedelta(days=25), "Advanced Computing Centre"),
-        ("Core Technical Placement Preparation Workshop",
-         "Hands-on workshop on system design, data structures, and mock technical interview rounds.",
-         "Career", today + timedelta(days=8), "Seminar Hall B"),
-        ("Algorithmic Coding Competition (CodeStorm 2026)",
-         "Speed coding and algorithmic optimization contest hosted by the ACM Student Chapter.",
-         "Technical", today + timedelta(days=14), "Computer Labs 1 & 2"),
-    ]
-
-    for title, desc, cat, edate, loc in events_spec:
-        ev = Event.query.filter_by(title=title).first()
-        if not ev:
-            ev = Event(
-                title=title,
-                description=desc,
-                category=cat,
-                event_date=edate,
-                location=loc,
-                created_by_id=admin_user.id,
-            )
-            db.session.add(ev)
-
-    db.session.commit()
+    """Zero-mock policy: Events are populated only via legitimate portal interactions or official calendar sync."""
+    pass
 
 
 def cleanup_all_students_and_faculty():
