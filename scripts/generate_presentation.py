@@ -11,23 +11,29 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCREENSHOTS_DIR = os.path.join(REPO_ROOT, "docs", "screenshots")
 OUTPUT_PPTX = os.path.join(REPO_ROOT, "docs", "Campus_Connect_ERP_Presentation.pptx")
 
-# Palette constants
-NAVY_BG = RGBColor(15, 23, 42)        # #0f172a Deep academic dark slate
-NAVY_HEADER = RGBColor(30, 41, 59)    # #1e293b
-CARD_BG = RGBColor(255, 255, 255)     # #ffffff
-PAGE_BG = RGBColor(248, 250, 252)     # #f8fafc
-PRIMARY_BLUE = RGBColor(37, 99, 235)  # #2563eb
-ROYAL_BLUE = RGBColor(30, 58, 138)    # #1e3a8a
-EMERALD = RGBColor(16, 185, 129)      # #10b981
-AMBER = RGBColor(217, 119, 6)         # #d97706
-BORDER_COLOR = RGBColor(226, 232, 240)# #e2e8f0
-TEXT_MAIN = RGBColor(15, 23, 42)      # #0f172a
-TEXT_MUTED = RGBColor(100, 116, 139)  # #64748b
-TEXT_LIGHT = RGBColor(241, 245, 249)  # #f1f5f9
-WHITE = RGBColor(255, 255, 255)
+# Palette constants: Premium Navy, White, Restrained Cyan Accents
+NAVY_DEEP = RGBColor(15, 23, 42)       # #0f172a Deep Academic Navy
+NAVY_CARD = RGBColor(30, 41, 59)       # #1e293b Slate 800 Card
+WHITE = RGBColor(255, 255, 255)        # Pure White
+PAGE_BG = RGBColor(248, 250, 252)      # #f8fafc Slate 50 Neutral Canvas
+BORDER_SUBTLE = RGBColor(226, 232, 240)# #e2e8f0 Slate 200 Border
+BORDER_DARK = RGBColor(51, 65, 85)     # #334155 Dark Border
 
-FONT_HEADING = "Segoe UI"
-FONT_BODY = "Segoe UI"
+# Accent Colors
+CYAN_BRIGHT = RGBColor(6, 182, 212)    # #06b6d4 Electric Cyan
+CYAN_PRIMARY = RGBColor(2, 132, 199)   # #0284c7 Vivid Sky/Cyan
+CYAN_DEEP = RGBColor(8, 145, 178)      # #0891b2 Academic Teal/Cyan
+EMERALD = RGBColor(16, 185, 129)       # #10b981 Emerald
+CORAL = RGBColor(220, 38, 38)          # #dc2626 Coral Red
+
+# Text Colors
+TEXT_DARK = RGBColor(15, 23, 42)       # #0f172a Deep Slate Text
+TEXT_BODY = RGBColor(51, 65, 85)       # #334155 Slate 700 Body Text
+TEXT_MUTED = RGBColor(100, 116, 139)   # #64748b Slate 500 Subtitle/Caption
+TEXT_LIGHT = RGBColor(241, 245, 249)   # #f1f5f9 Crisp Light Heading
+TEXT_DIM = RGBColor(148, 163, 184)     # #94a3b8 Slate 400
+
+FONT_FAMILY = "Segoe UI"
 
 def set_slide_background(slide, color):
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(13.333), Inches(7.5))
@@ -36,15 +42,16 @@ def set_slide_background(slide, color):
     bg.line.fill.background()
     return bg
 
-def add_header(slide, title_text, category_text="CAMPUS CONNECT ERP • SITCOE", slide_num=1):
+def add_header(slide, title_text, category_text="CAMPUS CONNECT ERP • SITCOE", slide_num=1, is_dark=False):
     # Header bar container
-    header_box = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(0.4), Inches(11.733), Inches(0.95))
+    header_box = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(0.4), Inches(11.733), Inches(1.1)
+    )
     header_box.fill.solid()
-    header_box.fill.fore_color.rgb = CARD_BG
-    header_box.line.color.rgb = BORDER_COLOR
+    header_box.fill.fore_color.rgb = NAVY_CARD if is_dark else WHITE
+    header_box.line.color.rgb = BORDER_DARK if is_dark else BORDER_SUBTLE
     header_box.line.width = Pt(1)
 
-    # Category Pill / Tag
     tf = header_box.text_frame
     tf.word_wrap = True
     tf.margin_left = Inches(0.25)
@@ -52,40 +59,91 @@ def add_header(slide, title_text, category_text="CAMPUS CONNECT ERP • SITCOE",
     tf.margin_right = Inches(0.25)
     tf.margin_bottom = Inches(0.05)
     
+    # Category Pill
     p0 = tf.paragraphs[0]
     p0.text = category_text.upper()
-    p0.font.name = FONT_HEADING
-    p0.font.size = Pt(9.5)
+    p0.font.name = FONT_FAMILY
+    p0.font.size = Pt(11)
     p0.font.bold = True
-    p0.font.color.rgb = PRIMARY_BLUE
+    p0.font.color.rgb = CYAN_BRIGHT if is_dark else CYAN_DEEP
 
+    # Slide Title (28 pt bold)
     p1 = tf.add_paragraph()
     p1.text = title_text
-    p1.font.name = FONT_HEADING
-    p1.font.size = Pt(18)
+    p1.font.name = FONT_FAMILY
+    p1.font.size = Pt(28)
     p1.font.bold = True
-    p1.font.color.rgb = TEXT_MAIN
+    p1.font.color.rgb = WHITE if is_dark else TEXT_DARK
 
     # Slide number badge on right
-    num_box = slide.shapes.add_textbox(Inches(10.5), Inches(0.55), Inches(1.8), Inches(0.4))
+    num_box = slide.shapes.add_textbox(Inches(10.5), Inches(0.55), Inches(1.8), Inches(0.45))
     ntf = num_box.text_frame
     ntf.word_wrap = False
     np = ntf.paragraphs[0]
     np.alignment = PP_ALIGN.RIGHT
     np.text = f"Slide {slide_num} of 7"
-    np.font.name = FONT_BODY
-    np.font.size = Pt(11)
+    np.font.name = FONT_FAMILY
+    np.font.size = Pt(13)
     np.font.bold = True
-    np.font.color.rgb = TEXT_MUTED
+    np.font.color.rgb = CYAN_BRIGHT if is_dark else CYAN_PRIMARY
 
-def add_footer(slide, slide_num):
-    ft = slide.shapes.add_textbox(Inches(0.8), Inches(7.1), Inches(11.733), Inches(0.3))
+def add_footer(slide, slide_num, is_dark=False):
+    ft = slide.shapes.add_textbox(Inches(0.8), Inches(7.0), Inches(11.733), Inches(0.35))
     ftf = ft.text_frame
     p = ftf.paragraphs[0]
-    p.text = "Campus Connect ERP • Sharad Institute of Technology College of Engineering, Yadrav (SITCOE) • Live PostgreSQL Production System"
-    p.font.name = FONT_BODY
-    p.font.size = Pt(9)
-    p.font.color.rgb = TEXT_MUTED
+    p.text = "Campus Connect ERP • Sharad Institute of Technology College of Engineering (SITCOE) • Live PostgreSQL Production System"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(10.5)
+    p.font.color.rgb = TEXT_DIM if is_dark else TEXT_MUTED
+
+def add_image_card(slide, img_path, left, top, width, caption_text, badge_text=None, is_dark=False):
+    """Embeds an image inside a mathematically proportioned card frame with zero overflow."""
+    img_pad = Inches(0.08)
+    img_w = width - (img_pad * 2)
+    # 16:10 screenshot ratio (1440x900)
+    img_h = img_w * 0.625
+    cap_h = Inches(0.56) if badge_text else Inches(0.36)
+    total_h = img_h + cap_h + (img_pad * 2)
+
+    # Outer frame
+    frame = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, total_h)
+    frame.fill.solid()
+    frame.fill.fore_color.rgb = NAVY_CARD if is_dark else WHITE
+    frame.line.color.rgb = BORDER_DARK if is_dark else BORDER_SUBTLE
+    frame.line.width = Pt(1)
+
+    # Place image
+    if os.path.exists(img_path):
+        slide.shapes.add_picture(
+            img_path, left + img_pad, top + img_pad, width=img_w, height=img_h
+        )
+
+    # Caption text frame
+    cb = slide.shapes.add_textbox(
+        left + Inches(0.10), top + img_h + img_pad, width - Inches(0.20), cap_h
+    )
+    cbtf = cb.text_frame
+    cbtf.word_wrap = True
+    cbtf.margin_top = Inches(0.04)
+    cbtf.margin_bottom = Inches(0.02)
+    cbtf.margin_left = Inches(0.02)
+    cbtf.margin_right = Inches(0.02)
+
+    p = cbtf.paragraphs[0]
+    p.text = caption_text
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(10.5)
+    p.font.bold = True
+    p.font.color.rgb = WHITE if is_dark else TEXT_DARK
+
+    if badge_text:
+        p2 = cbtf.add_paragraph()
+        p2.text = badge_text
+        p2.font.name = FONT_FAMILY
+        p2.font.size = Pt(9.5)
+        p2.font.color.rgb = CYAN_BRIGHT if is_dark else CYAN_DEEP
+
+    return total_h
 
 def build_presentation():
     prs = Presentation()
@@ -94,445 +152,480 @@ def build_presentation():
     blank_layout = prs.slide_layouts[6]
 
     # =========================================================================
-    # SLIDE 1: Title Slide (Dark Academic Navy Theme)
+    # SLIDE 1: Professional Cover (Theme: Deep Navy & Electric Cyan)
     # =========================================================================
     slide1 = prs.slides.add_slide(blank_layout)
-    set_slide_background(slide1, NAVY_BG)
+    set_slide_background(slide1, NAVY_DEEP)
 
-    # Accent Top Stripe
+    # Top Cyan Accent Band
     stripe = slide1.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(13.333), Inches(0.12))
     stripe.fill.solid()
-    stripe.fill.fore_color.rgb = PRIMARY_BLUE
+    stripe.fill.fore_color.rgb = CYAN_BRIGHT
     stripe.line.fill.background()
 
-    # Left Branding & Title Content Box
-    tb_left = slide1.shapes.add_textbox(Inches(0.8), Inches(0.8), Inches(6.8), Inches(5.8))
+    # Left Section: Typography & Attribution (Width: 6.8 in)
+    tb_left = slide1.shapes.add_textbox(Inches(0.8), Inches(0.85), Inches(6.6), Inches(5.8))
     tf1 = tb_left.text_frame
     tf1.word_wrap = True
 
     # Institution Pill
     p = tf1.paragraphs[0]
     p.text = "🏛️ SHARAD INSTITUTE OF TECHNOLOGY COLLEGE OF ENGINEERING"
-    p.font.name = FONT_HEADING
-    p.font.size = Pt(11)
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(12)
     p.font.bold = True
-    p.font.color.rgb = EMERALD
+    p.font.color.rgb = CYAN_BRIGHT
     p.space_after = Pt(4)
 
-    # Sub-department
+    # Department
     p = tf1.add_paragraph()
     p.text = "Department of Computer Science & Engineering • Academic Year 2025–26"
-    p.font.name = FONT_BODY
-    p.font.size = Pt(11)
-    p.font.color.rgb = TEXT_LIGHT
-    p.space_after = Pt(24)
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(12)
+    p.font.color.rgb = TEXT_DIM
+    p.space_after = Pt(22)
 
-    # Main Project Title
+    # Title: 36 pt Bold
     p = tf1.add_paragraph()
     p.text = "Campus Connect ERP"
-    p.font.name = FONT_HEADING
-    p.font.size = Pt(38)
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(36)
     p.font.bold = True
     p.font.color.rgb = WHITE
     p.space_after = Pt(6)
 
-    # Subtitle
+    # Subtitle: 20 pt Semi-bold Cyan
     p = tf1.add_paragraph()
-    p.text = "Integrated College Management & Academic Ledger System"
-    p.font.name = FONT_HEADING
-    p.font.size = Pt(17)
+    p.text = "Integrated Campus Management System"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(20)
     p.font.bold = True
-    p.font.color.rgb = PRIMARY_BLUE
+    p.font.color.rgb = CYAN_BRIGHT
     p.space_after = Pt(18)
 
-    # Overview Description
+    # Viva-ready description: 14 pt
     p = tf1.add_paragraph()
-    p.text = "A production-grade, centralized enterprise portal orchestrating student attendance tracking, 4-tier continuous examination marks entry, automated grade card publication, coursework lifecycle, and role-governed campus administration."
-    p.font.name = FONT_BODY
-    p.font.size = Pt(12)
+    p.text = "A production-grade, centralized web application orchestrating roll-call attendance tracking, 4-tier continuous examination assessment, automated student grade card publication, and role-governed campus administration."
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(14)
     p.font.color.rgb = RGBColor(203, 213, 225)
-    p.space_after = Pt(22)
+    p.space_after = Pt(24)
 
-    # Badges Box / Technology Summary
-    p = tf1.add_paragraph()
-    p.text = "VERIFIED TECHNOLOGY STACK:"
-    p.font.name = FONT_HEADING
-    p.font.size = Pt(9.5)
+    # Project Info Box
+    info_box = slide1.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(4.7), Inches(6.5), Inches(1.85))
+    info_box.fill.solid()
+    info_box.fill.fore_color.rgb = NAVY_CARD
+    info_box.line.color.rgb = BORDER_DARK
+    info_box.line.width = Pt(1)
+
+    ib_tf = info_box.text_frame
+    ib_tf.word_wrap = True
+    ib_tf.margin_left = Inches(0.2)
+    ib_tf.margin_top = Inches(0.12)
+
+    p = ib_tf.paragraphs[0]
+    p.text = "PROJECT DOMAIN: Web Applications • Academic ERP Architecture"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(11)
     p.font.bold = True
-    p.font.color.rgb = RGBColor(148, 163, 184)
-    p.space_after = Pt(6)
+    p.font.color.rgb = CYAN_BRIGHT
+    p.space_after = Pt(4)
 
-    p = tf1.add_paragraph()
-    p.text = "• Backend: Python 3.11 • Flask Web Framework • SQLAlchemy 2.0 ORM\n• Database: PostgreSQL Cloud DB • Connection Pooling • Alembic\n• Frontend: Responsive HTML5 • Vanilla CSS3 • Vanilla JavaScript ES6\n• Deployment: Render Cloud Web Service • Gunicorn • ProxyFix Security"
-    p.font.name = FONT_BODY
-    p.font.size = Pt(10.5)
-    p.font.color.rgb = RGBColor(226, 232, 240)
-    p.space_after = Pt(20)
+    p = ib_tf.add_paragraph()
+    p.text = "• Technology Stack: Python 3.11 • Flask Web Framework • PostgreSQL • SQLAlchemy 2.0 ORM\n• Developer Attribution: Ayan Mulani (Project Lead) & Project Team\n• GitHub Codebase: https://github.com/ayanmulani4867-cyber/Campus-mini2"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(11)
+    p.font.color.rgb = TEXT_LIGHT
 
-    # Repository & Project Info Box
-    p = tf1.add_paragraph()
-    p.text = "Project Repository: https://github.com/ayanmulani4867-cyber/Campus-mini2\nDeveloper Attribution: Ayan Mulani & Engineering Team | SITCOE Yadrav"
-    p.font.name = FONT_BODY
-    p.font.size = Pt(9.5)
-    p.font.color.rgb = RGBColor(148, 163, 184)
+    # Right Section: Real Dashboard Screenshot Frame
+    hero_frame = slide1.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(7.7), Inches(1.1), Inches(4.85), Inches(5.45))
+    hero_frame.fill.solid()
+    hero_frame.fill.fore_color.rgb = NAVY_CARD
+    hero_frame.line.color.rgb = CYAN_DEEP
+    hero_frame.line.width = Pt(1.5)
 
-    # Right Showcase: Actual Portal Login & Admin Dashboard Screenshot
-    # Screenshot Frame Box
-    frame = slide1.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(7.7), Inches(1.0), Inches(4.8), Inches(5.6))
-    frame.fill.solid()
-    frame.fill.fore_color.rgb = NAVY_HEADER
-    frame.line.color.rgb = RGBColor(51, 65, 85)
-    frame.line.width = Pt(1.5)
+    hf_tb = slide1.shapes.add_textbox(Inches(7.8), Inches(1.15), Inches(4.65), Inches(0.4))
+    hf_p = hf_tb.text_frame.paragraphs[0]
+    hf_p.text = "AUTHENTIC LIVE SYSTEM DASHBOARD"
+    hf_p.font.name = FONT_FAMILY
+    hf_p.font.size = Pt(11)
+    hf_p.font.bold = True
+    hf_p.font.color.rgb = CYAN_BRIGHT
 
-    frame_label = slide1.shapes.add_textbox(Inches(7.8), Inches(1.05), Inches(4.6), Inches(0.4))
-    fl_tf = frame_label.text_frame
-    fl_p = fl_tf.paragraphs[0]
-    fl_p.text = "REAL RUNNING SYSTEM INTERFACE"
-    fl_p.font.name = FONT_HEADING
-    fl_p.font.size = Pt(9)
-    fl_p.font.bold = True
-    fl_p.font.color.rgb = PRIMARY_BLUE
-
-    # Insert Real Screenshot 1: 01_login_portal.png
-    img1_path = os.path.join(SCREENSHOTS_DIR, "01_login_portal.png")
-    if os.path.exists(img1_path):
-        slide1.shapes.add_picture(img1_path, Inches(7.85), Inches(1.4), width=Inches(4.5))
-
-    # Real Screenshot 2 snippet: 02_admin_dashboard.png below
     img2_path = os.path.join(SCREENSHOTS_DIR, "02_admin_dashboard.png")
     if os.path.exists(img2_path):
-        slide1.shapes.add_picture(img2_path, Inches(7.85), Inches(3.95), width=Inches(4.5))
+        slide1.shapes.add_picture(img2_path, Inches(7.85), Inches(1.6), width=Inches(4.55))
 
-    # Slide 1 number
-    s1_num = slide1.shapes.add_textbox(Inches(11.0), Inches(6.9), Inches(1.5), Inches(0.3))
-    s1_ntf = s1_num.text_frame
-    s1_np = s1_ntf.paragraphs[0]
-    s1_np.alignment = PP_ALIGN.RIGHT
-    s1_np.text = "Slide 1 of 7"
-    s1_np.font.size = Pt(10)
-    s1_np.font.bold = True
-    s1_np.font.color.rgb = RGBColor(148, 163, 184)
+    # Metric Badges under hero screenshot
+    badge_tb = slide1.shapes.add_textbox(Inches(7.85), Inches(4.85), Inches(4.55), Inches(1.6))
+    btf = badge_tb.text_frame
+    btf.word_wrap = True
+    p = btf.paragraphs[0]
+    p.text = "Verified System Capabilities:"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(12)
+    p.font.bold = True
+    p.font.color.rgb = WHITE
+    p.space_after = Pt(3)
+
+    p = btf.add_paragraph()
+    p.text = "✔ Real-Time PostgreSQL Database Connection\n✔ 3 Roles: Administrator, Faculty, Student\n✔ Zero Mock Data: Authentic Academic Records"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(11)
+    p.font.color.rgb = CYAN_BRIGHT
+
+    # Slide 1 Number
+    s1_num = slide1.shapes.add_textbox(Inches(11.0), Inches(6.8), Inches(1.5), Inches(0.35))
+    s1_p = s1_num.text_frame.paragraphs[0]
+    s1_p.alignment = PP_ALIGN.RIGHT
+    s1_p.text = "Slide 1 of 7"
+    s1_p.font.size = Pt(12)
+    s1_p.font.bold = True
+    s1_p.font.color.rgb = TEXT_DIM
 
 
     # =========================================================================
-    # SLIDE 2: Problem Statement and Objectives
+    # SLIDE 2: Problem Statement and Objectives (Theme: Clean White & Cyan)
     # =========================================================================
     slide2 = prs.slides.add_slide(blank_layout)
     set_slide_background(slide2, PAGE_BG)
-    add_header(slide2, "Problem Statement & Strategic Objectives", "PROJECT FOUNDATION", 2)
+    add_header(slide2, "Problem Statement & Measurable Objectives", "PROJECT MOTIVATION & SCOPE", 2)
     add_footer(slide2, 2)
 
     # 2 Column Cards: Left (Problems), Right (Objectives)
-    # Column 1: Current Challenges (Width: 5.6 Inches)
-    card_prob = slide2.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.55), Inches(5.7), Inches(5.35))
-    card_prob.fill.solid()
-    card_prob.fill.fore_color.rgb = CARD_BG
-    card_prob.line.color.rgb = BORDER_COLOR
-    card_prob.line.width = Pt(1)
+    # Column 1: Problems Card (Width: 5.7 in)
+    p_card = slide2.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.65), Inches(5.7), Inches(5.15))
+    p_card.fill.solid()
+    p_card.fill.fore_color.rgb = WHITE
+    p_card.line.color.rgb = BORDER_SUBTLE
+    p_card.line.width = Pt(1)
 
-    ptf = card_prob.text_frame
+    ptf = p_card.text_frame
     ptf.word_wrap = True
     ptf.margin_left = Inches(0.3)
     ptf.margin_right = Inches(0.3)
-    ptf.margin_top = Inches(0.25)
+    ptf.margin_top = Inches(0.22)
 
     p = ptf.paragraphs[0]
-    p.text = "🚨 ACADEMIC PAIN POINTS & CHALLENGES"
-    p.font.name = FONT_HEADING
+    p.text = "🚨 OPERATIONAL CHALLENGES IN CAMPUS ADMINISTRATION"
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(13)
     p.font.bold = True
-    p.font.color.rgb = RGBColor(220, 38, 38)
+    p.font.color.rgb = CORAL
     p.space_after = Pt(14)
 
     problems = [
-        ("Fragmented Academic Information",
-         "Colleges traditionally store student records, enrollment lists, and course schedules across disparate offline registers and unlinked spreadsheets, leading to data synchronization bottlenecks."),
-        ("Inefficient Attendance & Result Tracking",
-         "Manual attendance logs make real-time roll-call auditing cumbersome. Continuous assessment (CA1, CA2, Mid-Sem, End-Sem) lacks automated total calculation, resulting in delayed grade finalization."),
-        ("Manual Notice & Assignment Circulation",
-         "Circulating physical circulars and collecting assignment submissions via email causes lost submissions, unverified deadlines, and absence of an auditable evaluation history."),
-        ("Lack of Role-Governed Workspace Isolation",
-         "Absence of granular Role-Based Access Control (RBAC) creates security hazards where administrative privileges, faculty assessment sheets, and student result cards are not strictly compartmentalized.")
+        ("Fragmented Academic Records",
+         "Student profiles, course enrollments, and department lists reside in disconnected offline registers and spreadsheets, causing data inconsistency and synchronization bottlenecks."),
+        ("Laborious Attendance Tracking",
+         "Manual classroom roll-calls require extensive paperwork, leading to delayed computation of attendance percentages and late identification of attendance shortages."),
+        ("Disjoint Examination Scoring",
+         "Multi-tier assessments (CA1, CA2, Mid-Sem, End-Sem) lack centralized tabulation, resulting in manual calculation errors and delayed publication of official student grade cards."),
+        ("Absence of Role-Based Governance",
+         "Without strict Role-Based Access Control (RBAC), administrative privileges, faculty grading sheets, and student academic reports are not securely compartmentalized.")
     ]
 
     for title, desc in problems:
         p = ptf.add_paragraph()
         p.text = f"• {title}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(11)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
         p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
+        p.font.color.rgb = TEXT_DARK
         
         p = ptf.add_paragraph()
         p.text = f"  {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(10)
-        p.font.color.rgb = TEXT_MUTED
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(12)
+        p.font.color.rgb = TEXT_BODY
         p.space_after = Pt(10)
 
-    # Column 2: Objectives & Engineering Solutions (Width: 5.7 Inches)
-    card_obj = slide2.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.8), Inches(1.55), Inches(5.7), Inches(5.35))
-    card_obj.fill.solid()
-    card_obj.fill.fore_color.rgb = CARD_BG
-    card_obj.line.color.rgb = BORDER_COLOR
-    card_obj.line.width = Pt(1)
+    # Column 2: Objectives Card (Width: 5.7 in)
+    o_card = slide2.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.8), Inches(1.65), Inches(5.7), Inches(5.15))
+    o_card.fill.solid()
+    o_card.fill.fore_color.rgb = WHITE
+    o_card.line.color.rgb = BORDER_SUBTLE
+    o_card.line.width = Pt(1)
 
-    otf = card_obj.text_frame
+    otf = o_card.text_frame
     otf.word_wrap = True
     otf.margin_left = Inches(0.3)
     otf.margin_right = Inches(0.3)
-    otf.margin_top = Inches(0.25)
+    otf.margin_top = Inches(0.22)
 
     p = otf.paragraphs[0]
-    p.text = "🎯 CORE OBJECTIVES OF CAMPUS CONNECT ERP"
-    p.font.name = FONT_HEADING
+    p.text = "🎯 CAMPUS CONNECT ERP OBJECTIVES & SOLUTIONS"
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(13)
     p.font.bold = True
-    p.font.color.rgb = EMERALD
+    p.font.color.rgb = CYAN_PRIMARY
     p.space_after = Pt(14)
 
     objectives = [
-        ("Centralized Academic Master Database",
-         "Deploy a unified relational PostgreSQL schema managed via SQLAlchemy 2.0 ORM, integrating Students, Faculty, Courses, Departments, and Enrollments with zero demo/mock fallback."),
-        ("Continuous 4-Tier Assessment & Grade Generation",
-         "Provide faculty with dedicated grading sheets for CA1 (20), CA2 (20), Mid-Sem (30), and End-Sem (70), featuring approval workflows and instant SGPA/CGPA grade card generation."),
-        ("Live Attendance Ledger & Eligibility Monitoring",
+        ("Centralized Relational Database",
+         "Establish a unified PostgreSQL database via SQLAlchemy 2.0 ORM, integrating Students, Faculty, Courses, and Departments with zero reliance on placeholder demo data."),
+        ("Real-Time Attendance Ledger",
          "Digitize classroom roll-call with live attendance score computation, subject-wise breakdown, and automatic flagging of students falling below the mandatory 75% board threshold."),
-        ("Multi-Tier Role-Based Access Control (RBAC)",
-         "Enforce strict server-side session authentication with token isolation across Administrators, Faculty, and Students to guarantee data integrity and individual record privacy.")
+        ("Unified 4-Tier Assessment Engine",
+         "Equip faculty with structured grading sheets for CA1 (20), CA2 (20), Mid-Sem (30), and End-Sem (70), featuring review submission and automated SGPA/CGPA grade card generation."),
+        ("Strict Role-Based Access Control (RBAC)",
+         "Enforce token-based session verification and server-side route guards across Administrators, Faculty, and Students to safeguard individual academic records and system security.")
     ]
 
     for title, desc in objectives:
         p = otf.add_paragraph()
         p.text = f"✔ {title}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(11)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
         p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
+        p.font.color.rgb = TEXT_DARK
         
         p = otf.add_paragraph()
         p.text = f"  {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(10)
-        p.font.color.rgb = TEXT_MUTED
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(12)
+        p.font.color.rgb = TEXT_BODY
         p.space_after = Pt(10)
 
 
     # =========================================================================
-    # SLIDE 3: System Architecture and Technology Stack
+    # SLIDE 3: System Architecture and Technology Stack (Theme: Clean White & Cyan)
     # =========================================================================
     slide3 = prs.slides.add_slide(blank_layout)
     set_slide_background(slide3, PAGE_BG)
-    add_header(slide3, "System Architecture & Technology Stack", "TECHNICAL SPECIFICATION", 3)
+    add_header(slide3, "System Architecture & Verified Technology Stack", "TECHNICAL SPECIFICATION & FLOW", 3)
     add_footer(slide3, 3)
 
-    # 4 Architecture Columns (Width 2.75 each, Gap 0.24)
-    layers = [
+    # Top Section: 3-Tier Architecture Flow Visual (Height: 1.65 in)
+    tiers = [
+        ("01 • PRESENTATION TIER", "Client Browser Interface", "Responsive HTML5, Vanilla CSS3 (Custom Theme), Vanilla JavaScript (ES6 Fetch Client)", CYAN_PRIMARY),
+        ("02 • APPLICATION TIER", "Python Flask REST Backend", "Application Factory Pattern, Blueprint Routes (Auth, Users, Attendance, Results), RBAC Decorators", NAVY_DEEP),
+        ("03 • PERSISTENCE TIER", "PostgreSQL Cloud Database", "SQLAlchemy 2.0 ORM, Alembic Migrations, Declarative Models, Connection Pooling, Zero Mock Fallback", EMERALD)
+    ]
+
+    tier_w = Inches(3.6)
+    tier_gap = Inches(0.46)
+    for i, (tag, title, desc, color) in enumerate(tiers):
+        tx = Inches(0.8) + i * (tier_w + tier_gap)
+        t_box = slide3.shapes.add_shape(MSO_SHAPE.RECTANGLE, tx, Inches(1.65), tier_w, Inches(1.65))
+        t_box.fill.solid()
+        t_box.fill.fore_color.rgb = WHITE
+        t_box.line.color.rgb = color
+        t_box.line.width = Pt(1.5)
+
+        tb_tf = t_box.text_frame
+        tb_tf.word_wrap = True
+        tb_tf.margin_left = Inches(0.18)
+        tb_tf.margin_top = Inches(0.12)
+
+        p = tb_tf.paragraphs[0]
+        p.text = tag
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(10.5)
+        p.font.bold = True
+        p.font.color.rgb = color
+        p.space_after = Pt(3)
+
+        p = tb_tf.add_paragraph()
+        p.text = title
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
+        p.font.bold = True
+        p.font.color.rgb = TEXT_DARK
+        p.space_after = Pt(4)
+
+        p = tb_tf.add_paragraph()
+        p.text = desc
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(11)
+        p.font.color.rgb = TEXT_BODY
+
+        # Arrow connector between tiers
+        if i < 2:
+            arr_box = slide3.shapes.add_textbox(tx + tier_w, Inches(2.2), tier_gap, Inches(0.5))
+            ap = arr_box.text_frame.paragraphs[0]
+            ap.alignment = PP_ALIGN.CENTER
+            ap.text = "➔"
+            ap.font.name = FONT_FAMILY
+            ap.font.size = Pt(20)
+            ap.font.bold = True
+            ap.font.color.rgb = CYAN_PRIMARY
+
+    # Bottom Section: 4 Verified Tech Cards (Top: 3.55 in, Height: 3.25 in)
+    tech_cards = [
         {
-            "num": "01",
-            "layer": "CLIENT INTERFACE",
-            "tech": "Frontend Architecture",
-            "color": ROYAL_BLUE,
-            "items": [
-                ("HTML5 Semantic UI", "Accessible, structured document layout tailored for academic dashboards."),
-                ("Vanilla CSS3", "Design system with customized slate tokens, CSS variables, zero Tailwind overhead."),
-                ("Vanilla JavaScript (ES6)", "Lightweight, modular fetch client handling REST APIs and DOM rendering."),
-                ("Multi-Tab Isolation", "Hybrid sessionStorage and localStorage token management preventing logout collisions.")
+            "tag": "FRONTEND STACK",
+            "name": "Semantic Web UI",
+            "color": CYAN_PRIMARY,
+            "bullets": [
+                ("HTML5 Semantic UI", "Clean document layout built for accessibility."),
+                ("Vanilla CSS3 Tokens", "Slate & navy academic palette; zero framework bloat."),
+                ("Vanilla JavaScript (ES6)", "Native fetch API client handling dynamic DOM updates."),
+                ("Multi-Tab Isolation", "Session token isolation preventing accidental logouts.")
             ]
         },
         {
-            "num": "02",
-            "layer": "APPLICATION LAYER",
-            "tech": "Flask REST Backend",
-            "color": PRIMARY_BLUE,
-            "items": [
-                ("Python 3.11 + Flask", "Lightweight micro-framework utilizing the Application Factory design pattern."),
-                ("Modular Blueprints", "Separation of concerns: auth, users, attendance, results, assignments, notices, events."),
-                ("RBAC & Security Decorators", "@login_required & @role_required enforcing strict route authorization."),
-                ("Password Security", "Werkzeug PBKDF2 hashing with salted credentials across all accounts.")
+            "tag": "BACKEND FRAMEWORK",
+            "name": "Python Flask Engine",
+            "color": NAVY_DEEP,
+            "bullets": [
+                ("Python 3.11 Runtime", "High execution speed and modern async support."),
+                ("Application Factory", "Modular create_app() design with clean configuration."),
+                ("Modular Blueprints", "Separation of concerns: auth, users, attendance, results."),
+                ("PBKDF2 Security", "Salted password hashing with Werkzeug security utilities.")
             ]
         },
         {
-            "num": "03",
-            "layer": "DATA PERSISTENCE",
-            "tech": "PostgreSQL & SQLAlchemy",
+            "tag": "DATABASE & ORM",
+            "name": "PostgreSQL & SQLAlchemy",
             "color": EMERALD,
-            "items": [
-                ("PostgreSQL Database", "Relational database hosted on Render Cloud with high reliability."),
-                ("SQLAlchemy 2.0 ORM", "Declarative schema models with cascade deletion and relational integrity."),
-                ("Alembic Migrations", "Strict schema version control ensuring seamless zero-downtime upgrades."),
-                ("Zero Mock Fallback", "All views directly bound to genuine SQL records with honest empty states.")
+            "bullets": [
+                ("PostgreSQL Database", "Reliable relational cloud storage hosted on Render."),
+                ("SQLAlchemy 2.0 ORM", "Declarative schema models with cascade deletion rules."),
+                ("Alembic Migrations", "Controlled database schema upgrades and rollback safety."),
+                ("Zero Mock Fallback", "Every view directly queries live SQL tables.")
             ]
         },
         {
-            "num": "04",
-            "layer": "DEPLOYMENT & HOSTING",
-            "tech": "Production DevOps",
-            "color": AMBER,
-            "items": [
-                ("Render Web Service", "Automated continuous delivery synchronized with GitHub main branch."),
-                ("Gunicorn WSGI Server", "Production multi-worker WSGI HTTP server handling concurrent requests."),
-                ("ProxyFix Middleware", "Reverse proxy header correction for secure HTTPS redirection and cookies."),
-                ("Environment Hygiene", "Strict credential isolation through environment variables (.env).")
+            "tag": "DEVOPS & DEPLOYMENT",
+            "name": "Production Cloud Stack",
+            "color": CYAN_DEEP,
+            "bullets": [
+                ("Render Web Service", "Continuous deployment synced with GitHub main."),
+                ("Gunicorn WSGI Server", "Multi-worker WSGI server managing concurrent requests."),
+                ("ProxyFix Middleware", "Proper HTTPS reverse-proxy header handling."),
+                ("Environment Hygiene", "Isolated configuration using environment variables (.env).")
             ]
         }
     ]
 
     col_w = Inches(2.75)
     gap = Inches(0.24)
-    left_start = Inches(0.8)
+    for i, tc in enumerate(tech_cards):
+        cx = Inches(0.8) + i * (col_w + gap)
+        c_box = slide3.shapes.add_shape(MSO_SHAPE.RECTANGLE, cx, Inches(3.55), col_w, Inches(3.25))
+        c_box.fill.solid()
+        c_box.fill.fore_color.rgb = WHITE
+        c_box.line.color.rgb = BORDER_SUBTLE
+        c_box.line.width = Pt(1)
 
-    for i, lyr in enumerate(layers):
-        x = left_start + i * (col_w + gap)
-        y = Inches(1.55)
-        h = Inches(4.0)
+        # Top Accent Header Bar
+        hbar = slide3.shapes.add_shape(MSO_SHAPE.RECTANGLE, cx, Inches(3.55), col_w, Inches(0.55))
+        hbar.fill.solid()
+        hbar.fill.fore_color.rgb = tc["color"]
+        hbar.line.fill.background()
 
-        box = slide3.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, col_w, h)
-        box.fill.solid()
-        box.fill.fore_color.rgb = CARD_BG
-        box.line.color.rgb = BORDER_COLOR
-        box.line.width = Pt(1)
+        h_tb = slide3.shapes.add_textbox(cx, Inches(3.6), col_w, Inches(0.45))
+        hp = h_tb.text_frame.paragraphs[0]
+        hp.alignment = PP_ALIGN.CENTER
+        hp.text = tc["tag"]
+        hp.font.name = FONT_FAMILY
+        hp.font.size = Pt(11)
+        hp.font.bold = True
+        hp.font.color.rgb = WHITE
 
-        # Header tag stripe inside box
-        top_bar = slide3.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, col_w, Inches(0.6))
-        top_bar.fill.solid()
-        top_bar.fill.fore_color.rgb = lyr["color"]
-        top_bar.line.fill.background()
+        # Body Content
+        b_tb = slide3.shapes.add_textbox(cx + Inches(0.12), Inches(4.18), col_w - Inches(0.24), Inches(2.5))
+        btf = b_tb.text_frame
+        btf.word_wrap = True
 
-        tb = slide3.shapes.add_textbox(x, y + Inches(0.05), col_w, Inches(0.5))
-        tf = tb.text_frame
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.CENTER
-        p.text = f"{lyr['num']} • {lyr['layer']}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(10)
+        p = btf.paragraphs[0]
+        p.text = tc["name"]
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(13)
         p.font.bold = True
-        p.font.color.rgb = WHITE
+        p.font.color.rgb = TEXT_DARK
+        p.space_after = Pt(6)
 
-        # Content
-        c_tb = slide3.shapes.add_textbox(x + Inches(0.12), y + Inches(0.65), col_w - Inches(0.24), h - Inches(0.75))
-        ctf = c_tb.text_frame
-        ctf.word_wrap = True
-
-        p = ctf.paragraphs[0]
-        p.text = lyr["tech"]
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(12)
-        p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
-        p.space_after = Pt(8)
-
-        for heading, body in lyr["items"]:
-            p = ctf.add_paragraph()
-            p.text = f"• {heading}:"
-            p.font.name = FONT_HEADING
-            p.font.size = Pt(9.5)
-            p.font.bold = True
-            p.font.color.rgb = TEXT_MAIN
-            
-            p = ctf.add_paragraph()
-            p.text = f"  {body}"
-            p.font.name = FONT_BODY
-            p.font.size = Pt(8.5)
-            p.font.color.rgb = TEXT_MUTED
+        for heading, desc in tc["bullets"]:
+            p = btf.add_paragraph()
+            p.text = f"• {heading}: {desc}"
+            p.font.name = FONT_FAMILY
+            p.font.size = Pt(10)
+            p.font.color.rgb = TEXT_BODY
             p.space_after = Pt(4)
-
-    # Bottom Architecture Flow Diagram Banner
-    flow_box = slide3.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(5.7), Inches(11.733), Inches(1.2))
-    flow_box.fill.solid()
-    flow_box.fill.fore_color.rgb = NAVY_BG
-    flow_box.line.color.rgb = RGBColor(51, 65, 85)
-    flow_box.line.width = Pt(1)
-
-    ftb = slide3.shapes.add_textbox(Inches(0.9), Inches(5.75), Inches(11.533), Inches(1.1))
-    ftf = ftb.text_frame
-    ftf.word_wrap = True
-
-    p = ftf.paragraphs[0]
-    p.text = "DATA FLOW & REQUEST EXECUTION PIPELINE"
-    p.font.name = FONT_HEADING
-    p.font.size = Pt(10)
-    p.font.bold = True
-    p.font.color.rgb = EMERALD
-    p.space_after = Pt(4)
-
-    p = ftf.add_paragraph()
-    p.text = "[Student / Faculty / Admin Client]  ──(HTTPS / REST JSON)──►  [Gunicorn WSGI + ProxyFix]  ──►  [Flask Application Factory & Route Blueprints]\n                                                                                                              │ (RBAC Decorators & Token Auth)\n                                                                                                              ▼\n[PostgreSQL Cloud Database (Render)]  ◄──(SQLAlchemy 2.0 ORM Engine & Session Pool)───  [Models: User, Attendance, Result, Assignment]"
-    p.font.name = "Consolas"
-    p.font.size = Pt(8.5)
-    p.font.color.rgb = RGBColor(226, 232, 240)
 
 
     # =========================================================================
-    # SLIDE 4: Admin Dashboard and User Management
+    # SLIDE 4: Dashboard and User Management (Theme: Clean White & Cyan)
     # =========================================================================
     slide4 = prs.slides.add_slide(blank_layout)
     set_slide_background(slide4, PAGE_BG)
-    add_header(slide4, "Administrative Control & Campus User Directory", "ADMINISTRATION MODULE", 4)
+    add_header(slide4, "Centralized Administration & Campus User Directory", "CORE MANAGEMENT MODULE", 4)
     add_footer(slide4, 4)
 
-    # Left: 2 Actual Screenshots (Stacked)
-    # Screenshot 1: 02_admin_dashboard.png
-    sc1_y = Inches(1.55)
-    sc_w = Inches(6.0)
-    if os.path.exists(img2_path):
-        slide4.shapes.add_picture(img2_path, Inches(0.8), sc1_y, width=sc_w)
-
-    # Screenshot 2: 03_user_directory.png
+    # Left: Hero Screenshot (User Directory)
     img3_path = os.path.join(SCREENSHOTS_DIR, "03_user_directory.png")
-    sc2_y = Inches(4.25)
-    if os.path.exists(img3_path):
-        slide4.shapes.add_picture(img3_path, Inches(0.8), sc2_y, width=sc_w)
+    add_image_card(
+        slide4, img3_path,
+        left=Inches(0.8), top=Inches(1.65), width=Inches(6.3),
+        caption_text="Figure 1: Campus User Directory displaying verified SITCOE student & faculty database records",
+        badge_text="Live Relational Data: PRN 24101099, 24101005 • Faculty Code FAC-TEST-01 • Computer Science Dept"
+    )
 
-    # Right: Feature Explanations & Verified Capabilities (Width: 5.5 Inches)
-    right_box = slide4.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(7.05), Inches(1.55), Inches(5.48), Inches(5.35))
-    right_box.fill.solid()
-    right_box.fill.fore_color.rgb = CARD_BG
-    right_box.line.color.rgb = BORDER_COLOR
-    right_box.line.width = Pt(1)
+    # Relational Database Status Callout below image card
+    db_stat = slide4.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(6.3), Inches(6.3), Inches(0.55))
+    db_stat.fill.solid()
+    db_stat.fill.fore_color.rgb = WHITE
+    db_stat.line.color.rgb = BORDER_SUBTLE
+    db_stat.line.width = Pt(1)
 
-    rtf = right_box.text_frame
+    dstf = db_stat.text_frame
+    dstf.margin_left = Inches(0.15)
+    dstf.margin_top = Inches(0.08)
+    p = dstf.paragraphs[0]
+    p.text = "⚡ Relational Schema Status: 100% Synced • 2 Students • 3 Faculty • 19 Courses • 6 Depts"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(10.5)
+    p.font.bold = True
+    p.font.color.rgb = CYAN_PRIMARY
+
+    # Right: Verified Capabilities Card (Width: 5.1 in, Top: 1.65 in, Height: 5.2 in)
+    r_card = slide4.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(7.4), Inches(1.65), Inches(5.1), Inches(5.2))
+    r_card.fill.solid()
+    r_card.fill.fore_color.rgb = WHITE
+    r_card.line.color.rgb = BORDER_SUBTLE
+    r_card.line.width = Pt(1)
+
+    rtf = r_card.text_frame
     rtf.word_wrap = True
     rtf.margin_left = Inches(0.3)
     rtf.margin_right = Inches(0.3)
-    rtf.margin_top = Inches(0.25)
+    rtf.margin_top = Inches(0.22)
 
     p = rtf.paragraphs[0]
-    p.text = "🏛️ CENTRALIZED CAMPUS GOVERNANCE"
-    p.font.name = FONT_HEADING
+    p.text = "🏛️ VERIFIED ADMINISTRATIVE CAPABILITIES"
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(13)
     p.font.bold = True
-    p.font.color.rgb = PRIMARY_BLUE
-    p.space_after = Pt(10)
+    p.font.color.rgb = CYAN_PRIMARY
+    p.space_after = Pt(12)
 
     admin_features = [
-        ("Institutional Overview & Live KPI Metrics",
-         "The Admin Dashboard aggregates real-time metrics across the institution: Total Enrolled Students (2), Teaching Faculty (3), Active Courses (19), Engineering Departments (6), and 100% System Health."),
-        ("Centralized Campus User Directory",
-         "Consolidated member ledger linking authentication accounts directly with Student and Faculty profiles. Eliminates detached data records and guarantees profile referential integrity."),
+        ("Institutional Health & KPI Metrics",
+         "The Admin Dashboard aggregates real-time metrics across SITCOE: Total Enrolled Students (2), Teaching Faculty (3), Active Courses (19), and 6 Engineering Departments with 100% operational status."),
+        ("Unified Campus Member Ledger",
+         "Directly couples authentication credentials with Student and Faculty academic profiles. Eliminates orphan records and guarantees complete profile referential integrity."),
         ("Multi-Field Full-Text Search",
-         "Instant searching across student and faculty records by Full Name, Roll Number, PRN (e.g. 24101099, 24101005), Employee Code (FAC-TEST-01), or College Email address."),
-        ("Granular Multi-Criteria Filtering",
-         "Filter registered campus members dynamically by Role (Admin, Faculty, Student), Academic Department (Computer Science & Engineering), Semester, Class Division, and Status."),
-        ("Authorized Member Actions & Lifecycle",
-         "Administrators can inspect detailed member profiles, view official generated grade cards, manage academic enrollment status, and maintain system security.")
+         "Enables immediate member lookup by Full Name, Roll Number, PRN (e.g. 24101099, 24101005), Employee Code (FAC-TEST-01), or College Email address."),
+        ("Departmental Filtering & Role Governance",
+         "Filter registered campus members dynamically by Role (Admin, Faculty, Student), Department (Computer Science & Engineering), Semester, Class Division, and Active Status.")
     ]
 
     for title, desc in admin_features:
         p = rtf.add_paragraph()
         p.text = f"✔ {title}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(10.5)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
         p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
+        p.font.color.rgb = TEXT_DARK
         
         p = rtf.add_paragraph()
         p.text = f"  {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(9.5)
-        p.font.color.rgb = TEXT_MUTED
-        p.space_after = Pt(8)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(12)
+        p.font.color.rgb = TEXT_BODY
+        p.space_after = Pt(10)
 
 
     # =========================================================================
@@ -540,146 +633,158 @@ def build_presentation():
     # =========================================================================
     slide5 = prs.slides.add_slide(blank_layout)
     set_slide_background(slide5, PAGE_BG)
-    add_header(slide5, "Academic Management: Attendance & Examination Results", "ACADEMIC LIFECYCLE", 5)
+    add_header(slide5, "Academic Management: Attendance & Examination Scoring", "ACADEMIC WORKFLOWS", 5)
     add_footer(slide5, 5)
 
-    # 3 Screenshots layout: Left Column has Attendance (04) & Faculty Marks (06); Middle/Right has Student Results (05) + Features
-    # Top Left: 04_student_attendance.png
-    img4_path = os.path.join(SCREENSHOTS_DIR, "04_student_attendance.png")
-    if os.path.exists(img4_path):
-        slide5.shapes.add_picture(img4_path, Inches(0.8), Inches(1.55), width=Inches(5.6))
-
-    # Bottom Left: 06_faculty_results_management.png
-    img6_path = os.path.join(SCREENSHOTS_DIR, "06_faculty_results_management.png")
-    if os.path.exists(img6_path):
-        slide5.shapes.add_picture(img6_path, Inches(0.8), Inches(4.25), width=Inches(5.6))
-
-    # Top Right: 05_student_results.png
+    # 2 Side-by-Side Clean Screenshots: Left (Student Grade Card), Right (Faculty Marks Entry)
+    # Width: 5.6 in -> img_h: 3.40 in, total_h: ~4.12 in. Top: 1.65 in -> ends at ~5.77 in
     img5_path = os.path.join(SCREENSHOTS_DIR, "05_student_results.png")
-    if os.path.exists(img5_path):
-        slide5.shapes.add_picture(img5_path, Inches(6.65), Inches(1.55), width=Inches(5.88))
+    add_image_card(
+        slide5, img5_path,
+        left=Inches(0.8), top=Inches(1.65), width=Inches(5.6),
+        caption_text="Figure 2: Official Published Student Grade Card (Automated SGPA & CGPA Calculation)",
+        badge_text="Verified Student: Aarav Sharma (PRN 24101099) • SGPA 8.93 (First Class) • Grade A"
+    )
 
-    # Bottom Right: Feature Breakdown Card
-    acad_card = slide5.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.65), Inches(4.35), Inches(5.88), Inches(2.55))
-    acad_card.fill.solid()
-    acad_card.fill.fore_color.rgb = CARD_BG
-    acad_card.line.color.rgb = BORDER_COLOR
-    acad_card.line.width = Pt(1)
+    img6_path = os.path.join(SCREENSHOTS_DIR, "06_faculty_results_management.png")
+    add_image_card(
+        slide5, img6_path,
+        left=Inches(6.9), top=Inches(1.65), width=Inches(5.6),
+        caption_text="Figure 3: Faculty Continuous Assessment Sheet (CA1, CA2, Mid-Sem, End-Sem)",
+        badge_text="Workflow: CS601 Software Eng (Div A) • Marks Entry & Review Submission Console"
+    )
 
-    atf = acad_card.text_frame
-    atf.word_wrap = True
-    atf.margin_left = Inches(0.25)
-    atf.margin_right = Inches(0.25)
-    atf.margin_top = Inches(0.18)
+    # Bottom Academic Capabilities Strip (Top: 5.95 in, Height: 0.90 in, Width: 11.7 in)
+    bot_card = slide5.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(5.95), Inches(11.7), Inches(0.90))
+    bot_card.fill.solid()
+    bot_card.fill.fore_color.rgb = WHITE
+    bot_card.line.color.rgb = BORDER_SUBTLE
+    bot_card.line.width = Pt(1)
 
-    p = atf.paragraphs[0]
-    p.text = "📊 VERIFIED ACADEMIC EVALUATION WORKFLOW"
-    p.font.name = FONT_HEADING
+    btf = bot_card.text_frame
+    btf.word_wrap = True
+    btf.margin_left = Inches(0.2)
+    btf.margin_top = Inches(0.08)
+
+    p = btf.paragraphs[0]
+    p.text = "VERIFIED ACADEMIC EVALUATION & ATTENDANCE WORKFLOW:"
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(11)
     p.font.bold = True
-    p.font.color.rgb = ROYAL_BLUE
-    p.space_after = Pt(6)
+    p.font.color.rgb = CYAN_PRIMARY
+    p.space_after = Pt(2)
 
-    acad_features = [
-        ("Real-Time Attendance Ledger",
-         "Live roll-call tracking per course (CS601 Software Eng, 23CS3601 ML, 23CS3602 Software Testing) with Present/Late/Absent metrics and automatic 75% board threshold compliance."),
-        ("4-Tier Assessment System",
-         "Faculty marks entry sheet covering CA1 (20 pts), CA2 (20 pts), Mid-Sem (30 pts), and End-Sem (70 pts) with draft saving and administrative approval workflows."),
-        ("Official Student Grade Card",
-         "Automated total computation (125/100 weighted scale), letter grading (Grade A), SGPA & CGPA calculation (8.93 First Class), and printable grade report generation.")
-    ]
-
-    for title, desc in acad_features:
-        p = atf.add_paragraph()
-        p.text = f"• {title}: {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(9)
-        p.font.color.rgb = TEXT_MAIN
-        p.space_after = Pt(4)
+    p = btf.add_paragraph()
+    p.text = "• 4-Tier Assessment System: Faculty input raw scores for CA1 (20 pts), CA2 (20 pts), Mid-Sem (30 pts), and End-Sem (70 pts) with automated total calculation (125/100 scale).\n• Attendance Roll-Call Ledger: Course-wise session tracking (CS601, 23CS3601, 23CS3602) with automated 75% board threshold compliance monitoring.\n• Administrative Approval Workflow: Instructors save drafts and submit for review; Administrators approve and publish official, tamper-proof student grade reports."
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(10)
+    p.font.color.rgb = TEXT_DARK
 
 
     # =========================================================================
-    # SLIDE 6: Campus Collaboration (Notices, Events and Assignments)
+    # SLIDE 6: Communication and Campus Services (Theme: Clean White & Cyan)
     # =========================================================================
     slide6 = prs.slides.add_slide(blank_layout)
     set_slide_background(slide6, PAGE_BG)
-    add_header(slide6, "Campus Collaboration: Notices, Events & Coursework", "COLLABORATION & SUBMISSIONS", 6)
+    add_header(slide6, "Coursework Lifecycle & Campus Announcements", "COLLABORATION & SERVICES", 6)
     add_footer(slide6, 6)
 
-    # Left: Real Screenshots (08_assignments_management.png & 07_notices_bulletin.png)
+    # Left: Real Screenshot (Coursework Assignments & Submissions)
+    # Width: 6.1 in -> img_h: 3.71 in, total_h: ~4.39 in. Top: 1.65 in -> ends at ~6.04 in
     img8_path = os.path.join(SCREENSHOTS_DIR, "08_assignments_management.png")
-    if os.path.exists(img8_path):
-        slide6.shapes.add_picture(img8_path, Inches(0.8), Inches(1.55), width=Inches(5.8))
+    add_image_card(
+        slide6, img8_path,
+        left=Inches(0.8), top=Inches(1.65), width=Inches(6.1),
+        caption_text="Figure 4: Coursework Assignment Management with submission locking & evaluation queue",
+        badge_text="Active Coursework: CS601 'Module 8 Lab Assignment on Concurrency' • 10 pts • 1 Delivered"
+    )
 
-    img7_path = os.path.join(SCREENSHOTS_DIR, "07_notices_bulletin.png")
-    if os.path.exists(img7_path):
-        slide6.shapes.add_picture(img7_path, Inches(0.8), Inches(4.25), width=Inches(5.8))
+    # Notice snippet indicator below
+    n_box = slide6.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(6.20), Inches(6.1), Inches(0.65))
+    n_box.fill.solid()
+    n_box.fill.fore_color.rgb = WHITE
+    n_box.line.color.rgb = BORDER_SUBTLE
+    n_box.line.width = Pt(1)
 
-    # Right: Feature Cards (Width 5.68 Inches)
-    collab_box = slide6.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.85), Inches(1.55), Inches(5.68), Inches(5.35))
-    collab_box.fill.solid()
-    collab_box.fill.fore_color.rgb = CARD_BG
-    collab_box.line.color.rgb = BORDER_COLOR
-    collab_box.line.width = Pt(1)
+    np_tf = n_box.text_frame
+    np_tf.margin_left = Inches(0.15)
+    np_tf.margin_top = Inches(0.08)
+    p = np_tf.paragraphs[0]
+    p.text = "📢 Campus Notice Board & Cultural Events: Operates directly with PostgreSQL (zero mock data). Active event: Spring Cultural Fest 'Vibrance 2026'."
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(10.5)
+    p.font.color.rgb = TEXT_DARK
 
-    ctf = collab_box.text_frame
+    # Right: Verified Capabilities Card (Width: 5.3 in, Top: 1.65 in, Height: 5.2 in)
+    col_card = slide6.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(7.2), Inches(1.65), Inches(5.3), Inches(5.2))
+    col_card.fill.solid()
+    col_card.fill.fore_color.rgb = WHITE
+    col_card.line.color.rgb = BORDER_SUBTLE
+    col_card.line.width = Pt(1)
+
+    ctf = col_card.text_frame
     ctf.word_wrap = True
     ctf.margin_left = Inches(0.3)
     ctf.margin_right = Inches(0.3)
-    ctf.margin_top = Inches(0.25)
+    ctf.margin_top = Inches(0.22)
 
     p = ctf.paragraphs[0]
-    p.text = "📢 CAMPUS COMMUNICATION & COURSEWORK"
-    p.font.name = FONT_HEADING
+    p.text = "📁 VERIFIED COLLABORATION & CAMPUS SERVICES"
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(13)
     p.font.bold = True
-    p.font.color.rgb = AMBER
-    p.space_after = Pt(12)
+    p.font.color.rgb = CYAN_PRIMARY
+    p.space_after = Pt(14)
 
     collab_features = [
-        ("Coursework & Assignment Management",
+        ("Coursework Assignment Publishing",
          "Faculty can create course-specific assignments (e.g. CS601 'Module 8 Lab Assignment on Concurrency') with point allocations (10 pts), assigned divisions, and strict deadlines."),
-        ("Student Submission & Tamper-Proof Locking",
+        ("Tamper-Proof Submission Locking",
          "Students submit solutions directly through their portal. Once submitted, submissions are timestamped and locked against further modification to ensure academic integrity."),
-        ("Faculty Evaluation & Grading Queue",
-         "Real-time submission ledger displays delivered coursework (1 Completed, 1 Awaiting Review), providing instructors with direct review and grading interfaces."),
+        ("Faculty Evaluation Queue",
+         "Real-time coursework ledger displays delivered submissions (1 Completed, 1 Awaiting Evaluation), providing instructors with direct review and grading interfaces."),
         ("Zero Mock Data Notice Bulletin",
-         "The notice board operates directly against the PostgreSQL database with zero placeholder fallbacks. Handles official announcements across Academic, Examination, and Cultural categories."),
-        ("Campus Events Coordination",
-         "Dynamic event tracking for inter-collegiate and departmental fests (e.g. 'Spring Cultural Fest Vibrance 2026' at Open Air Amphitheatre).")
+         "The campus notice board operates directly against the PostgreSQL database with zero placeholder fallbacks. Handles official announcements across Academic, Examination, and Cultural categories.")
     ]
 
     for title, desc in collab_features:
         p = ctf.add_paragraph()
         p.text = f"✔ {title}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(10.5)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
         p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
+        p.font.color.rgb = TEXT_DARK
         
         p = ctf.add_paragraph()
         p.text = f"  {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(9.5)
-        p.font.color.rgb = TEXT_MUTED
-        p.space_after = Pt(8)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(12)
+        p.font.color.rgb = TEXT_BODY
+        p.space_after = Pt(10)
 
 
     # =========================================================================
-    # SLIDE 7: Conclusion and Future Scope
+    # SLIDE 7: Conclusion and Future Scope (Theme: Deep Navy & Electric Cyan)
     # =========================================================================
     slide7 = prs.slides.add_slide(blank_layout)
-    set_slide_background(slide7, PAGE_BG)
-    add_header(slide7, "Project Conclusion, Impact & Future Roadmap", "PROJECT WRAP-UP", 7)
-    add_footer(slide7, 7)
+    set_slide_background(slide7, NAVY_DEEP)
 
-    # 2 Big Cards: Left (Verified Achievements), Right (Future Roadmap)
-    # Left Card: Achievements (Width: 5.7 Inches)
-    ach_box = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.55), Inches(5.7), Inches(4.35))
+    # Top Cyan Accent Band
+    stripe7 = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(13.333), Inches(0.12))
+    stripe7.fill.solid()
+    stripe7.fill.fore_color.rgb = CYAN_BRIGHT
+    stripe7.line.fill.background()
+
+    add_header(slide7, "Project Conclusion, Impact & Future Roadmap", "PROJECT SYNTHESIS & VIVA SUMMARY", 7, is_dark=True)
+    add_footer(slide7, 7, is_dark=True)
+
+    # 2 Big Cards: Left (Verified Deliverables), Right (Future Roadmap)
+    # Left Card: Achievements & Value (Width: 5.7 in)
+    ach_box = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(1.65), Inches(5.7), Inches(4.25))
     ach_box.fill.solid()
-    ach_box.fill.fore_color.rgb = CARD_BG
-    ach_box.line.color.rgb = BORDER_COLOR
-    ach_box.line.width = Pt(1)
+    ach_box.fill.fore_color.rgb = NAVY_CARD
+    ach_box.line.color.rgb = CYAN_DEEP
+    ach_box.line.width = Pt(1.5)
 
     atf = ach_box.text_frame
     atf.word_wrap = True
@@ -688,45 +793,45 @@ def build_presentation():
     atf.margin_top = Inches(0.22)
 
     p = atf.paragraphs[0]
-    p.text = "🏁 VERIFIED CAPABILITIES & ACHIEVEMENTS"
-    p.font.name = FONT_HEADING
+    p.text = "🏁 VERIFIED CAPABILITIES & PRACTICAL VALUE"
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(13)
     p.font.bold = True
-    p.font.color.rgb = EMERALD
-    p.space_after = Pt(10)
+    p.font.color.rgb = CYAN_BRIGHT
+    p.space_after = Pt(12)
 
     achievements = [
         ("Fully Operational Enterprise System",
-         "Successfully delivered a complete, working ERP system for Sharad Institute of Technology College of Engineering (SITCOE), verified on live PostgreSQL cloud storage."),
-        ("Comprehensive Academic Lifecycle",
+         "Successfully delivered a working college ERP for SITCOE, verified on live PostgreSQL cloud storage with complete schema referential integrity."),
+        ("End-to-End Academic Digitization",
          "Unified attendance roll-call tracking, 4-tier continuous assessment (CA1, CA2, Mid-Sem, End-Sem), and official published grade cards within a single platform."),
         ("Zero Demo/Mock Fallbacks",
-         "Strict data integrity across all modules—every view directly binds to genuine database tables with authentic empty states."),
+         "Strict data integrity across all modules—every view directly queries authentic database tables with legitimate empty states."),
         ("Multi-Role Security & Isolation",
-         "Robust Role-Based Access Control (RBAC) with token session isolation, preventing multi-tab session conflicts between Admin, Faculty, and Student users.")
+         "Robust Role-Based Access Control (RBAC) with token session isolation, preventing multi-tab session conflicts between Admin, Faculty, and Student workspaces.")
     ]
 
     for title, desc in achievements:
         p = atf.add_paragraph()
         p.text = f"✔ {title}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(10.5)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
         p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
+        p.font.color.rgb = WHITE
         
         p = atf.add_paragraph()
         p.text = f"  {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(9.5)
-        p.font.color.rgb = TEXT_MUTED
-        p.space_after = Pt(6)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(12)
+        p.font.color.rgb = TEXT_DIM
+        p.space_after = Pt(8)
 
-    # Right Card: Future Scope (Width: 5.7 Inches)
-    scope_box = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.8), Inches(1.55), Inches(5.7), Inches(4.35))
+    # Right Card: Realistic Future Roadmap (Width: 5.7 in)
+    scope_box = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.8), Inches(1.65), Inches(5.7), Inches(4.25))
     scope_box.fill.solid()
-    scope_box.fill.fore_color.rgb = CARD_BG
-    scope_box.line.color.rgb = BORDER_COLOR
-    scope_box.line.width = Pt(1)
+    scope_box.fill.fore_color.rgb = NAVY_CARD
+    scope_box.line.color.rgb = BORDER_DARK
+    scope_box.line.width = Pt(1.5)
 
     stf = scope_box.text_frame
     stf.word_wrap = True
@@ -736,62 +841,62 @@ def build_presentation():
 
     p = stf.paragraphs[0]
     p.text = "🚀 FUTURE ROADMAP & PLANNED ENHANCEMENTS"
-    p.font.name = FONT_HEADING
+    p.font.name = FONT_FAMILY
     p.font.size = Pt(13)
     p.font.bold = True
-    p.font.color.rgb = PRIMARY_BLUE
-    p.space_after = Pt(10)
+    p.font.color.rgb = EMERALD
+    p.space_after = Pt(12)
 
     future_scope = [
-        ("Automated SMS Shortage Alerts (Planned)",
+        ("Automated Parent SMS Alerts (Planned)",
          "Integrate SMS gateways (Twilio / Fast2SMS) to automatically alert parents and students when overall attendance falls below the mandatory 75% threshold."),
         ("Web Push Notifications (Planned)",
          "Implement Service Worker push notifications for urgent circulars, impending assignment deadlines, and newly published examination grade cards."),
-        ("Advanced Academic Analytics & NIRF Reporting (Planned)",
-         "Build graphical department-wise analytics, batch pass-rate distributions, and automated CSV/PDF report generators for NIRF and NAAC accreditation."),
-        ("Native Mobile Companion Application (Planned)",
-         "Develop a Flutter/React Native mobile client utilizing the existing secure REST API endpoints for convenient student access on Android and iOS devices.")
+        ("Academic Analytics & NIRF Reports (Planned)",
+         "Build graphical department-wise analytics, batch pass-rate distributions, and automated CSV/PDF report generators for NIRF and NAAC accreditation reviews."),
+        ("Native Mobile Companion App (Planned)",
+         "Develop a cross-platform mobile client (Flutter / React Native) leveraging the existing secure REST API endpoints for convenient student access on mobile devices.")
     ]
 
     for title, desc in future_scope:
         p = stf.add_paragraph()
         p.text = f"★ {title}"
-        p.font.name = FONT_HEADING
-        p.font.size = Pt(10.5)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(15)
         p.font.bold = True
-        p.font.color.rgb = TEXT_MAIN
+        p.font.color.rgb = WHITE
         
         p = stf.add_paragraph()
         p.text = f"  {desc}"
-        p.font.name = FONT_BODY
-        p.font.size = Pt(9.5)
-        p.font.color.rgb = TEXT_MUTED
-        p.space_after = Pt(6)
+        p.font.name = FONT_FAMILY
+        p.font.size = Pt(12)
+        p.font.color.rgb = TEXT_DIM
+        p.space_after = Pt(8)
 
-    # Bottom Attribution Banner (Repository & Credits)
-    attrib_box = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(6.05), Inches(11.7), Inches(0.9))
-    attrib_box.fill.solid()
-    attrib_box.fill.fore_color.rgb = NAVY_BG
-    attrib_box.line.color.rgb = RGBColor(51, 65, 85)
-    attrib_box.line.width = Pt(1)
+    # Bottom Attribution Banner & Thank You (Top: 6.05 in, Height: 0.85 in)
+    ab = slide7.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(6.05), Inches(11.7), Inches(0.85))
+    ab.fill.solid()
+    ab.fill.fore_color.rgb = RGBColor(11, 19, 43)
+    ab.line.color.rgb = CYAN_DEEP
+    ab.line.width = Pt(1)
 
-    ab_tf = attrib_box.text_frame
+    ab_tf = ab.text_frame
     ab_tf.word_wrap = True
     ab_tf.margin_left = Inches(0.25)
     ab_tf.margin_top = Inches(0.12)
 
     p = ab_tf.paragraphs[0]
-    p.text = "PROJECT REPOSITORY & CODEBASE:"
-    p.font.name = FONT_HEADING
-    p.font.size = Pt(9.5)
+    p.text = "CAMPUS CONNECT ERP • SITCOE YADRAV • THANK YOU!"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(14)
     p.font.bold = True
-    p.font.color.rgb = EMERALD
+    p.font.color.rgb = CYAN_BRIGHT
     p.space_after = Pt(2)
 
     p = ab_tf.add_paragraph()
-    p.text = "GitHub Repository: https://github.com/ayanmulani4867-cyber/Campus-mini2  •  Branch: main  •  SITCOE Yadrav"
-    p.font.name = FONT_BODY
-    p.font.size = Pt(11)
+    p.text = "Repository: https://github.com/ayanmulani4867-cyber/Campus-mini2  •  Open for Viva Questions & Discussion"
+    p.font.name = FONT_FAMILY
+    p.font.size = Pt(12)
     p.font.bold = True
     p.font.color.rgb = WHITE
 
