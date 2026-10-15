@@ -16,6 +16,9 @@ htmlcov/
 .env
 .env.local
 *.env
+serviceAccountKey.json
+*firebase-adminsdk*.json
+*serviceAccount*.json
 
 # Local Storage & Uploads
 uploads/

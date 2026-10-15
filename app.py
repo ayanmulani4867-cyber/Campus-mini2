@@ -29,25 +29,33 @@ def create_app(config_name=None):
     )
     app.config.from_object(config_class)
 
-    # Dynamically resolve and normalize DATABASE_URL from environment at runtime
-    env_db = os.environ.get("DATABASE_URL")
-    if env_db:
-        from config import _normalize_db_url
-        app.config["SQLALCHEMY_DATABASE_URI"] = _normalize_db_url(env_db)
+    database_backend = app.config.get("DATABASE_BACKEND", "firebase")
 
-    if not app.config.get("SQLALCHEMY_DATABASE_URI"):
-        app.logger.warning(
-            "DATABASE_URL is not set. The app will start, but database operations will fail."
-        )
+    # If explicitly running in postgres mode, dynamically resolve DATABASE_URL
+    if database_backend == "postgres":
+        env_db = os.environ.get("DATABASE_URL")
+        if env_db:
+            from config import _normalize_db_url
+            app.config["SQLALCHEMY_DATABASE_URI"] = _normalize_db_url(env_db)
 
     logging.basicConfig(level=logging.INFO if not app.debug else logging.DEBUG)
 
-    # Initialize extensions
-    db.init_app(app)
-    migrate.init_app(app, db)
-
     # Import models so SQLAlchemy / Alembic registers them
     import models  # noqa: F401
+
+    # Initialize extensions
+    db.init_app(app)
+    if database_backend == "postgres":
+        migrate.init_app(app, db)
+    else:
+        with app.app_context():
+            db.create_all()
+            from services.firebase_sync import register_firebase_rtdb_hooks, hydrate_from_firebase_rtdb
+            register_firebase_rtdb_hooks(db)
+            try:
+                hydrate_from_firebase_rtdb(app, db)
+            except Exception as e:
+                app.logger.warning("Firebase RTDB initial hydration deferred: %s", e)
 
     # Register error handlers and API blueprints
     register_error_handlers(app)
@@ -58,10 +66,10 @@ def create_app(config_name=None):
     cors_origins = app.config.get("CORS_ORIGINS")
     if cors_origins:
         CORS(app, supports_credentials=True, origins=cors_origins,
-             allow_headers=["Content-Type", "X-Session-Token", "Authorization"])
+             allow_headers=["Content-Type", "X-Session-Token", "Authorization", "X-Firebase-Token"])
     else:
         CORS(app, supports_credentials=True, origins=r".*",
-             allow_headers=["Content-Type", "X-Session-Token", "Authorization"])
+             allow_headers=["Content-Type", "X-Session-Token", "Authorization", "X-Firebase-Token"])
 
     # ProxyFix for reverse-proxy deployments (Render, Heroku, etc.)
     from werkzeug.middleware.proxy_fix import ProxyFix
@@ -75,12 +83,16 @@ def create_app(config_name=None):
     # Health check endpoint
     @app.get("/api/health")
     def health():
-        db_configured = bool(app.config.get("SQLALCHEMY_DATABASE_URI"))
+        from services.firebase_service import firebase_service
+        backend = app.config.get("DATABASE_BACKEND", "firebase")
         return {
             "success": True,
             "status": "ok",
             "environment": config_name,
-            "databaseConfigured": db_configured,
+            "databaseBackend": backend,
+            "firebaseLive": firebase_service.is_live,
+            "firebaseUrl": firebase_service.database_url,
+            "databaseConfigured": True,
         }
 
     # Automatically ensure default administrator account exists on first request / deployment

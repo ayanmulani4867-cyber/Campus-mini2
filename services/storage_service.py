@@ -136,6 +136,61 @@ class StorageService:
         response.headers["Content-Type"] = effective_mime
         return response
 
+    def get_submission_bytes(self, submission) -> bytes:
+        """Resolves binary data for an assignment submission from instance or Firebase RTDB file_blobs."""
+        if submission.file_data:
+            return submission.file_data
+
+        try:
+            from services.firebase_service import firebase_service
+            import base64
+            blob_id = f"submission_{submission.id}"
+            blob = firebase_service.get_data(f"file_blobs/{blob_id}")
+            if blob and "data_base64" in blob:
+                decoded = base64.b64decode(blob["data_base64"])
+                submission.file_data = decoded
+                return decoded
+        except Exception:
+            pass
+        return None
+
+    def get_material_bytes(self, material) -> bytes:
+        """Resolves binary data for study material from instance or Firebase RTDB file_blobs."""
+        if material.file_data:
+            return material.file_data
+
+        try:
+            from services.firebase_service import firebase_service
+            import base64
+            blob_id = f"material_{material.id}"
+            blob = firebase_service.get_data(f"file_blobs/{blob_id}")
+            if blob and "data_base64" in blob:
+                decoded = base64.b64decode(blob["data_base64"])
+                material.file_data = decoded
+                return decoded
+        except Exception:
+            pass
+        return None
+
+    def save_file_blob(self, blob_id: str, file_bytes: bytes, filename: str, mime_type: str = None) -> bool:
+        """Persists binary data directly to Firebase RTDB under /file_blobs/<blob_id> in base64."""
+        try:
+            from services.firebase_service import firebase_service
+            import base64
+            from datetime import datetime, timezone
+            b64_str = base64.b64encode(file_bytes).decode("ascii")
+            firebase_service.set_data(f"file_blobs/{blob_id}", {
+                "blob_id": blob_id,
+                "file_name": filename,
+                "file_size_bytes": len(file_bytes),
+                "mime_type": mime_type or self.get_mime_type(filename),
+                "data_base64": b64_str,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return True
+        except Exception:
+            return False
+
 
 # Singleton storage service instance
 storage_service = StorageService()

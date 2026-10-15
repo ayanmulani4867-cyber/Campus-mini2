@@ -50,9 +50,32 @@ def current_user():
     """Return the authenticated User for this request.
     
     Priority:
-    1. Session token via X-Session-Token, Authorization Bearer, or query token.
-    2. Fallback to ambient Flask session cookie.
+    1. Firebase ID token via Authorization: Bearer <id_token> or X-Firebase-Token.
+    2. Tab-scoped session token via X-Session-Token, Authorization Bearer, or query token.
+    3. Fallback to ambient Flask session cookie.
     """
+    # 1. Check for Firebase ID Token
+    raw_token = request.headers.get("X-Firebase-Token")
+    if not raw_token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw_token = auth_header[7:].strip()
+            
+    if raw_token:
+        from services.firebase_service import firebase_service
+        decoded_claims = firebase_service.verify_firebase_id_token(raw_token)
+        if decoded_claims:
+            uid = decoded_claims.get("uid")
+            email = decoded_claims.get("email")
+            user = None
+            if uid and str(uid).isdigit():
+                user = db.session.get(User, int(uid))
+            if not user and email:
+                user = User.query.filter(User.email.ilike(email)).first()
+            if user and user.is_active:
+                return user
+
+    # 2. Session token via X-Session-Token or Bearer token
     token_supplied = bool(
         request.headers.get("X-Session-Token") or
         request.headers.get("Authorization", "").startswith("Bearer ") or
@@ -65,7 +88,7 @@ def current_user():
         if user_session and user_session.user and user_session.user.is_active:
             return user_session.user
 
-    # Cookie-based session fallback
+    # 3. Cookie-based session fallback
     user_id = session.get("user_id")
     if not user_id:
         return None

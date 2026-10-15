@@ -286,6 +286,12 @@ def submit_assignment(assignment_id):
             existing.file_size_bytes = file_size
             existing.mime_type = mime_type
             existing.file_path = None
+            storage_service.save_file_blob(
+                f"submission_{existing.id}",
+                file_bytes,
+                file_name,
+                mime_type
+            )
         existing.submitted_at = now
         existing.status = submission_status
         existing.is_locked = True  # Re-lock after exceptional resubmission
@@ -321,6 +327,14 @@ def submit_assignment(assignment_id):
     )
     db.session.add(submission)
     db.session.commit()
+
+    if file_bytes:
+        storage_service.save_file_blob(
+            f"submission_{submission.id}",
+            file_bytes,
+            file_name,
+            mime_type
+        )
 
     from models import log_audit
     log_audit(
@@ -452,9 +466,10 @@ def download_submission(assignment_id, submission_id):
         if not is_owner:
             return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
 
-    if submission.file_data:
+    file_bytes = storage_service.get_submission_bytes(submission)
+    if file_bytes:
         return storage_service.create_download_response(
-            submission.file_data,
+            file_bytes,
             submission.file_name or f"submission_{submission.id}.pdf",
             submission.mime_type,
         )
@@ -486,7 +501,8 @@ def preview_submission(assignment_id, submission_id):
         if not is_owner:
             return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
 
-    if not submission.file_data:
+    file_bytes = storage_service.get_submission_bytes(submission)
+    if not file_bytes:
         return jsonify({"success": False, "error": "No file attached to this submission."}), 404
 
     fname = (submission.file_name or "").lower()
@@ -498,7 +514,7 @@ def preview_submission(assignment_id, submission_id):
         }), 400
 
     return storage_service.create_preview_response(
-        submission.file_data,
+        file_bytes,
         submission.file_name or f"submission_{submission.id}.pdf",
         submission.mime_type or "application/pdf",
     )
@@ -528,9 +544,10 @@ def download_submission_flat(submission_id):
         if not is_owner:
             return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
 
-    if submission.file_data:
+    file_bytes = storage_service.get_submission_bytes(submission)
+    if file_bytes:
         return storage_service.create_download_response(
-            submission.file_data,
+            file_bytes,
             submission.file_name or f"submission_{submission.id}.pdf",
             submission.mime_type,
         )
@@ -562,7 +579,8 @@ def preview_submission_flat(submission_id):
         if not is_owner:
             return jsonify({"success": False, "error": "Forbidden: You do not have permission to view this submission."}), 403
 
-    if not submission.file_data:
+    file_bytes = storage_service.get_submission_bytes(submission)
+    if not file_bytes:
         return jsonify({"success": False, "error": "No file attached to this submission."}), 404
 
     fname = (submission.file_name or "").lower()
@@ -574,7 +592,7 @@ def preview_submission_flat(submission_id):
         }), 400
 
     return storage_service.create_preview_response(
-        submission.file_data,
+        file_bytes,
         submission.file_name or f"submission_{submission.id}.pdf",
         submission.mime_type or "application/pdf",
     )
@@ -587,7 +605,7 @@ def grade_submission_flat(submission_id):
     user = current_user()
     data = request.get_json(silent=True) or {}
 
-    submission = AssignmentSubmission.query.get(submission_id)
+    submission = db.session.get(AssignmentSubmission, submission_id)
     if not submission:
         return jsonify({"success": False, "error": "Submission not found."}), 404
 

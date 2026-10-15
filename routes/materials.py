@@ -146,6 +146,12 @@ def upload_material():
     try:
         db.session.add(material)
         db.session.commit()
+        storage_service.save_file_blob(
+            f"material_{material.id}",
+            validated["file_bytes"],
+            validated["file_name"],
+            validated["mime_type"]
+        )
     except Exception:
         db.session.rollback()
         raise
@@ -156,7 +162,7 @@ def upload_material():
 @bp.get("/<int:material_id>/download")
 @login_required
 def download_material(material_id):
-    """Serve study material directly from PostgreSQL BYTEA or legacy path."""
+    """Serve study material directly from PostgreSQL BYTEA, Firebase RTDB file_blobs, or legacy path."""
     user = current_user()
     material = StudyMaterial.query.get(material_id)
     if not material:
@@ -176,10 +182,11 @@ def download_material(material_id):
         if not ((dept_match and sem_match and div_match) or (course_match and div_match)):
             return jsonify({"success": False, "error": "You do not have permission to download this material."}), 403
 
-    # Primary: serve directly from PostgreSQL BYTEA
-    if material.file_data:
+    # Primary: serve directly from PostgreSQL BYTEA or Firebase RTDB file_blobs
+    file_bytes = storage_service.get_material_bytes(material)
+    if file_bytes:
         return storage_service.create_download_response(
-            material.file_data,
+            file_bytes,
             material.file_name,
             material.mime_type
         )

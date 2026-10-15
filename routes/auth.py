@@ -74,11 +74,65 @@ def login():
     session["user_id"] = user.id
     session["role"] = user.role
 
+    from services.firebase_service import firebase_service
+    fb_token = firebase_service.create_custom_token(str(user.id), {"role": user.role})
+
     return jsonify({
         "success": True,
         "data": user.to_dict(),
         "user": user.to_dict(),
-        "sessionToken": session_token
+        "sessionToken": session_token,
+        "firebaseCustomToken": fb_token,
+    })
+
+
+@bp.post("/firebase-login")
+def firebase_login():
+    """Authenticates a user via verified Firebase ID token from the client SDK."""
+    data = request.get_json(silent=True) or {}
+    id_token = data.get("idToken") or data.get("id_token")
+    if not id_token:
+        return jsonify({"success": False, "error": "Missing Firebase ID token."}), 400
+
+    from services.firebase_service import firebase_service
+    decoded = firebase_service.verify_firebase_id_token(id_token)
+    if not decoded:
+        return jsonify({"success": False, "error": "Invalid or expired Firebase ID token."}), 401
+
+    email = decoded.get("email")
+    uid = decoded.get("uid")
+    user = None
+    if uid and str(uid).isdigit():
+        user = db.session.get(User, int(uid))
+    if not user and email:
+        user = User.query.filter(User.email.ilike(email)).first()
+
+    if not user:
+        return jsonify({"success": False, "error": "User account matching Firebase credentials not found."}), 404
+
+    if not user.is_active:
+        return jsonify({"success": False, "error": "This account has been deactivated."}), 403
+
+    session_token = secrets.token_urlsafe(32)
+    user_session = UserSession(
+        id=session_token,
+        user_id=user.id,
+        role=user.role,
+        is_active=True
+    )
+    db.session.add(user_session)
+    db.session.commit()
+
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user.id
+    session["role"] = user.role
+
+    return jsonify({
+        "success": True,
+        "data": user.to_dict(),
+        "user": user.to_dict(),
+        "sessionToken": session_token,
     })
 
 

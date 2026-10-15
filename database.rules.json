@@ -1,0 +1,63 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      ".indexOn": ["email", "role", "is_active", "phone"]
+    },
+    "students": {
+      ".indexOn": ["user_id", "student_code", "prn", "department_id", "semester", "division", "status"]
+    },
+    "faculty": {
+      ".indexOn": ["user_id", "faculty_code", "department_id", "status"]
+    },
+    "faculty_assignments": {
+      ".indexOn": ["faculty_id", "course_id", "department_id", "semester", "division"]
+    },
+    "departments": {
+      ".indexOn": ["code", "name"]
+    },
+    "courses": {
+      ".indexOn": ["code", "department_id", "semester", "category", "instructor_id", "status"]
+    },
+    "enrollments": {
+      ".indexOn": ["student_id", "course_id"]
+    },
+    "attendance_sessions": {
+      ".indexOn": ["course_id", "marked_by_id", "session_date", "division"]
+    },
+    "attendance_records": {
+      ".indexOn": ["session_id", "student_id", "status"]
+    },
+    "results": {
+      ".indexOn": ["student_id", "course_id", "status", "is_published", "academic_year", "semester", "division"]
+    },
+    "assessment_configs": {
+      ".indexOn": ["course_id", "department_id"]
+    },
+    "assignments": {
+      ".indexOn": ["course_id", "faculty_id", "semester", "division", "due_date"]
+    },
+    "assignment_submissions": {
+      ".indexOn": ["assignment_id", "student_id", "status", "is_locked"]
+    },
+    "notices": {
+      ".indexOn": ["department_id", "posted_by_id", "created_at", "category"]
+    },
+    "study_materials": {
+      ".indexOn": ["course_id", "department_id", "uploaded_by_id", "category"]
+    },
+    "events": {
+      ".indexOn": ["event_date", "category"]
+    },
+    "leave_requests": {
+      ".indexOn": ["student_id", "status", "start_date"]
+    },
+    "audit_logs": {
+      ".indexOn": ["user_id", "action", "created_at"]
+    },
+    "user_sessions": {
+      ".indexOn": ["user_id", "is_active", "role"]
+    }
+  }
+}

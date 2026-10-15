@@ -24,16 +24,33 @@ def _normalize_db_url(url: str) -> str:
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 
-    _raw_db_url = os.environ.get("DATABASE_URL") or "postgresql+psycopg://postgres:postgres@localhost:5432/campus_connect"
-    SQLALCHEMY_DATABASE_URI = _normalize_db_url(_raw_db_url)
+    # Backend selection: 'firebase' (default) or 'postgres'
+    DATABASE_BACKEND = os.environ.get("DATABASE_BACKEND", "firebase").lower()
+    FIREBASE_DATABASE_URL = os.environ.get(
+        "FIREBASE_DATABASE_URL", "https://campus-mini2-default-rtdb.firebaseio.com/"
+    )
+    FIREBASE_SERVICE_ACCOUNT_KEY = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY")
+    FIREBASE_CREDENTIALS_PATH = os.environ.get("FIREBASE_CREDENTIALS_PATH")
+
+    if DATABASE_BACKEND == "firebase":
+        instance_dir = BASE_DIR / "instance"
+        instance_dir.mkdir(exist_ok=True)
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{str((instance_dir / 'campus_connect_rtdb.sqlite').resolve())}"
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_pre_ping": True,
+        }
+    else:
+        _raw_db_url = os.environ.get("DATABASE_URL") or "postgresql+psycopg://postgres:postgres@localhost:5432/campus_connect"
+        SQLALCHEMY_DATABASE_URI = _normalize_db_url(_raw_db_url)
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_timeout": 30,
+            "pool_recycle": 300,
+            "pool_pre_ping": True,
+        }
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_size": 10,
-        "max_overflow": 20,
-        "pool_timeout": 30,
-        "pool_recycle": 300,
-        "pool_pre_ping": True,
-    }
 
     # Session-based auth settings
     SESSION_COOKIE_NAME = "campus_session"

@@ -4,19 +4,17 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: flask db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
     envVars:
       - key: PYTHON_VERSION
-        value: "3.14.3"
+        value: "3.11.11"
       - key: FLASK_ENV
         value: production
+      - key: DATABASE_BACKEND
+        value: firebase
+      - key: FIREBASE_DATABASE_URL
+        value: https://campus-mini2-default-rtdb.firebaseio.com/
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        sync: false
       - key: SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: campus-connect-db
-          property: connectionString
-
-databases:
-  - name: campus-connect-db
-    plan: free
