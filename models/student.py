@@ -45,6 +45,7 @@ class Student(db.Model):
         return {
             "id": self.student_code,
             "studentCode": self.student_code,
+            "userId": self.user_id,
             "prn": self.prn or self.student_code,
             "name": self.user.full_name,
             "email": self.user.email,

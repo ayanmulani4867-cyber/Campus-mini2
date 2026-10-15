@@ -92,7 +92,30 @@ def create_faculty():
     phone = validate_phone(str(data["phone"]).strip())
     if not phone:
         raise ValidationError("Phone number is required.")
-    if User.query.filter_by(email=email).first():
+
+    # Idempotent retry handling: if faculty member already exists and hasn't logged in, resend welcome email
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        if existing_user.faculty_profile:
+            from models import UserSession
+            has_logged_in = UserSession.query.filter_by(user_id=existing_user.id).count() > 0
+            if not has_logged_in:
+                from services.firebase_service import firebase_service
+                from services.email_service import email_service
+                link = firebase_service.generate_password_reset_link(email)
+                email_res = email_service.send_welcome_email(existing_user, existing_user.faculty_profile, link)
+                return jsonify({
+                    "success": True,
+                    "message": f"Faculty account already exists for {email}. Resent welcome email with a fresh password setup link.",
+                    "data": existing_user.faculty_profile.to_dict(),
+                    "emailDelivery": {
+                        "sent": email_res.get("success", False),
+                        "recipient": email,
+                        "messageId": email_res.get("message_id"),
+                        "simulated": email_res.get("simulated", False),
+                        "error": email_res.get("error"),
+                    }
+                }), 200
         raise ValidationError("A user with that email already exists.")
 
     dept = Department.resolve(data["department"])
@@ -102,8 +125,10 @@ def create_faculty():
     designation = data.get("designation", "Assistant Professor").strip()
     code = (data.get("facultyId") or "").strip() or _next_faculty_code()
 
+    import secrets
+    secure_initial_pwd = secrets.token_urlsafe(32)
     user = User(email=email, full_name=data["name"].strip(), phone=phone, role="faculty")
-    user.set_password(phone)  # Phone number becomes initial password
+    user.set_password(secure_initial_pwd)
     db.session.add(user)
     db.session.flush()
 
@@ -179,7 +204,52 @@ def create_faculty():
                     db.session.add(Enrollment(student_id=s.id, course_id=course.id))
 
     db.session.commit()
-    return jsonify({"success": True, "data": fac.to_dict()}), 201
+
+    # Generate Firebase password setup link and dispatch Brevo welcome email
+    from services.firebase_service import firebase_service
+    from services.email_service import email_service
+    setup_link = firebase_service.generate_password_reset_link(user.email)
+    email_res = email_service.send_welcome_email(user, fac, setup_link)
+
+    return jsonify({
+        "success": True,
+        "data": fac.to_dict(),
+        "emailDelivery": {
+            "sent": email_res.get("success", False),
+            "recipient": user.email,
+            "messageId": email_res.get("message_id"),
+            "simulated": email_res.get("simulated", False),
+            "error": email_res.get("error"),
+        }
+    }), 201
+
+
+@bp.post("/<string:faculty_code>/resend-welcome-email")
+@roles_required("admin")
+def resend_faculty_welcome_email(faculty_code):
+    """Admin endpoint to re-trigger a Brevo welcome email with a fresh Firebase password setup link."""
+    fac = Faculty.query.filter(
+        db.or_(Faculty.faculty_code == faculty_code, Faculty.id == int(faculty_code) if faculty_code.isdigit() else False)
+    ).first()
+    if not fac:
+        return jsonify({"success": False, "error": "Faculty member not found."}), 404
+
+    from services.firebase_service import firebase_service
+    from services.email_service import email_service
+    link = firebase_service.generate_password_reset_link(fac.user.email)
+    email_res = email_service.send_welcome_email(fac.user, fac, link)
+
+    return jsonify({
+        "success": email_res.get("success", False),
+        "message": "Welcome email resent successfully." if email_res.get("success") else "Failed to send email.",
+        "emailDelivery": {
+            "sent": email_res.get("success", False),
+            "recipient": fac.user.email,
+            "messageId": email_res.get("message_id"),
+            "simulated": email_res.get("simulated", False),
+            "error": email_res.get("error"),
+        }
+    }), (200 if email_res.get("success") else 500)
 
 
 @bp.put("/<string:faculty_code>")

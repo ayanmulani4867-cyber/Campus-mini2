@@ -104,6 +104,7 @@ class Faculty(db.Model):
         return {
             "id": self.faculty_code,
             "facultyId": self.id,
+            "userId": self.user_id,
             "facultyCode": self.faculty_code,
             "name": self.user.full_name,
             "email": self.user.email,

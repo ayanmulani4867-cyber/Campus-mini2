@@ -18,3 +18,12 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Campus Connect ERP
+      - key: ERP_LOGIN_URL
+        sync: false
+

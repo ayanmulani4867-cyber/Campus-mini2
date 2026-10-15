@@ -81,8 +81,30 @@ def create_student():
     email = validate_email(data["email"])
     raw_phone = data.get("phone")
     phone = validate_phone(str(raw_phone).strip()) if raw_phone else None
-    initial_password = str(raw_phone).strip() if (raw_phone and len(str(raw_phone).strip()) >= 6) else "campus@123"
-    if User.query.filter_by(email=email).first():
+
+    # Idempotent retry handling: if student already exists and hasn't logged in, resend welcome email
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        if existing_user.student_profile:
+            from models import UserSession
+            has_logged_in = UserSession.query.filter_by(user_id=existing_user.id).count() > 0
+            if not has_logged_in:
+                from services.firebase_service import firebase_service
+                from services.email_service import email_service
+                link = firebase_service.generate_password_reset_link(email)
+                email_res = email_service.send_welcome_email(existing_user, existing_user.student_profile, link)
+                return jsonify({
+                    "success": True,
+                    "message": f"Student account already exists for {email}. Resent welcome email with a fresh password setup link.",
+                    "data": existing_user.student_profile.to_dict(),
+                    "emailDelivery": {
+                        "sent": email_res.get("success", False),
+                        "recipient": email,
+                        "messageId": email_res.get("message_id"),
+                        "simulated": email_res.get("simulated", False),
+                        "error": email_res.get("error"),
+                    }
+                }), 200
         raise ValidationError("A user with that email already exists.")
 
     dept = Department.resolve(data["department"])
@@ -113,8 +135,10 @@ def create_student():
         prn = generate_unique_prn()
         code = prn
 
+    import secrets
+    secure_initial_pwd = secrets.token_urlsafe(32)
     user = User(email=email, full_name=data["name"].strip(), phone=phone, role="student")
-    user.set_password(initial_password)
+    user.set_password(secure_initial_pwd)
     db.session.add(user)
     db.session.flush()
 
@@ -166,7 +190,55 @@ def create_student():
         db.session.rollback()
         raise ValidationError(f"Database constraint violation: {str(e.orig) if hasattr(e, 'orig') else 'Duplicate record'}")
 
-    return jsonify({"success": True, "data": student.to_dict()}), 201
+    # Generate Firebase password setup link and dispatch Brevo welcome email
+    from services.firebase_service import firebase_service
+    from services.email_service import email_service
+    setup_link = firebase_service.generate_password_reset_link(user.email)
+    email_res = email_service.send_welcome_email(user, student, setup_link)
+
+    return jsonify({
+        "success": True,
+        "data": student.to_dict(),
+        "emailDelivery": {
+            "sent": email_res.get("success", False),
+            "recipient": user.email,
+            "messageId": email_res.get("message_id"),
+            "simulated": email_res.get("simulated", False),
+            "error": email_res.get("error"),
+        }
+    }), 201
+
+
+@bp.post("/<string:student_code>/resend-welcome-email")
+@roles_required("admin")
+def resend_student_welcome_email(student_code):
+    """Admin endpoint to re-trigger a Brevo welcome email with a fresh Firebase password setup link."""
+    student = Student.query.filter(
+        db.or_(Student.student_code == student_code, Student.prn == student_code)
+    ).first()
+    if not student and student_code.isdigit():
+        student = Student.query.filter(
+            db.or_(Student.id == int(student_code), Student.user_id == int(student_code))
+        ).first()
+    if not student:
+        return jsonify({"success": False, "error": "Student not found."}), 404
+
+    from services.firebase_service import firebase_service
+    from services.email_service import email_service
+    link = firebase_service.generate_password_reset_link(student.user.email)
+    email_res = email_service.send_welcome_email(student.user, student, link)
+
+    return jsonify({
+        "success": email_res.get("success", False),
+        "message": "Welcome email resent successfully." if email_res.get("success") else "Failed to send email.",
+        "emailDelivery": {
+            "sent": email_res.get("success", False),
+            "recipient": student.user.email,
+            "messageId": email_res.get("message_id"),
+            "simulated": email_res.get("simulated", False),
+            "error": email_res.get("error"),
+        }
+    }), (200 if email_res.get("success") else 500)
 
 
 @bp.put("/<string:student_code>")

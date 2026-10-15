@@ -290,3 +290,31 @@ def get_user_detail(user_id):
         data["subjectAssignments"] = [fa.to_dict() for fa in fas]
 
     return jsonify({"success": True, "data": data})
+
+
+@bp.post("/<int:user_id>/resend-welcome-email")
+@roles_required("admin")
+def resend_user_welcome_email(user_id):
+    """Admin endpoint to re-trigger a Brevo welcome email for any student or faculty member."""
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"success": False, "error": "User not found."}), 404
+
+    profile = user.student_profile or user.faculty_profile
+    from services.firebase_service import firebase_service
+    from services.email_service import email_service
+    link = firebase_service.generate_password_reset_link(user.email)
+    email_res = email_service.send_welcome_email(user, profile, link)
+
+    return jsonify({
+        "success": email_res.get("success", False),
+        "message": "Welcome email resent successfully." if email_res.get("success") else "Failed to send email.",
+        "emailDelivery": {
+            "sent": email_res.get("success", False),
+            "recipient": user.email,
+            "messageId": email_res.get("message_id"),
+            "simulated": email_res.get("simulated", False),
+            "error": email_res.get("error"),
+        }
+    }), (200 if email_res.get("success") else 500)
+

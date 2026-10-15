@@ -75,6 +75,12 @@ class Config:
         "MATERIAL_UPLOAD_DIR", str((BASE_DIR / "uploads" / "materials").resolve())
     )
 
+    # Brevo Transactional Email Settings
+    BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
+    BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "no-reply@campus.edu")
+    BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "Campus Connect ERP")
+    ERP_LOGIN_URL = os.environ.get("ERP_LOGIN_URL", "http://localhost:5000/login.html")
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

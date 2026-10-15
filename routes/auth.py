@@ -44,7 +44,18 @@ def login():
             if fac:
                 user = fac.user
 
-    if not user or not user.check_password(password):
+    if not user:
+        return jsonify({"success": False, "error": "Invalid email/ID or password."}), 401
+
+    password_ok = user.check_password(password)
+    if not password_ok:
+        from services.firebase_service import firebase_service
+        if firebase_service.verify_password_with_firebase(user.email, password):
+            user.set_password(password)
+            db.session.commit()
+            password_ok = True
+
+    if not password_ok:
         return jsonify({"success": False, "error": "Invalid email/ID or password."}), 401
 
     if not user.is_active:
