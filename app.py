@@ -163,16 +163,27 @@ def create_app(config_name=None):
     def page_logout():
         from utils.auth import current_user
         try:
-            user = current_user()
-            if user:
+            token = request.args.get("token") or session.get("session_token")
+            if token:
                 from models import UserSession
-                UserSession.query.filter_by(user_id=user.id, is_active=True).update({"is_active": False})
-                db.session.commit()
+                user_session = UserSession.query.filter_by(id=token).first()
+                if user_session:
+                    user_session.is_active = False
+                    db.session.commit()
+            else:
+                user = current_user()
+                if user:
+                    from models import UserSession
+                    UserSession.query.filter_by(user_id=user.id, is_active=True).update({"is_active": False})
+                    db.session.commit()
         except Exception:
             pass
         session.clear()
+        cookie_name = app.config.get("SESSION_COOKIE_NAME", "campus_session")
         resp = redirect("/login.html")
-        resp.delete_cookie("session")
+        resp.delete_cookie(cookie_name, path="/")
+        resp.delete_cookie("session", path="/")
+        resp.delete_cookie("campus_fb_session", path="/")
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         return resp
 
@@ -188,9 +199,39 @@ def create_app(config_name=None):
         if path.startswith("api/"):
             return jsonify({"success": False, "error": "Not found"}), 404
 
-        # Enforce server-side role gating on admin-only pages if user session is present
         norm_path = path.lower().strip("/")
-        if norm_path.startswith("users"):
+
+        protected_pages = (
+            "dashboard", "dashboard.html",
+            "users", "users.html",
+            "profile", "profile.html",
+            "settings", "settings.html",
+            "courses", "courses.html",
+            "attendance", "attendance.html",
+            "assignments", "assignments.html",
+            "results", "results.html",
+            "materials", "materials.html",
+            "notices", "notices.html",
+            "events", "events.html",
+        )
+        is_protected = norm_path in protected_pages
+
+        # If a session cookie is present for a protected page request, verify it.
+        # If the session is invalid or expired, clear the cookie and redirect to login.
+        if is_protected and (session.get("session_token") or session.get("user_id")):
+            from utils.auth import current_user
+            user = current_user()
+            if not user:
+                session.clear()
+                cookie_name = app.config.get("SESSION_COOKIE_NAME", "campus_session")
+                resp = redirect("/login.html")
+                resp.delete_cookie(cookie_name, path="/")
+                resp.delete_cookie("session", path="/")
+                resp.delete_cookie("campus_fb_session", path="/")
+                return resp
+
+        # Server-side RBAC gate on Admin User Directory
+        if norm_path in ("users", "users.html"):
             from utils.auth import current_user
             user = current_user()
             if user and user.role != "admin":

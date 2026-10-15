@@ -524,7 +524,7 @@ def get_student_result_card(student_ref):
             "backlogsCount": backlogs_count,
             "isPublished": not has_unpublished if results else False,
             "hasUnpublishedRecords": has_unpublished,
-            "publishedAt": max((r.published_at for r in results if r.published_at), default=None).isoformat() if results else None,
+            "publishedAt": (max((r.published_at for r in results if r.published_at), default=None).isoformat() if any(r.published_at for r in results) else None) if results else None,
         }
     }
 

@@ -10,7 +10,7 @@ var CURRENT_USER = null; // populated by bootstrap() from /api/auth/me
 function api(path, options) {
   options = options || {};
   options.credentials = "include";
-  var token = sessionStorage.getItem("campus_session_token") || localStorage.getItem("campus_session_token");
+  var token = sessionStorage.getItem("campus_session_token");
   var headers = Object.assign({}, options.headers || {});
   if (token) {
     headers["X-Session-Token"] = token;
@@ -376,18 +376,22 @@ document.addEventListener("DOMContentLoaded", function () {
     return;
   }
 
-  // Synchronize token between sessionStorage and localStorage for seamless multi-tab navigation
-  var token = sessionStorage.getItem("campus_session_token") || localStorage.getItem("campus_session_token");
-  if (token && !sessionStorage.getItem("campus_session_token")) {
-    sessionStorage.setItem("campus_session_token", token);
-  }
+  // Remove stale global localStorage tokens to enforce strict per-tab session isolation
+  localStorage.removeItem("campus_session_token");
+  localStorage.removeItem("campus_user_role");
+
+  var token = sessionStorage.getItem("campus_session_token");
 
   api("/api/auth/me")
     .then(function (res) {
+      if (!res || !res.data || !res.data.id) {
+        throw new Error("Invalid session identity");
+      }
       CURRENT_USER = res.data;
-      if (res.data && res.data.role) {
-        sessionStorage.setItem("campus_user_role", res.data.role);
-        localStorage.setItem("campus_user_role", res.data.role);
+      var role = (res.data.role || "").toLowerCase();
+      sessionStorage.setItem("campus_user_role", role);
+      if (res.sessionToken) {
+        sessionStorage.setItem("campus_session_token", res.sessionToken);
       }
       boot(currentPath);
     })
@@ -661,6 +665,8 @@ function initLogin() {
   // Clean stale session tokens whenever reaching the login screen
   sessionStorage.removeItem("campus_session_token");
   sessionStorage.removeItem("campus_user_role");
+  localStorage.removeItem("campus_session_token");
+  localStorage.removeItem("campus_user_role");
   CURRENT_USER = null;
 
   var tabs = document.querySelectorAll(".role-tab");
@@ -706,14 +712,15 @@ function initLogin() {
       method: "POST",
       body: { email: id, password: pass, role: selectedRole }
     }).then(function (res) {
+      // Store session token and role strictly in tab-isolated sessionStorage
       if (res.sessionToken) {
         sessionStorage.setItem("campus_session_token", res.sessionToken);
-        localStorage.setItem("campus_session_token", res.sessionToken);
       }
       if (res.data && res.data.role) {
-        sessionStorage.setItem("campus_user_role", res.data.role);
-        localStorage.setItem("campus_user_role", res.data.role);
+        sessionStorage.setItem("campus_user_role", res.data.role.toLowerCase());
       }
+      localStorage.removeItem("campus_session_token");
+      localStorage.removeItem("campus_user_role");
       window.location.href = "dashboard.html";
     }).catch(function (e) {
       err.textContent = e.message || "Login failed.";

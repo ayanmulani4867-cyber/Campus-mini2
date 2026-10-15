@@ -24,7 +24,9 @@ class MasterPromptFixesTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.app = create_app("development")
         cls.app.config["TESTING"] = True
-        cls.client = cls.app.test_client()
+
+    def setUp(self):
+        self.client = self.app.test_client()
 
     # =========================================================================
     # MODULE 1: FIX AUTOMATIC LOGOUT & SESSION MANAGEMENT
@@ -242,6 +244,11 @@ class MasterPromptFixesTestCase(unittest.TestCase):
     def test_08_empty_states_and_zero_mock_records(self):
         """Verify notices and events endpoints return valid DB records with no fake fixtures."""
         with self.app.app_context():
+            admin = User.query.filter_by(role="admin").first()
+            with self.client.session_transaction() as sess:
+                sess["user_id"] = admin.id
+                sess["role"] = admin.role
+
             # Notices endpoint
             notice_res = self.client.get("/api/notices")
             self.assertEqual(notice_res.status_code, 200)

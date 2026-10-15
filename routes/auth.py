@@ -1,5 +1,5 @@
 import secrets
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 from models import User, UserSession
 from extensions import db
 from utils.auth import current_user, login_required
@@ -79,11 +79,12 @@ def login():
     db.session.add(user_session)
     db.session.commit()
 
-    # Maintain standard Flask session cookie as secondary fallback
+    # Bind standard Flask session cookie to this specific user session token
     session.clear()
     session.permanent = True
     session["user_id"] = user.id
     session["role"] = user.role
+    session["session_token"] = session_token
 
     from services.firebase_service import firebase_service
     fb_token = firebase_service.create_custom_token(str(user.id), {"role": user.role})
@@ -138,6 +139,7 @@ def firebase_login():
     session.permanent = True
     session["user_id"] = user.id
     session["role"] = user.role
+    session["session_token"] = session_token
 
     return jsonify({
         "success": True,
@@ -178,6 +180,8 @@ def logout():
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
+    if not token:
+        token = session.get("session_token")
 
     if token:
         user_session = UserSession.query.filter_by(id=token).first()
@@ -192,7 +196,10 @@ def logout():
 
     session.clear()
     resp = jsonify({"success": True})
-    resp.delete_cookie("session")
+    cookie_name = current_app.config.get("SESSION_COOKIE_NAME", "campus_session")
+    resp.delete_cookie(cookie_name, path="/")
+    resp.delete_cookie("session", path="/")
+    resp.delete_cookie("campus_fb_session", path="/")
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
 
@@ -201,4 +208,9 @@ def logout():
 @login_required
 def me():
     user = current_user()
-    return jsonify({"success": True, "data": user.to_dict()})
+    token = request.headers.get("X-Session-Token") or session.get("session_token")
+    return jsonify({
+        "success": True,
+        "data": user.to_dict(),
+        "sessionToken": token,
+    })
