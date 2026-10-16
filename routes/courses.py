@@ -62,6 +62,8 @@ def list_courses():
     elif user.role == "faculty":
         faculty = user.faculty_profile
         assigned_ids = [a.course_id for a in faculty.assignments]
+        if not assigned_ids and faculty.courses_taught:
+            assigned_ids = [c.id for c in faculty.courses_taught]
         q = q.filter(Course.id.in_(assigned_ids) if assigned_ids else False)
     else:  # admin
         dept_param = request.args.get("department") or request.args.get("department_id")

@@ -72,8 +72,11 @@ def summary():
         faculty = user.faculty_profile
         from extensions import db
         assigned_ids = {a.course_id for a in faculty.assignments}
-        instructed_ids = {c[0] for c in Course.query.with_entities(Course.id).filter_by(instructor_id=faculty.id).all()}
-        all_course_ids = list(assigned_ids | instructed_ids)
+        if not assigned_ids and faculty.courses_taught:
+            instructed_ids = {c[0] for c in Course.query.with_entities(Course.id).filter_by(instructor_id=faculty.id).all()}
+            all_course_ids = list(instructed_ids)
+        else:
+            all_course_ids = list(assigned_ids)
 
         assigned_divs = {a.division.upper() for a in faculty.assignments} or {"A"}
 

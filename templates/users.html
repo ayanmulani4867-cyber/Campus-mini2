@@ -309,16 +309,51 @@
             </div>
           </div>
 
-          <!-- Relational Teaching Assignments Builder -->
+                    <!-- Relational Teaching Assignments Builder with Searchable Dropdown & Removable Chips -->
           <div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <div style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase;">
-                📚 Teaching Assignments (Multi-Subject & Multi-Division)
+              <div style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                <span>📚 Teaching Assignments (Multi-Subject)</span>
+                <span id="facultyAssignedCountBadge" class="badge badge-primary" style="font-size: 10px; padding: 1px 6px;">0 Selected</span>
               </div>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="addFacultyAssignmentRow()" style="font-size: 11px; padding: 3px 8px;">+ Add Subject / Class</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnClearAllFacultySubjects" onclick="clearAllFacultySubjectChips()" style="font-size: 11px; padding: 2px 8px; display: none; color: var(--danger);">Clear All</button>
             </div>
-            <div id="facultyAssignmentsContainer">
-              <!-- Assignment rows dynamically added here -->
+
+            <!-- Searchable Subject Dropdown Populated from Database -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="font-size: 11px; display: flex; justify-content: space-between; margin-bottom: 3px;">
+                <span>Select Subject / Course *</span>
+                <span style="font-size: 10.5px; color: var(--text-muted);">Populated from database</span>
+              </label>
+              <div style="display: flex; gap: 6px; align-items: stretch; margin-bottom: 4px;">
+                <input type="text" class="form-input" id="facultySubjectSearchInput" placeholder="🔍 Search subjects by code or title..." style="font-size: 12px; padding: 6px 8px; flex: 1;" oninput="filterFacultySubjectDropdown()">
+              </div>
+              <div style="display: flex; gap: 6px; align-items: stretch;">
+                <select class="form-select" id="newFacultySubjectSelect" style="font-size: 12px; padding: 6px 8px; flex: 1;">
+                  <option value="">-- Choose a Subject / Course --</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm" id="btnAddSubjectChipBtn" onclick="addSelectedSubjectFromDropdown()" style="font-size: 11.5px; padding: 6px 12px; white-space: nowrap;">+ Add Subject</button>
+              </div>
+              <div id="noSubjectsInDbAlert" style="display: none; padding: 6px 8px; margin-top: 6px; font-size: 11.5px; color: var(--danger); background: var(--danger-bg); border-radius: var(--radius-sm); border: 1px solid rgba(220, 38, 38, 0.2);">
+                ⚠️ No subjects found in the database. Please add courses first in the Course Management section.
+              </div>
+            </div>
+
+            <!-- Removable Chips Container -->
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 10.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">
+                Selected Subjects
+              </label>
+              <div id="facultySubjectChipsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 36px; padding: 6px 8px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); align-items: center;">
+                <span id="noSubjectChipsPlaceholder" style="font-size: 11.5px; color: var(--text-muted); font-style: italic;">
+                  No subjects assigned yet. Select a subject above and click "+ Add Subject".
+                </span>
+              </div>
+            </div>
+
+            <!-- Per-Subject Class and Division Details -->
+            <div id="facultySubjectAssignmentsList">
+              <!-- Per-subject division selection rows -->
             </div>
           </div>
         </div>

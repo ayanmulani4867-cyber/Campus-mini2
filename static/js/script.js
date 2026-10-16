@@ -4069,6 +4069,235 @@ window.deleteStudyMaterial = function (id, title, btn) {
 // ---- User Directory (Admin) --------------------------------------------------------
 var _assignmentRowCounter = 0;
 
+// =========================================================================
+// Dynamic Faculty Subject Assignment & Searchable Dropdown Management
+// =========================================================================
+var _facultyAvailableCoursesCache = [];
+var _currentFacultyAssignedSubjects = []; // [{ courseId, courseCode, courseTitle, year, semester, department, divisions: ['A'] }]
+
+function loadAvailableFacultyCourses(callback) {
+  if (_facultyAvailableCoursesCache && _facultyAvailableCoursesCache.length > 0) {
+    if (callback) callback(_facultyAvailableCoursesCache);
+    return Promise.resolve(_facultyAvailableCoursesCache);
+  }
+  return api("/api/courses").then(function (res) {
+    _facultyAvailableCoursesCache = (res && res.data) ? res.data : [];
+    if (callback) callback(_facultyAvailableCoursesCache);
+    return _facultyAvailableCoursesCache;
+  }).catch(function (err) {
+    console.error("Failed to load courses for faculty subject dropdown:", err);
+    _facultyAvailableCoursesCache = [];
+    if (callback) callback([]);
+    return [];
+  });
+}
+
+function renderSubjectChipsAndCards(containerPrefix) {
+  var prefix = containerPrefix || "";
+  var chipsCont = document.getElementById(prefix + "facultySubjectChipsContainer");
+  var listCont = document.getElementById(prefix + "facultySubjectAssignmentsList");
+  var badge = document.getElementById(prefix + "facultyAssignedCountBadge");
+  var clearBtn = document.getElementById(prefix + "btnClearAllFacultySubjects");
+
+  if (!chipsCont || !listCont) return;
+
+  var count = _currentFacultyAssignedSubjects.length;
+  if (badge) badge.textContent = count + " Selected";
+  if (clearBtn) clearBtn.style.display = count > 0 ? "inline-block" : "none";
+
+  if (count === 0) {
+    chipsCont.innerHTML = '<span id="' + prefix + 'noSubjectChipsPlaceholder" style="font-size: 11.5px; color: var(--text-muted); font-style: italic;">No subjects assigned yet. Select a subject above and click "+ Add Subject".</span>';
+    listCont.innerHTML = '';
+    return;
+  }
+
+  // Render chips
+  chipsCont.innerHTML = _currentFacultyAssignedSubjects.map(function (sub) {
+    return (
+      '<div class="subject-chip" id="' + prefix + 'chip_' + sub.courseId + '">' +
+        (sub.courseCode ? '<span class="subject-chip-code">' + escapeHtml(sub.courseCode) + '</span>' : '') +
+        '<span>' + escapeHtml(sub.courseTitle) + '</span>' +
+        '<span style="font-size:10px; opacity:0.8;">(Sem ' + sub.semester + ')</span>' +
+        '<button type="button" class="subject-chip-remove" title="Remove ' + escapeHtml(sub.courseTitle) + '" onclick="removeFacultySubjectChip(' + sub.courseId + ', '' + prefix + '')">&times;</button>' +
+      '</div>'
+    );
+  }).join('');
+
+  // Render cards
+  listCont.innerHTML = _currentFacultyAssignedSubjects.map(function (sub) {
+    var divs = sub.divisions || ["A"];
+    var divChecks = ['A', 'B', 'C', 'D'].map(function (d) {
+      var chk = divs.indexOf(d) !== -1 ? ' checked' : '';
+      return (
+        '<label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-weight:normal;font-size:11.5px;">' +
+          '<input type="checkbox" class="assign-div-cb" value="' + d + '"' + chk + '> Div ' + d +
+        '</label>'
+      );
+    }).join('');
+
+    return (
+      '<div class="faculty-subject-card" id="' + prefix + 'fac_subject_card_' + sub.courseId + '" data-course-id="' + sub.courseId + '" data-course-code="' + escapeHtml(sub.courseCode || '') + '" data-course-title="' + escapeHtml(sub.courseTitle) + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+            (sub.courseCode ? '<span class="badge badge-primary" style="font-family:monospace;font-size:11px;">' + escapeHtml(sub.courseCode) + '</span>' : '') +
+            '<strong style="font-size:12.5px;color:var(--text-main);">' + escapeHtml(sub.courseTitle) + '</strong>' +
+            '<span style="font-size:11px;color:var(--text-muted);">(' + escapeHtml(sub.department || 'Curriculum') + ' • Sem ' + sub.semester + ')</span>' +
+          '</div>' +
+          '<button type="button" class="btn btn-danger btn-sm" onclick="removeFacultySubjectChip(' + sub.courseId + ', '' + prefix + '')" style="padding:2px 7px;font-size:11px;">🗑️ Remove</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;align-items:center;">' +
+          '<div>' +
+            '<label style="font-size:10.5px;color:var(--text-muted);display:block;margin-bottom:2px;">Teaching Year</label>' +
+            '<input type="text" class="form-input assign-year" value="' + escapeHtml(sub.year || '1st Year') + '" readonly style="font-size:11.5px;padding:4px 8px;background:var(--bg-subtle);">' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:10.5px;color:var(--text-muted);display:block;margin-bottom:2px;">Semester</label>' +
+            '<input type="text" class="form-input assign-sem" value="' + sub.semester + '" readonly style="font-size:11.5px;padding:4px 8px;background:var(--bg-subtle);">' +
+          '</div>' +
+          '<div>' +
+            '<label style="font-size:10.5px;color:var(--text-muted);display:block;margin-bottom:2px;">Divisions Taught</label>' +
+            '<div style="display:flex;gap:10px;align-items:center;padding:3px 0;">' + divChecks + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+window.removeFacultySubjectChip = function (courseId, prefix) {
+  var cid = Number(courseId);
+  _currentFacultyAssignedSubjects = _currentFacultyAssignedSubjects.filter(function (s) {
+    return Number(s.courseId) !== cid;
+  });
+  renderSubjectChipsAndCards(prefix || "");
+  populateFacultySubjectDropdown(null, prefix || "");
+};
+
+window.clearAllFacultySubjectChips = function (prefix) {
+  _currentFacultyAssignedSubjects = [];
+  renderSubjectChipsAndCards(prefix || "");
+  populateFacultySubjectDropdown(null, prefix || "");
+};
+
+function populateFacultySubjectDropdown(filterDept, containerPrefix) {
+  var prefix = containerPrefix || "";
+  var select = document.getElementById(prefix + "newFacultySubjectSelect");
+  var noCoursesAlert = document.getElementById(prefix + "noSubjectsInDbAlert");
+  var searchInput = document.getElementById(prefix + "facultySubjectSearchInput");
+  if (!select) return;
+
+  var deptVal = filterDept;
+  if (!deptVal) {
+    var deptEl = document.getElementById(prefix + "newMemberDept") || document.getElementById("newMemberDept");
+    if (deptEl) deptVal = deptEl.value;
+  }
+
+  loadAvailableFacultyCourses(function (courses) {
+    if (!courses || courses.length === 0) {
+      select.innerHTML = '<option value="" disabled selected>No subjects found in database</option>';
+      if (noCoursesAlert) noCoursesAlert.style.display = "block";
+      return;
+    }
+    if (noCoursesAlert) noCoursesAlert.style.display = "none";
+
+    var searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    var assignedIds = _currentFacultyAssignedSubjects.map(function (s) { return Number(s.courseId); });
+
+    var matchingCourses = courses.filter(function (c) {
+      if (!searchTerm) return true;
+      var text = ((c.code || "") + " " + (c.title || "") + " " + (c.department || "")).toLowerCase();
+      return text.indexOf(searchTerm) !== -1;
+    });
+
+    var html = '<option value="">-- Choose a Subject / Course (' + matchingCourses.length + ' available) --</option>';
+
+    var deptMatches = [];
+    var otherMatches = [];
+
+    matchingCourses.forEach(function (c) {
+      var isAssigned = assignedIds.indexOf(Number(c.id)) !== -1;
+      var isSameDept = deptVal && c.department && (c.department.toLowerCase() === deptVal.toLowerCase() || c.departmentCode === deptVal);
+      if (isSameDept) {
+        deptMatches.push({ course: c, isAssigned: isAssigned });
+      } else {
+        otherMatches.push({ course: c, isAssigned: isAssigned });
+      }
+    });
+
+    if (deptMatches.length > 0) {
+      html += '<optgroup label="Subjects in ' + escapeHtml(deptVal) + '">';
+      deptMatches.forEach(function (item) {
+        var c = item.course;
+        var label = (c.code ? "[" + c.code + "] " : "") + c.title + " (Sem " + (c.semester || 1) + ")" + (item.isAssigned ? " - [Already Assigned]" : "");
+        html += '<option value="' + c.id + '"' + (item.isAssigned ? ' disabled style="color:var(--text-muted);"' : '') + '>' + escapeHtml(label) + '</option>';
+      });
+      html += '</optgroup>';
+    }
+
+    if (otherMatches.length > 0) {
+      html += '<optgroup label="' + (deptMatches.length > 0 ? 'Other Department Subjects' : 'All Available Subjects') + '">';
+      otherMatches.forEach(function (item) {
+        var c = item.course;
+        var deptName = c.departmentCode || c.department || "General";
+        var label = (c.code ? "[" + c.code + "] " : "") + c.title + " (" + deptName + " • Sem " + (c.semester || 1) + ")" + (item.isAssigned ? " - [Already Assigned]" : "");
+        html += '<option value="' + c.id + '"' + (item.isAssigned ? ' disabled style="color:var(--text-muted);"' : '') + '>' + escapeHtml(label) + '</option>';
+      });
+      html += '</optgroup>';
+    }
+
+    select.innerHTML = html;
+  });
+}
+
+window.filterFacultySubjectDropdown = function (prefix) {
+  populateFacultySubjectDropdown(null, prefix || "");
+};
+
+window.updateDepartmentCourses = function () {
+  populateFacultySubjectDropdown(null, "");
+};
+
+window.addSelectedSubjectFromDropdown = function (prefix) {
+  var p = prefix || "";
+  var select = document.getElementById(p + "newFacultySubjectSelect");
+  if (!select || !select.value) {
+    showToast("Subject Required", "Please choose a subject from the dropdown to assign.", "info");
+    return;
+  }
+
+  var courseId = Number(select.value);
+  var course = _facultyAvailableCoursesCache.find(function (c) { return Number(c.id) === courseId; });
+  if (!course) return;
+
+  var exists = _currentFacultyAssignedSubjects.some(function (s) { return Number(s.courseId) === courseId; });
+  if (exists) {
+    showToast("Already Assigned", "Subject '" + (course.code ? "[" + course.code + "] " : "") + course.title + "' is already assigned to this faculty member.", "warning");
+    return;
+  }
+
+  var sem = course.semester || 1;
+  var yrNum = Math.floor((sem + 1) / 2);
+  var suffix = (yrNum === 1) ? "st" : (yrNum === 2) ? "nd" : (yrNum === 3) ? "rd" : "th";
+  var yearDerived = yrNum + suffix + " Year";
+
+  _currentFacultyAssignedSubjects.push({
+    courseId: course.id,
+    courseCode: course.code || "",
+    courseTitle: course.title,
+    year: course.year || yearDerived,
+    semester: sem,
+    department: course.department || "",
+    divisions: ["A"]
+  });
+
+  renderSubjectChipsAndCards(p);
+  populateFacultySubjectDropdown(null, p);
+
+  var searchInput = document.getElementById(p + "facultySubjectSearchInput");
+  if (searchInput) searchInput.value = "";
+  select.value = "";
+};
+
 window.toggleMemberTypeFields = function () {
   var type = document.getElementById("newMemberType") ? document.getElementById("newMemberType").value : "Student";
   var studentFields = document.getElementById("studentSpecificFields");
@@ -4076,10 +4305,7 @@ window.toggleMemberTypeFields = function () {
   if (type === "Faculty Member") {
     if (studentFields) studentFields.style.display = "none";
     if (facultyFields) facultyFields.style.display = "block";
-    var cont = document.getElementById("facultyAssignmentsContainer");
-    if (cont && cont.children.length === 0) {
-      window.addFacultyAssignmentRow({ subject: "DBMS", year: "3rd Year", semester: 5, divisions: ["A", "B"] });
-    }
+    populateFacultySubjectDropdown(null, "");
   } else {
     if (studentFields) studentFields.style.display = "block";
     if (facultyFields) facultyFields.style.display = "none";
@@ -4097,61 +4323,29 @@ window.syncStudentYearSem = function () {
   }
 };
 
-window.updateDepartmentCourses = function () {};
-
 window.addFacultyAssignmentRow = function (initial) {
-  var cont = document.getElementById("facultyAssignmentsContainer");
-  if (!cont) return;
-  _assignmentRowCounter++;
-  var rowId = "fac_assign_row_" + _assignmentRowCounter;
-  var data = initial || { subject: "", year: "3rd Year", semester: 5, divisions: ["A"] };
-
-  var div = document.createElement("div");
-  div.id = rowId;
-  div.className = "faculty-assignment-row";
-  div.style.cssText = "background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;";
-
-  div.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-      '<strong style="font-size:12px;color:var(--text-main);">Teaching Assignment #' + _assignmentRowCounter + '</strong>' +
-      '<button type="button" class="btn btn-danger btn-sm" onclick="window.removeFacultyAssignmentRow(\'' + rowId + '\')" style="padding:2px 6px;font-size:11px;">✕ Remove</button>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:6px;">' +
-      '<div>' +
-        '<label style="font-size:11px;display:block;margin-bottom:2px;">Subject / Course Title *</label>' +
-        '<input type="text" class="form-input assign-subject" value="' + escapeHtml(data.subject || '') + '" placeholder="e.g. DBMS, Computer Networks" style="font-size:12px;padding:6px;" required>' +
-      '</div>' +
-      '<div>' +
-        '<label style="font-size:11px;display:block;margin-bottom:2px;">Teaching Year *</label>' +
-        '<select class="form-select assign-year" style="font-size:12px;padding:6px;">' +
-          '<option value="1st Year"' + (data.year === "1st Year" ? " selected" : "") + '>1st Year</option>' +
-          '<option value="2nd Year"' + (data.year === "2nd Year" ? " selected" : "") + '>2nd Year</option>' +
-          '<option value="3rd Year"' + (data.year === "3rd Year" ? " selected" : "") + '>3rd Year</option>' +
-          '<option value="4th Year"' + (data.year === "4th Year" ? " selected" : "") + '>4th Year</option>' +
-        '</select>' +
-      '</div>' +
-      '<div>' +
-        '<label style="font-size:11px;display:block;margin-bottom:2px;">Semester *</label>' +
-        '<select class="form-select assign-sem" style="font-size:12px;padding:6px;">' +
-          [1,2,3,4,5,6,7,8].map(function (s) {
-            return '<option value="' + s + '"' + (Number(data.semester) === s ? ' selected' : '') + '>Sem ' + s + '</option>';
-          }).join('') +
-        '</select>' +
-      '</div>' +
-    '</div>' +
-    '<div>' +
-      '<label style="font-size:11px;display:block;margin-bottom:2px;">Divisions / Sections Taught (e.g. A, B)</label>' +
-      '<div style="display:flex;gap:12px;align-items:center;font-size:12px;padding:4px 0;">' +
-        ['A', 'B', 'C', 'D'].map(function (d) {
-          var checked = (data.divisions && data.divisions.indexOf(d) !== -1) ? " checked" : "";
-          return '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal;">' +
-            '<input type="checkbox" class="assign-div-cb" value="' + d + '"' + checked + '> Div ' + d +
-          '</label>';
-        }).join('') +
-      '</div>' +
-    '</div>';
-
-  cont.appendChild(div);
+  if (initial && (initial.subject || initial.courseId)) {
+    loadAvailableFacultyCourses(function(courses) {
+      var course = courses.find(function(c) {
+        return c.code === initial.subject || c.title === initial.subject || c.id === initial.courseId;
+      });
+      if (course) {
+        var sem = initial.semester || course.semester || 1;
+        var yr = initial.year || course.year || "1st Year";
+        _currentFacultyAssignedSubjects.push({
+          courseId: course.id,
+          courseCode: course.code || "",
+          courseTitle: course.title,
+          year: yr,
+          semester: sem,
+          department: course.department || "",
+          divisions: initial.divisions || ["A"]
+        });
+        renderSubjectChipsAndCards("");
+        populateFacultySubjectDropdown(null, "");
+      }
+    });
+  }
 };
 
 window.removeFacultyAssignmentRow = function (rowId) {
@@ -4170,8 +4364,7 @@ function resetUserForm() {
   if (phoneInp) phoneInp.value = "";
   if (prnInp) prnInp.value = "";
   if (facIdInp) facIdInp.value = "";
-  var cont = document.getElementById("facultyAssignmentsContainer");
-  if (cont) cont.innerHTML = "";
+  clearAllFacultySubjectChips("");
 }
 
 function initUsers(role) {
@@ -4365,25 +4558,32 @@ function initUsers(role) {
         var designation = document.getElementById("newFacultyDesignation") ? document.getElementById("newFacultyDesignation").value : "Assistant Professor";
         var facultyId = document.getElementById("newFacultyID") ? document.getElementById("newFacultyID").value.trim() : "";
 
-        var rows = document.querySelectorAll("#facultyAssignmentsContainer .faculty-assignment-row");
         var assignments = [];
-        rows.forEach(function (r) {
-          var subject = r.querySelector(".assign-subject").value.trim();
-          var y = r.querySelector(".assign-year").value;
-          var s = r.querySelector(".assign-sem").value;
+        _currentFacultyAssignedSubjects.forEach(function (sub) {
+          var card = document.getElementById("fac_subject_card_" + sub.courseId);
           var divs = [];
-          r.querySelectorAll(".assign-div-cb:checked").forEach(function (cb) {
-            divs.push(cb.value);
-          });
-          if (subject) {
-            assignments.push({
-              subject: subject,
-              year: y,
-              semester: s,
-              divisions: divs.length ? divs : ["A"]
+          if (card) {
+            card.querySelectorAll(".assign-div-cb:checked").forEach(function (cb) {
+              divs.push(cb.value);
             });
           }
+          assignments.push({
+            courseId: sub.courseId,
+            courseCode: sub.courseCode,
+            subject: sub.courseTitle,
+            year: sub.year,
+            semester: sub.semester,
+            divisions: divs.length ? divs : ["A"]
+          });
         });
+
+        if (assignments.length === 0) {
+          showInlineError(modalBody, "Please select and assign at least one subject to the faculty member before submitting.");
+          var selEl = document.getElementById("newFacultySubjectSelect");
+          if (selEl) selEl.focus();
+          resetButton(enrollBtn, "Enroll Member");
+          return;
+        }
 
         api("/api/faculty", {
           method: "POST",
@@ -4898,6 +5098,31 @@ window.editDirectoryMember = function (type, code) {
       };
 
     } else {
+      var existingAssignments = [];
+      var seenIds = {};
+      if (d.assignments && d.assignments.length) {
+        d.assignments.forEach(function (a) {
+          var cid = a.courseId || a.id;
+          if (!seenIds[cid]) {
+            seenIds[cid] = {
+              courseId: cid,
+              courseCode: a.courseCode || "",
+              courseTitle: a.courseTitle || a.subject || ("Course " + cid),
+              year: a.year || "1st Year",
+              semester: a.semester || 1,
+              department: a.department || d.dept || "",
+              divisions: [a.division || "A"]
+            };
+          } else {
+            if (a.division && seenIds[cid].divisions.indexOf(a.division) === -1) {
+              seenIds[cid].divisions.push(a.division);
+            }
+          }
+        });
+        existingAssignments = Object.values(seenIds);
+      }
+      _currentFacultyAssignedSubjects = existingAssignments;
+
       body.innerHTML =
         '<div class="form-group"><label>Full Name *</label><input type="text" class="form-input" id="editMemberName" value="' + escapeHtml(d.name) + '" required></div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
@@ -4906,13 +5131,61 @@ window.editDirectoryMember = function (type, code) {
             ['Assistant Professor', 'Associate Professor', 'Professor', 'Head of Department'].map(function(des){return '<option value="' + des + '"' + (d.designation === des ? ' selected' : '') + '>' + des + '</option>';}).join('') +
           '</select></div>' +
         '</div>' +
-        '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept">' + deptOptions + '</select></div>';
+        '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept" onchange="populateFacultySubjectDropdown(this.value, 'edit_')">' + deptOptions + '</select></div>' +
+        '<div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 10px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+            '<div style="font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase; display:flex; align-items:center; gap:6px;">' +
+              '<span>📚 Assigned Subjects</span>' +
+              '<span id="edit_facultyAssignedCountBadge" class="badge badge-primary" style="font-size:10px; padding:1px 6px;">' + existingAssignments.length + ' Selected</span>' +
+            '</div>' +
+            '<button type="button" class="btn btn-secondary btn-sm" id="edit_btnClearAllFacultySubjects" onclick="clearAllFacultySubjectChips('edit_')" style="font-size:11px; padding:2px 8px; color:var(--danger);' + (existingAssignments.length ? '' : 'display:none;') + '">Clear All</button>' +
+          '</div>' +
+          '<div class="form-group" style="margin-bottom:8px;">' +
+            '<input type="text" class="form-input" id="edit_facultySubjectSearchInput" placeholder="🔍 Search subjects to add..." style="font-size:12px; padding:5px 8px; margin-bottom:4px;" oninput="filterFacultySubjectDropdown('edit_')">' +
+            '<div style="display:flex; gap:6px;">' +
+              '<select class="form-select" id="edit_newFacultySubjectSelect" style="font-size:12px; padding:6px 8px; flex:1;">' +
+                '<option value="">-- Choose Subject to Add --</option>' +
+              '</select>' +
+              '<button type="button" class="btn btn-primary btn-sm" onclick="addSelectedSubjectFromDropdown('edit_')" style="font-size:11.5px; padding:6px 12px; white-space:nowrap;">+ Add</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="edit_facultySubjectChipsContainer" style="display:flex; flex-wrap:wrap; gap:6px; min-height:36px; padding:6px 8px; background:var(--bg-card); border:1px dashed var(--border); border-radius:var(--radius-sm); align-items:center; margin-bottom:8px;"></div>' +
+          '<div id="edit_facultySubjectAssignmentsList"></div>' +
+        '</div>';
+
+      renderSubjectChipsAndCards('edit_');
+      populateFacultySubjectDropdown(d.dept || "", 'edit_');
 
       saveBtn.onclick = function () {
+        var assignments = [];
+        _currentFacultyAssignedSubjects.forEach(function (sub) {
+          var card = document.getElementById("edit_fac_subject_card_" + sub.courseId);
+          var divs = [];
+          if (card) {
+            card.querySelectorAll(".assign-div-cb:checked").forEach(function (cb) {
+              divs.push(cb.value);
+            });
+          }
+          assignments.push({
+            courseId: sub.courseId,
+            courseCode: sub.courseCode,
+            subject: sub.courseTitle,
+            year: sub.year,
+            semester: sub.semester,
+            divisions: divs.length ? divs : ["A"]
+          });
+        });
+
+        if (assignments.length === 0) {
+          showInlineError(body, "Please assign at least one subject to the faculty member.");
+          return;
+        }
+
         var payload = {
           name: document.getElementById("editMemberName").value.trim(),
           phone: document.getElementById("editMemberPhone").value.trim(),
-          designation: document.getElementById("editMemberDesignation").value
+          designation: document.getElementById("editMemberDesignation").value,
+          assignments: assignments
         };
         var deptEl = document.getElementById("editMemberDept");
         if (deptEl && deptEl.value) {
@@ -4939,12 +5212,14 @@ window.editDirectoryMember = function (type, code) {
             }
             var classEl = row.querySelector(".col-member-class");
             if (classEl) {
-              classEl.innerHTML = '<span class="badge badge-secondary">' + escapeHtml(payload.designation) + '</span>';
+              var updatedSubjs = assignments.map(function(a){ return a.subject; });
+              var subSummary = updatedSubjs.length ? ('<small style="display:block;color:var(--text-muted);margin-top:2px;">' + escapeHtml(updatedSubjs.join(', ')) + '</small>') : '';
+              classEl.innerHTML = '<span class="badge badge-secondary">' + escapeHtml(payload.designation) + '</span>' + subSummary;
             }
             highlightRow(row, "update");
           }
 
-          showToast("Profile Updated", "Faculty details for " + payload.name + " updated successfully.", "success");
+          showToast("Profile Updated", "Faculty details and teaching subjects for " + payload.name + " updated successfully.", "success");
         }).catch(function (e) {
           showInlineError(body, e.message || "Could not update faculty member.");
           showToast("Update Failed", e.message || "Could not update faculty member.", "error");

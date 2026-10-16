@@ -68,24 +68,37 @@ def get_faculty(faculty_code):
     return jsonify({"success": True, "data": fac.to_dict()})
 
 
+def _derive_year_label(semester: int) -> str:
+    sem = max(1, min(8, int(semester or 1)))
+    yr = (sem + 1) // 2
+    suffix = "st" if yr == 1 else "nd" if yr == 2 else "rd" if yr == 3 else "th"
+    return f"{yr}{suffix} Year"
+
+
 def _resolve_course(course_ref):
     if not course_ref:
         return None
     from models import Course
+    ref_str = str(course_ref).strip()
+    if ref_str.isdigit():
+        c = db.session.get(Course, int(ref_str))
+        if c:
+            return c
+
     # 1. Exact code or exact title
     course = Course.query.filter(
-        db.or_(Course.code.ilike(course_ref), Course.title.ilike(course_ref))
+        db.or_(Course.code.ilike(ref_str), Course.title.ilike(ref_str))
     ).first()
     if course:
         return course
 
     # 2. Substring in title (e.g. "Computer Networks" in "Computer Networks & Security")
-    course = Course.query.filter(Course.title.ilike(f"%{course_ref}%")).first()
+    course = Course.query.filter(Course.title.ilike(f"%{ref_str}%")).first()
     if course:
         return course
 
     # 3. Code prefix (e.g. "CS601 - Database...")
-    prefix = course_ref.split(" - ")[0].split(" ")[0]
+    prefix = ref_str.split(" - ")[0].split(" ")[0]
     course = Course.query.filter_by(code=prefix).first()
     if course:
         return course
@@ -180,21 +193,27 @@ def create_faculty():
             "divisions": data.get("divisions") or data.get("division", ["A"]),
         }]
 
+    seen_create_courses = set()
     for item in raw_assignments:
         course_ref = str(item.get("courseCode") or item.get("courseId") or item.get("subject") or "").strip()
         if not course_ref:
             continue
 
-        year_val = item.get("year") or item.get("year_label") or "1st Year"
-        try:
-            sem_val = int(item.get("semester") or 1)
-        except (ValueError, TypeError):
-            sem_val = 1
-
         course = _resolve_course(course_ref)
         if not course:
             db.session.rollback()
             return jsonify({"success": False, "error": f"Referenced course '{course_ref}' was not found. Cannot invent unverified academic records."}), 400
+
+        if course.id in seen_create_courses:
+            continue
+        seen_create_courses.add(course.id)
+
+        try:
+            sem_val = int(item.get("semester") or course.semester or 1)
+        except (ValueError, TypeError):
+            sem_val = course.semester if course.semester else 1
+
+        year_val = item.get("year") or item.get("year_label") or _derive_year_label(sem_val)
 
         raw_divs = item.get("divisions") or item.get("division") or ["A"]
         if isinstance(raw_divs, str):
@@ -308,28 +327,41 @@ def update_faculty(faculty_code):
         fac.status = data["status"]
 
     if "assignments" in data:
-        # Replace assignments
-        FacultyAssignment.query.filter_by(faculty_id=fac.id).delete()
+        # Replace assignments: delete instances explicitly so session.deleted triggers RTDB hook
+        old_assigned_course_ids = {a.course_id for a in fac.assignments}
+        for old_a in list(fac.assignments):
+            db.session.delete(old_a)
+        db.session.flush()
+
+        seen_update_courses = set()
         for item in data["assignments"]:
             course_ref = str(item.get("courseCode") or item.get("courseId") or item.get("subject") or "").strip()
             if not course_ref:
                 continue
-            year_val = item.get("year") or item.get("year_label") or "1st Year"
-            try:
-                sem_val = int(item.get("semester") or 1)
-            except (ValueError, TypeError):
-                sem_val = 1
 
             course = _resolve_course(course_ref)
             if not course:
                 db.session.rollback()
                 return jsonify({"success": False, "error": f"Referenced course '{course_ref}' was not found. Cannot invent unverified academic records."}), 400
 
+            if course.id in seen_update_courses:
+                continue
+            seen_update_courses.add(course.id)
+
+            try:
+                sem_val = int(item.get("semester") or course.semester or 1)
+            except (ValueError, TypeError):
+                sem_val = course.semester if course.semester else 1
+
+            year_val = item.get("year") or item.get("year_label") or _derive_year_label(sem_val)
+
             raw_divs = item.get("divisions") or item.get("division") or ["A"]
             if isinstance(raw_divs, str):
                 divs = [d.strip().upper() for d in raw_divs.replace(",", " ").split() if d.strip()]
             else:
                 divs = [str(d).strip().upper() for d in raw_divs if str(d).strip()]
+            if not divs:
+                divs = ["A"]
 
             if course:
                 for div in divs:
@@ -342,6 +374,9 @@ def update_faculty(faculty_code):
                         division=div,
                     ))
 
+                if not course.instructor_id:
+                    course.instructor_id = fac.id
+
                 from models import Student, Enrollment
                 matching_students = Student.query.filter(
                     Student.department_id == fac.department_id,
@@ -351,6 +386,12 @@ def update_faculty(faculty_code):
                 for s in matching_students:
                     if not Enrollment.query.filter_by(student_id=s.id, course_id=course.id).first():
                         db.session.add(Enrollment(student_id=s.id, course_id=course.id))
+
+        # Clear instructor_id on courses that were removed from this faculty member
+        for removed_cid in (old_assigned_course_ids - seen_update_courses):
+            removed_course = db.session.get(Course, removed_cid)
+            if removed_course and removed_course.instructor_id == fac.id:
+                removed_course.instructor_id = None
 
     db.session.commit()
     return jsonify({"success": True, "data": fac.to_dict()})
