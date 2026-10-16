@@ -722,8 +722,7 @@ function setupSidebar(role) {
       { name: "Faculty Profile", href: "profile.html", icon: "👤" },
       { name: "My Classes", href: "courses.html", icon: "📚" },
       { name: "Attendance", href: "attendance.html", icon: "📅" },
-      { name: "Assignment Management", href: "assignments.html", icon: "📋" },
-      { name: "Assignment Evaluation", href: "assignments.html#evaluations", icon: "📝" },
+      { name: "Assignments", href: "assignments.html", icon: "📋" },
       { name: "Enter Marks", href: "results.html", icon: "📊" },
       { name: "Notices", href: "notices.html", icon: "📢" },
       { name: "Events", href: "events.html", icon: "🎉" },
@@ -906,7 +905,7 @@ function initDashboard(user, role) {
       quickLinks.innerHTML =
         '<a href="courses.html" class="btn btn-secondary btn-sm">📚 My Classes</a>' +
         '<a href="attendance.html" class="btn btn-secondary btn-sm">📅 Attendance</a>' +
-        '<a href="assignments.html" class="btn btn-secondary btn-sm">📋 Assignment Management</a>' +
+        '<a href="assignments.html" class="btn btn-secondary btn-sm">📋 Assignments</a>' +
         '<a href="results.html" class="btn btn-secondary btn-sm">📝 Enter Marks</a>' +
         '<a href="materials.html" class="btn btn-secondary btn-sm">📁 Upload Materials</a>' +
         '<a href="notices.html" class="btn btn-secondary btn-sm">📢 Notice Board</a>' +
@@ -2038,6 +2037,8 @@ function initAssignments(role) {
   var facultyCard = document.getElementById("facultyAssignmentsCard");
   var submissionsCard = document.getElementById("assignmentSubmissionsCard");
   var syncBadge = document.getElementById("assignmentLastUpdated");
+  var openCreateBtn = document.getElementById("openCreateAssignmentBtn");
+  var cardCreateBtn = document.getElementById("cardCreateAssignmentBtn");
 
   var currentAssignmentsList = [];
 
@@ -2045,12 +2046,17 @@ function initAssignments(role) {
     if (studentCard) studentCard.style.display = "block";
     if (facultyCard) facultyCard.style.display = "none";
     if (submissionsCard) submissionsCard.style.display = "none";
+    if (openCreateBtn) openCreateBtn.style.display = "none";
+    if (cardCreateBtn) cardCreateBtn.style.display = "none";
     loadStudentAssignments();
     // Real-time polling every 8 seconds for gradebook updates
     assignmentsPollTimer = setInterval(loadStudentAssignments, 8000);
   } else {
     if (studentCard) studentCard.style.display = "none";
     if (facultyCard) facultyCard.style.display = "block";
+    if (submissionsCard) submissionsCard.style.display = "block";
+    if (openCreateBtn) openCreateBtn.style.display = "inline-flex";
+    if (cardCreateBtn) cardCreateBtn.style.display = "inline-flex";
     initFacultyAssignments();
   }
 
@@ -2269,6 +2275,7 @@ function initAssignments(role) {
     var courseFilter = document.getElementById("facultyCourseFilter");
     var newCourseSelect = document.getElementById("newAssignmentCourse");
     var tbody = document.getElementById("facultyAssignmentsTableBody");
+    var rosterSelect = document.getElementById("rosterAssignmentSelect");
 
     api("/api/courses").then(function (res) {
       var courses = res.data || [];
@@ -2290,6 +2297,17 @@ function initAssignments(role) {
     });
 
     if (courseFilter) courseFilter.addEventListener("change", loadFacultyAssignmentsList);
+
+    if (rosterSelect) {
+      rosterSelect.addEventListener("change", function () {
+        if (this.value) {
+          openSubmissionsRoster(this.value, false);
+        } else {
+          var subTbody = document.getElementById("assignmentSubmissionsTableBody");
+          if (subTbody) subTbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">Please select an assignment to evaluate student submissions.</td></tr>';
+        }
+      });
+    }
 
     function loadFacultyAssignmentsList() {
       var selectedCourse = courseFilter ? courseFilter.value : "all";
@@ -2323,9 +2341,27 @@ function initAssignments(role) {
         if (penEl) penEl.textContent = totalPending;
         if (evaEl) evaEl.textContent = totalEval;
 
+        if (rosterSelect) {
+          if (!assignments.length) {
+            rosterSelect.innerHTML = '<option value="">No assignments published</option>';
+          } else {
+            var prevVal = rosterSelect.value;
+            rosterSelect.innerHTML = assignments.map(function (a) {
+              return '<option value="' + a.id + '">' + escapeHtml(a.courseCode || '') + ' - ' + escapeHtml(a.title) + '</option>';
+            }).join("");
+            if (prevVal && assignments.some(function (a) { return String(a.id) === String(prevVal); })) {
+              rosterSelect.value = prevVal;
+            } else {
+              rosterSelect.value = assignments[0].id;
+            }
+          }
+        }
+
         if (!tbody) return;
         if (!assignments.length) {
           tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--text-muted);">No assignments found. Click "+ Create Assignment" to publish.</td></tr>';
+          var subTbody = document.getElementById("assignmentSubmissionsTableBody");
+          if (subTbody) subTbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--text-muted);">No coursework assignments published yet. Click <strong>+ Create Assignment</strong> above to publish and evaluate student submissions.</td></tr>';
           return;
         }
 
@@ -2342,9 +2378,14 @@ function initAssignments(role) {
             '<td><strong style="color:var(--primary);">' + (counts.submissions || 0) + '</strong></td>' +
             '<td><strong style="color:var(--warning);">' + (counts.awaiting_evaluation || 0) + '</strong></td>' +
             '<td><strong style="color:var(--success);">' + (counts.evaluated || 0) + '</strong></td>' +
-            '<td><button class="btn btn-primary btn-sm" onclick="openSubmissionsRoster(' + a.id + ')">Review Submissions</button></td>' +
+            '<td><button class="btn btn-primary btn-sm" onclick="selectAndScrollToAssignment(' + a.id + ')">📝 Evaluate Submissions</button></td>' +
             '</tr>';
         }).join("");
+
+        var activeAId = rosterSelect ? rosterSelect.value : (assignments[0] ? assignments[0].id : null);
+        if (activeAId) {
+          openSubmissionsRoster(activeAId, false);
+        }
       }).catch(function (err) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:24px; color: var(--danger);">Failed to load assignments.</td></tr>';
       });
@@ -2389,7 +2430,18 @@ function initAssignments(role) {
       });
     };
 
-    window.openSubmissionsRoster = function (assignmentId) {
+    window.selectAndScrollToAssignment = function (assignmentId) {
+      if (rosterSelect) rosterSelect.value = assignmentId;
+      openSubmissionsRoster(assignmentId, true);
+    };
+
+    window.refreshCurrentRoster = function () {
+      if (rosterSelect && rosterSelect.value) {
+        openSubmissionsRoster(rosterSelect.value, false);
+      }
+    };
+
+    window.openSubmissionsRoster = function (assignmentId, shouldScroll) {
       var subCard = document.getElementById("assignmentSubmissionsCard");
       var titleEl = document.getElementById("submissionsCardTitle");
       var subTitleEl = document.getElementById("submissionsCardSubtitle");
@@ -2485,7 +2537,9 @@ function initAssignments(role) {
             '</tr>';
         }).join("");
 
-        subCard.scrollIntoView({ behavior: "smooth" });
+        if (shouldScroll && subCard) {
+          subCard.scrollIntoView({ behavior: "smooth" });
+        }
       }).catch(function (err) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color: var(--danger);">' + escapeHtml(err.message || 'Error loading roster.') + '</td></tr>';
       });

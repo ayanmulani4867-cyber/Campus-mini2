@@ -55,11 +55,9 @@
         </div>
         <div class="page-actions" style="display: flex; align-items: center; gap: 10px;">
           <span class="badge badge-info" id="assignmentLastUpdated" style="font-size: 12px;">Live Ledger Synced</span>
-          {% if current_user and current_user.role in ['faculty', 'admin'] %}
-          <button class="btn btn-primary btn-sm" id="openCreateAssignmentBtn" onclick="openModal('createAssignmentModal')">
+          <button class="btn btn-primary btn-sm" id="openCreateAssignmentBtn" onclick="openModal('createAssignmentModal')" style="display: none;">
             <span>+</span> Create Assignment
           </button>
-          {% endif %}
         </div>
       </div>
 
@@ -124,17 +122,20 @@
         </div>
       </div>
 
-      <!-- Faculty/Admin View: Assignments & Evaluation Management -->
+      <!-- Faculty/Admin View: Assignments & Coursework Management -->
       <div class="card" id="facultyAssignmentsCard" style="margin-bottom: 24px; display: {% if current_user and current_user.role in ['faculty', 'admin'] %}block{% else %}none{% endif %};">
-        <div class="card-header-row">
+        <div class="card-header-row" style="flex-wrap: wrap; gap: 12px; align-items: center;">
           <div>
-            <h3>Coursework Management & Evaluation</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Manage published assignments, review enrolled student submissions, and record marks</p>
+            <h3>Coursework & Assignments Management</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Manage published coursework, view enrolled student submissions, and select an assignment to evaluate</p>
           </div>
-          <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <select class="form-select" id="facultyCourseFilter" style="width: auto; font-size: 13px;">
               <option value="all">All Assigned Courses</option>
             </select>
+            <button class="btn btn-primary btn-sm" id="cardCreateAssignmentBtn" onclick="openModal('createAssignmentModal')" style="display: none;">
+              <span>+</span> Create Assignment
+            </button>
           </div>
         </div>
 
@@ -161,14 +162,24 @@
         </div>
       </div>
 
-      <!-- Submissions Evaluation Drawer / Roster View -->
-      <div class="card" id="assignmentSubmissionsCard" style="display: none; margin-bottom: 24px;">
-        <div class="card-header-row">
+      <!-- Faculty/Admin View: Evaluate Student Assignments Section -->
+      <div class="card" id="assignmentSubmissionsCard" style="margin-bottom: 24px; display: {% if current_user and current_user.role in ['faculty', 'admin'] %}block{% else %}none{% endif %};">
+        <div class="card-header-row" style="flex-wrap: wrap; gap: 12px; align-items: center;">
           <div>
-            <h3 id="submissionsCardTitle">Submissions Roster</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="submissionsCardSubtitle">Review submitted work and record grades (0 to 10 marks)</p>
+            <h3 id="submissionsCardTitle" style="display: flex; align-items: center; gap: 8px;">
+              <span>📝 Evaluate Student Assignments</span>
+            </h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="submissionsCardSubtitle">Review submitted student work, view PDFs in-screen, and record grades (0 to 10 marks)</p>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="closeSubmissionsRoster()">✕ Back to Assignments</button>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <label for="rosterAssignmentSelect" style="font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0;">Active Assignment:</label>
+            <select class="form-select" id="rosterAssignmentSelect" style="min-width: 250px; font-size: 13px; font-weight: 500;">
+              <option value="">Select assignment to evaluate...</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" id="refreshRosterBtn" onclick="refreshCurrentRoster()" title="Refresh Submissions">
+              🔄 Refresh
+            </button>
+          </div>
         </div>
 
         <div class="table-container">
@@ -444,6 +455,6 @@
     <p>&copy; 2026 Campus Connect</p>
   </footer>
 
-  <script src="js/script.js?v=55"></script>
+  <script src="js/script.js?v=75"></script>
 </body>
 </html>

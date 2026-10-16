@@ -198,7 +198,7 @@ def test_workflow_d_e_f_g_assignment_lifecycle(client, app):
 
     # --- TEST E: STUDENT SUBMISSION ---
     # Log in as Ayan Mulani
-    res = login_user(client, "ayan.mulani@campus.edu", "campus@123")
+    res = login_user(client, "ayanmulani4867@gmail.com", "campus@123")
     assert res.status_code == 200
 
     # Student sees the assignment in assignment list
@@ -259,7 +259,7 @@ def test_workflow_d_e_f_g_assignment_lifecycle(client, app):
     logout_user(client)
 
     # --- TEST G: STUDENT SEES MARKS & PRIVACY ---
-    res = login_user(client, "ayan.mulani@campus.edu", "campus@123")
+    res = login_user(client, "ayanmulani4867@gmail.com", "campus@123")
     assert res.status_code == 200
 
     res_student_view = client.get(f"/api/assignments/{assignment_id}")
@@ -354,8 +354,8 @@ def test_workflow_role_based_navigation_and_security(client, app):
     assert fac_match, "Faculty sidebar section must be defined"
     fac_block = fac_match.group(1)
     assert 'attendance.html' in fac_block, "Attendance must be in Faculty sidebar"
-    assert 'Assignment Management' in fac_block, "Assignment Management must be in Faculty sidebar"
-    assert 'Assignment Evaluation' in fac_block, "Assignment Evaluation must be in Faculty sidebar"
+    assert 'assignments.html' in fac_block, "Assignments must be in Faculty sidebar"
+    assert 'Assignment Evaluation' not in fac_block, "Assignment Evaluation must be consolidated into single Assignments option"
 
     # Extract student sidebar items
     stu_match = re.search(r'role\s*===\s*["\']student["\']\)[\s\S]*?items\s*=\s*\[([\s\S]*?)\];', sidebar_body)
@@ -365,15 +365,18 @@ def test_workflow_role_based_navigation_and_security(client, app):
     assert 'My Assignments & Submissions' in stu_block, "My Assignments & Submissions must be in Student sidebar"
 
     # 2. Student cannot access faculty roll-call endpoint (HTTP 403)
-    login_user(client, "ayan.mulani@campus.edu", "campus@123")
-    res_stu_denied = client.get("/api/attendance/roll-call?courseCode=CS601&division=A")
+    login_res = login_user(client, "ayanmulani4867@gmail.com", "campus@123")
+    stu_token = login_res.get_json().get("sessionToken")
+    stu_headers = {"X-Session-Token": stu_token} if stu_token else {}
+    res_stu_denied = client.get("/api/attendance/roll-call?courseCode=CS601&division=A", headers=stu_headers)
     assert res_stu_denied.status_code == 403, "Student must receive 403 on faculty roll-call"
 
     # Student cannot grade submissions (HTTP 403)
     res_grade_denied = client.post(
         "/api/assignments/submissions/1/grade",
         data=json.dumps({"marks_obtained": 8, "feedback": "Nice"}),
-        content_type="application/json"
+        content_type="application/json",
+        headers=stu_headers
     )
     assert res_grade_denied.status_code == 403, "Student must receive 403 on grading"
 
@@ -449,7 +452,7 @@ def test_workflow_in_screen_pdf_assignment_viewer(client, app):
             db.session.commit()
 
         # Student Ayan submits PDF
-        login_user(client, "ayan.mulani@campus.edu", "campus@123")
+        login_user(client, "ayanmulani4867@gmail.com", "campus@123")
         pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n%%EOF"
         data = {
             "submissionText": "Here is my SQL query optimization paper with execution plans.",
@@ -498,7 +501,7 @@ def test_workflow_in_screen_pdf_assignment_viewer(client, app):
 
         # 4. Security verification
         # Submitting student CAN preview their own submission
-        login_user(client, "ayan.mulani@campus.edu", "campus@123")
+        login_user(client, "ayanmulani4867@gmail.com", "campus@123")
         res_own_prev = client.get(f"/api/assignments/submissions/{sub_id}/preview")
         assert res_own_prev.status_code == 200, "Student must be able to preview own submission"
         logout_user(client)
