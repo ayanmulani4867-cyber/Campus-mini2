@@ -275,14 +275,20 @@ def hydrate_from_firebase_rtdb(app, db):
                 if not e_dict:
                     continue
                 int_id = int(e_dict.get("id") or e_id)
-                if not db.session.get(models.Enrollment, int_id):
+                stu_id = int(e_dict.get("student_id"))
+                crs_id = int(e_dict.get("course_id"))
+                if not db.session.get(models.Enrollment, int_id) and not models.Enrollment.query.filter_by(student_id=stu_id, course_id=crs_id).first():
                     en = models.Enrollment(
                         id=int_id,
-                        student_id=int(e_dict.get("student_id")),
-                        course_id=int(e_dict.get("course_id")),
+                        student_id=stu_id,
+                        course_id=crs_id,
                     )
                     db.session.add(en)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception as e_enr:
+                db.session.rollback()
+                logger.warning("Enrollments hydration commit error: %s", e_enr)
 
             # 8. Attendance Sessions & Records
             sess_data = _normalize_node_dict(rtdb_root.get("attendance_sessions", {}))
