@@ -2949,9 +2949,6 @@ function fetchUsersFromAPI(role) {
         var editRef = (m.role === 'faculty') ? (m.facultyCode || m.employeeId || m.id) : (m.prn || m.studentId || m.id);
         actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="editDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(editRef) + '\')" title="Edit all member details">Edit</button> ';
       }
-      if (m.role === 'student') {
-        actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(m.publicId || m.id) + '\')" title="View official student result card">Grade Card</button> ';
-      }
       if (m.role !== 'admin') {
         actionsHtml += '<button class="btn btn-danger btn-sm" onclick="deleteDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\', \'' + escapeHtml(m.name).replace(/'/g, "\\'") + '\', this)">Delete</button>';
       }
