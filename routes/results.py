@@ -101,16 +101,22 @@ def list_results():
         if course_code:
             course = Course.query.filter_by(code=course_code).first()
             q = q.filter(Result.course_id == (course.id if course else -1))
-        if dept_ref:
+        if dept_ref and str(dept_ref).lower() != "all":
             dept = Department.resolve(dept_ref)
             if dept:
                 q = q.join(Course).filter(Course.department_id == dept.id)
-        if sem_val and str(sem_val).isdigit():
+        if sem_val and str(sem_val).isdigit() and str(sem_val).lower() != "all":
             q = q.filter(Result.semester == int(sem_val))
-        if division:
+        if division and str(division).lower() != "all":
             q = q.filter(Result.division.ilike(division.strip()))
-        if status_val:
-            q = q.filter(Result.status == status_val.strip().lower())
+        if status_val and str(status_val).lower() != "all":
+            s_low = status_val.strip().lower()
+            if s_low == "published":
+                q = q.filter(db.or_(Result.status == "published", Result.is_published.is_(True)))
+            elif s_low in ("unpublished", "draft"):
+                q = q.filter(db.or_(Result.status.in_(["draft", "submitted", "under_review", "approved", "reopened"]), Result.is_published.is_(False)))
+            else:
+                q = q.filter(Result.status == s_low)
 
     results = q.order_by(Result.id.desc()).all()
     return jsonify({"success": True, "data": [r.to_dict() for r in results]})
@@ -768,3 +774,518 @@ def update_config():
         user=current_user()
     )
     return jsonify({"success": True, "data": cfg.to_dict()})
+
+
+# =====================================================================
+# 9. REAL-WORLD CONTROLLER OF EXAMINATIONS (COE) RESULT CONTROL SUITE
+# =====================================================================
+
+@bp.get("/my")
+@login_required
+def get_my_results():
+    """Personal published examination results ledger for enrolled students."""
+    user = current_user()
+    if user.role != "student":
+        return jsonify({"success": False, "error": "Only students have personal results ledger."}), 403
+    student = user.student_profile
+    if not student:
+        return jsonify({"success": True, "data": []})
+    q = Result.query.filter_by(student_id=student.id, is_published=True).options(
+        db.joinedload(Result.course).joinedload(Course.department)
+    ).order_by(Result.semester.asc(), Result.id.asc()).all()
+    return jsonify({"success": True, "data": [r.to_dict() for r in q]})
+
+
+@bp.route("/<int:result_id>/publish", methods=["POST", "PUT"])
+@roles_required("admin")
+def publish_individual_result(result_id):
+    """Immediate publication of a single student scorecard by CoE."""
+    user = current_user()
+    res = db.session.get(Result, result_id)
+    if not res:
+        return jsonify({"success": False, "error": f"Result #{result_id} not found."}), 404
+
+    now = datetime.now(timezone.utc)
+    res.is_published = True
+    res.status = "published"
+    res.published_by_id = user.id
+    res.published_at = now
+    db.session.commit()
+
+    log_audit(
+        action="RESULT_PUBLISH_INDIVIDUAL",
+        target_type="Result",
+        target_id=res.id,
+        details=f"Admin {user.email} published individual result for student {res.student.student_code if res.student else res.student_id} in {res.course.code if res.course else res.course_id}.",
+        user=user
+    )
+    return jsonify({
+        "success": True,
+        "message": "Result successfully published to student portal.",
+        "data": res.to_dict()
+    })
+
+
+@bp.route("/<int:result_id>/withhold", methods=["POST", "PUT"])
+@roles_required("admin")
+def withhold_individual_result(result_id):
+    """Withhold or revoke publication of a single student scorecard (e.g. pending dues or discipline)."""
+    user = current_user()
+    res = db.session.get(Result, result_id)
+    if not res:
+        return jsonify({"success": False, "error": f"Result #{result_id} not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "Withheld by Controller of Examinations").strip()
+
+    now = datetime.now(timezone.utc)
+    res.is_published = False
+    res.attendance_status = "withheld"
+    res.reopened_by_id = user.id
+    res.reopened_at = now
+    res.reopen_reason = reason
+    db.session.commit()
+
+    log_audit(
+        action="RESULT_WITHHOLD_INDIVIDUAL",
+        target_type="Result",
+        target_id=res.id,
+        reason=reason,
+        details=f"Admin {user.email} withheld result for student {res.student.student_code if res.student else res.student_id} in {res.course.code if res.course else res.course_id}.",
+        user=user
+    )
+    return jsonify({
+        "success": True,
+        "message": "Result successfully withheld from student portal.",
+        "data": res.to_dict()
+    })
+
+
+@bp.route("/<int:result_id>/override", methods=["POST", "PUT"])
+@roles_required("admin")
+def override_student_marks(result_id):
+    """Authoritative Controller of Examinations marks amendment, grievance adjustment & audit logging."""
+    user = current_user()
+    res = db.session.get(Result, result_id)
+    if not res:
+        return jsonify({"success": False, "error": f"Result #{result_id} not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip()
+    if not reason:
+        return jsonify({"success": False, "error": "A mandatory administrative audit reason is required for marks override."}), 400
+
+    cfg = _get_or_create_config(res.course.department_id if res.course else None, res.course_id)
+    old_ca1 = res.ca1_marks
+    old_ca2 = res.ca2_marks
+    old_mid = res.mid_sem_marks
+    old_end = res.end_sem_marks
+    old_att = res.attendance_status
+    old_tot = res.total_marks
+    old_grade = res.grade
+
+    # Update CA1
+    if "ca1" in data or "ca1Marks" in data:
+        v = data.get("ca1") if "ca1" in data else data.get("ca1Marks")
+        if v is not None and str(v).strip() != "":
+            res.ca1_marks = min(cfg.ca1_max, max(0.0, float(v)))
+            res.ca1_status = "approved"
+
+    # Update CA2
+    if "ca2" in data or "ca2Marks" in data:
+        v = data.get("ca2") if "ca2" in data else data.get("ca2Marks")
+        if v is not None and str(v).strip() != "":
+            res.ca2_marks = min(cfg.ca2_max, max(0.0, float(v)))
+            res.ca2_status = "approved"
+
+    # Update Mid-Sem
+    if "midSem" in data or "midSemMarks" in data:
+        v = data.get("midSem") if "midSem" in data else data.get("midSemMarks")
+        if v is not None and str(v).strip() != "":
+            res.mid_sem_marks = min(cfg.mid_sem_max, max(0.0, float(v)))
+            res.mid_sem_status = "approved"
+
+    # Update End-Sem
+    if "endSem" in data or "endSemMarks" in data:
+        v = data.get("endSem") if "endSem" in data else data.get("endSemMarks")
+        if v is not None and str(v).strip() != "":
+            res.end_sem_marks = min(cfg.end_sem_max, max(0.0, float(v)))
+            res.end_sem_status = "approved"
+
+    # Update Attendance Status
+    if "attendanceStatus" in data:
+        att = str(data["attendanceStatus"]).strip().lower()
+        if att in ("present", "absent", "incomplete", "withheld"):
+            res.attendance_status = att
+
+    # Update Publication Status
+    if "isPublished" in data:
+        pub_flag = bool(data["isPublished"])
+        res.is_published = pub_flag
+        if pub_flag:
+            res.status = "published"
+            res.published_by_id = user.id
+            res.published_at = datetime.now(timezone.utc)
+        elif res.status == "published":
+            res.status = "approved"
+
+    if "status" in data:
+        s_val = str(data["status"]).strip().lower()
+        if s_val in ("draft", "submitted", "under_review", "approved", "published", "reopened"):
+            res.status = s_val
+
+    # Recalculate legacy sync
+    res.internal_marks = res.internal_calculated
+    res.reopen_reason = f"CoE Override: {reason}"
+    res.reopened_by_id = user.id
+    res.reopened_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+
+    log_audit(
+        action="MARKS_OVERRIDE_ADMIN",
+        target_type="Result",
+        target_id=res.id,
+        reason=reason,
+        details=(
+            f"Admin {user.email} overridden marks for student {res.student.student_code if res.student else res.student_id} in {res.course.code if res.course else res.course_id}. "
+            f"Scores: [CA1: {old_ca1}->{res.ca1_marks}, CA2: {old_ca2}->{res.ca2_marks}, Mid: {old_mid}->{res.mid_sem_marks}, End: {old_end}->{res.end_sem_marks}]. "
+            f"Total: {old_tot}->{res.total_marks}, Grade: {old_grade}->{res.grade}. Reason: {reason}"
+        ),
+        user=user
+    )
+
+    return jsonify({
+        "success": True,
+        "message": f"Successfully updated and audited result for {res.student.user.full_name if (res.student and res.student.user) else 'student'}.",
+        "data": res.to_dict()
+    })
+
+
+@bp.post("/bulk-publish")
+@roles_required("admin")
+def bulk_publish_results():
+    """Bulk declaration or revocation of results for an entire semester or department."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    dept_ref = data.get("department")
+    sem_val = data.get("semester")
+    course_code = data.get("courseCode")
+    action = (data.get("action") or "publish").strip().lower()
+    reason = (data.get("reason") or "").strip()
+
+    if action == "reopen" and not reason:
+        return jsonify({"success": False, "error": "Mandatory audit reason required when reopening results."}), 400
+
+    q = Result.query.join(Student).join(Course)
+
+    if dept_ref and str(dept_ref).lower() != "all":
+        dept = Department.resolve(dept_ref)
+        if dept:
+            q = q.filter(Course.department_id == dept.id)
+
+    if sem_val and str(sem_val).lower() != "all" and str(sem_val).isdigit():
+        q = q.filter(Result.semester == int(sem_val))
+
+    if course_code and str(course_code).lower() != "all":
+        q = q.filter(Course.code == course_code.strip())
+
+    results = q.all()
+    if not results:
+        return jsonify({"success": False, "error": "No examination results match the specified criteria."}), 404
+
+    now = datetime.now(timezone.utc)
+    updated_count = 0
+
+    for r in results:
+        if action == "publish":
+            r.is_published = True
+            r.status = "published"
+            r.published_by_id = user.id
+            r.published_at = now
+            updated_count += 1
+        elif action == "unpublish":
+            r.is_published = False
+            if r.status == "published":
+                r.status = "approved"
+            updated_count += 1
+        elif action == "approve":
+            r.status = "approved"
+            r.approved_by_id = user.id
+            r.approved_at = now
+            updated_count += 1
+        elif action == "reopen":
+            r.is_published = False
+            r.status = "reopened"
+            r.reopened_by_id = user.id
+            r.reopened_at = now
+            r.reopen_reason = reason
+            updated_count += 1
+
+    db.session.commit()
+    log_audit(
+        action=f"BULK_RESULT_{action.upper()}",
+        target_type="ExamBatch",
+        target_id=0,
+        reason=reason or None,
+        details=f"Admin {user.email} executed bulk {action} on {updated_count} results (Dept: {dept_ref}, Sem: {sem_val}, Course: {course_code}).",
+        user=user
+    )
+
+    action_label = {
+        "publish": "published to student portals",
+        "unpublish": "withheld / hidden from student portals",
+        "approve": "approved for declaration",
+        "reopen": "reopened for faculty amendment"
+    }.get(action, action)
+
+    return jsonify({
+        "success": True,
+        "message": f"Successfully {action_label} for {updated_count} student examination records.",
+        "count": updated_count
+    })
+
+
+@bp.post("/apply-grace")
+@roles_required("admin")
+def apply_grace_marks():
+    """Awards institutional moderation grace marks for borderline failing students per autonomous ordinance."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    dept_ref = data.get("department")
+    sem_val = data.get("semester")
+    course_code = data.get("courseCode")
+    max_grace = float(data.get("maxGraceMarks") or 3.0)
+    reason = (data.get("reason") or "Ordinance 4.2 Standing Committee Moderation Grace Marks").strip()
+
+    q = Result.query.join(Student).join(Course).filter(
+        Result.attendance_status == "present"
+    )
+
+    if dept_ref and str(dept_ref).lower() != "all":
+        dept = Department.resolve(dept_ref)
+        if dept:
+            q = q.filter(Course.department_id == dept.id)
+
+    if sem_val and str(sem_val).lower() != "all" and str(sem_val).isdigit():
+        q = q.filter(Result.semester == int(sem_val))
+
+    if course_code and str(course_code).lower() != "all":
+        q = q.filter(Course.code == course_code.strip())
+
+    results = q.all()
+    awarded_list = []
+
+    for r in results:
+        if not r.is_passed:
+            passing_cutoff = (r.total_max_marks * 0.40)
+            deficit = passing_cutoff - r.total_marks
+            if 0 < deficit <= max_grace:
+                old_tot = r.total_marks
+                r.end_sem_marks = round((r.end_sem_marks or 0.0) + deficit, 2)
+                r.reopen_reason = f"Passed with Grace Marks (+{round(deficit, 1)} pts): {reason}"
+                r.status = "approved"
+                awarded_list.append({
+                    "id": r.id,
+                    "studentName": r.student.user.full_name if (r.student and r.student.user) else r.student_id,
+                    "prn": r.student.prn if r.student else None,
+                    "courseCode": r.course.code if r.course else None,
+                    "oldTotal": old_tot,
+                    "graceAwarded": round(deficit, 1),
+                    "newTotal": r.total_marks,
+                    "newGrade": r.grade,
+                    "isPassed": r.is_passed
+                })
+
+    if awarded_list:
+        db.session.commit()
+        log_audit(
+            action="MODERATION_GRACE_MARKS_APPLIED",
+            target_type="ExamBatch",
+            target_id=0,
+            reason=reason,
+            details=f"Admin {user.email} awarded grace marks to {len(awarded_list)} qualifying borderline students.",
+            user=user
+        )
+
+    return jsonify({
+        "success": True,
+        "message": f"Evaluated eligible candidates. Awarded grace marks to {len(awarded_list)} student scorecards.",
+        "awardedCount": len(awarded_list),
+        "data": awarded_list
+    })
+
+
+@bp.get("/gazette")
+@login_required
+def get_examination_gazette():
+    """Generates complete institutional broadsheet ledger with course-by-course breakdowns and statistical analysis."""
+    dept_ref = request.args.get("department")
+    sem_val = request.args.get("semester")
+    acad_year = request.args.get("academicYear", "2025-2026")
+
+    dept = None
+    if dept_ref and str(dept_ref).lower() != "all":
+        dept = Department.resolve(dept_ref)
+
+    sem_int = int(sem_val) if (sem_val and str(sem_val).isdigit()) else None
+
+    c_q = Course.query.options(db.joinedload(Course.department))
+    if dept:
+        c_q = c_q.filter(Course.department_id == dept.id)
+    if sem_int:
+        c_q = c_q.filter(Course.semester == sem_int)
+    courses = c_q.order_by(Course.code.asc()).all()
+
+    r_q = Result.query.join(Student).join(Course).options(
+        db.joinedload(Result.student).joinedload(Student.user),
+        db.joinedload(Result.student).joinedload(Student.department),
+        db.joinedload(Result.course)
+    )
+    if dept:
+        r_q = r_q.filter(Course.department_id == dept.id)
+    if sem_int:
+        r_q = r_q.filter(db.or_(Result.semester == sem_int, Course.semester == sem_int, Student.semester == sem_int))
+
+    results = r_q.all()
+
+    students_map = {}
+    for r in results:
+        stu = r.student
+        if not stu:
+            continue
+        sid = stu.id
+        if sid not in students_map:
+            students_map[sid] = {
+                "student": {
+                    "id": stu.id,
+                    "studentCode": stu.student_code,
+                    "prn": stu.prn or stu.student_code,
+                    "rollNumber": stu.roll_number,
+                    "name": stu.user.full_name if stu.user else "Student",
+                    "department": stu.department.name if stu.department else (dept.name if dept else "General"),
+                    "departmentCode": stu.department.code if stu.department else (dept.code if dept else "GEN"),
+                    "semester": stu.semester or sem_int,
+                    "division": stu.division or "A"
+                },
+                "courses": {},
+                "totalObtained": 0.0,
+                "totalMax": 0.0,
+                "totalCredits": 0,
+                "earnedCredits": 0,
+                "backlogs": 0,
+                "hasUnpublished": False,
+                "allPassed": True
+            }
+
+        c_code = r.course.code if r.course else "COURSE"
+        c_credits = (r.course.credits if r.course else 3) or 3
+
+        students_map[sid]["courses"][c_code] = {
+            "ca1": r.ca1_marks,
+            "ca2": r.ca2_marks,
+            "midSem": r.mid_sem_marks,
+            "endSem": r.end_sem_marks,
+            "internal": r.internal_calculated,
+            "total": r.total_marks,
+            "max": r.total_max_marks,
+            "grade": r.grade,
+            "isPassed": r.is_passed,
+            "attendanceStatus": r.attendance_status,
+            "isPublished": r.is_published
+        }
+
+        students_map[sid]["totalObtained"] += r.total_marks
+        students_map[sid]["totalMax"] += r.total_max_marks
+        students_map[sid]["totalCredits"] += c_credits
+        if r.is_passed:
+            students_map[sid]["earnedCredits"] += c_credits
+        else:
+            students_map[sid]["backlogs"] += 1
+            students_map[sid]["allPassed"] = False
+
+        if not r.is_published:
+            students_map[sid]["hasUnpublished"] = True
+
+    roster = []
+    distinction_count = 0
+    first_class_count = 0
+    second_class_count = 0
+    pass_class_count = 0
+    fail_count = 0
+
+    for sid, entry in students_map.items():
+        tot_obt = round(entry["totalObtained"], 2)
+        tot_max = round(entry["totalMax"], 2)
+        pct = round((tot_obt / tot_max) * 100.0, 2) if tot_max > 0 else 0.0
+        sgpa = round(pct / 10.0, 2)
+
+        if entry["allPassed"] and len(entry["courses"]) > 0:
+            if pct >= 75.0:
+                classification = "FIRST CLASS WITH DISTINCTION"
+                distinction_count += 1
+            elif pct >= 60.0:
+                classification = "FIRST CLASS"
+                first_class_count += 1
+            elif pct >= 50.0:
+                classification = "SECOND CLASS"
+                second_class_count += 1
+            else:
+                classification = "PASS CLASS"
+                pass_class_count += 1
+            final_result = "PASS"
+        else:
+            classification = "FAIL / ATKT" if entry["backlogs"] <= 3 else "FAIL"
+            final_result = "ATKT" if (0 < entry["backlogs"] <= 3) else "FAIL"
+            fail_count += 1
+
+        roster.append({
+            "student": entry["student"],
+            "courseScores": entry["courses"],
+            "totalMarks": tot_obt,
+            "maxMarks": tot_max,
+            "percentage": pct,
+            "sgpa": sgpa,
+            "earnedCredits": entry["earnedCredits"],
+            "totalCredits": entry["totalCredits"],
+            "backlogs": entry["backlogs"],
+            "classification": classification,
+            "finalResult": final_result,
+            "hasUnpublished": entry["hasUnpublished"]
+        })
+
+    roster.sort(key=lambda s: (str(s["student"]["rollNumber"] or "999999"), str(s["student"]["prn"] or "")))
+
+    total_appeared = len(roster)
+    total_passed = total_appeared - fail_count
+    pass_rate = round((total_passed / total_appeared) * 100.0, 1) if total_appeared > 0 else 0.0
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "institution": {
+                "name": "Sharad Institute of Technology College of Engineering",
+                "autonomous": "An Autonomous Institute Affiliated to DBATU",
+                "coe": "Office of the Controller of Examinations",
+                "gazetteTitle": "Official Autonomous Examination Gazette & Broadsheet",
+                "academicYear": acad_year,
+                "department": dept.name if dept else "All Engineering Departments",
+                "departmentCode": dept.code if dept else "ALL",
+                "semester": f"Semester {sem_int}" if sem_int else "All Semesters",
+                "generatedAt": datetime.now(timezone.utc).strftime("%d-%b-%Y %H:%M UTC")
+            },
+            "courses": [c.to_dict() for c in courses],
+            "statistics": {
+                "totalAppeared": total_appeared,
+                "totalPassed": total_passed,
+                "totalFailed": fail_count,
+                "passPercentage": pass_rate,
+                "distinctionCount": distinction_count,
+                "firstClassCount": first_class_count,
+                "secondClassCount": second_class_count,
+                "passClassCount": pass_class_count
+            },
+            "roster": roster,
+            "students": roster
+        }
+    })

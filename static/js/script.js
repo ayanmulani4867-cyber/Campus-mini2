@@ -2874,10 +2874,18 @@ function initResults(role) {
     if (adminView) {
       adminView.style.display = "block";
       loadAdminLifecycle();
-      // Populate department dropdowns across admin tabs
+      // Populate department dropdowns across all admin tabs
       api("/api/departments").then(function (res) {
         var depts = res.data || [];
-        ["adminCardDeptFilter", "toppersDeptSelect", "analyticsDeptSelect"].forEach(function (id) {
+        [
+          "adminLifecycleDeptFilter",
+          "bulkPublishDeptSelect",
+          "graceDeptSelect",
+          "gazetteDeptSelect",
+          "adminCardDeptFilter",
+          "toppersDeptSelect",
+          "analyticsDeptSelect"
+        ].forEach(function (id) {
           var sel = document.getElementById(id);
           if (sel && depts.length) {
             sel.innerHTML = '<option value="all">All Departments</option>' + depts.map(function (d) {
@@ -2886,6 +2894,29 @@ function initResults(role) {
           }
         });
       }).catch(function () {});
+
+      // Wire live filter listeners for real-world CoE Result Command Center
+      ["adminLifecycleDeptFilter", "adminLifecycleSemFilter", "adminLifecycleStatusFilter"].forEach(function (filterId) {
+        var filterEl = document.getElementById(filterId);
+        if (filterEl && !filterEl._hasChangeListener) {
+          filterEl._hasChangeListener = true;
+          filterEl.addEventListener("change", function () {
+            loadAdminLifecycle();
+          });
+        }
+      });
+
+      var adminSearchInput = document.getElementById("adminLifecycleSearchInput");
+      if (adminSearchInput && !adminSearchInput._hasInputListener) {
+        adminSearchInput._hasInputListener = true;
+        var adminSearchDebounce = null;
+        adminSearchInput.addEventListener("input", function () {
+          clearTimeout(adminSearchDebounce);
+          adminSearchDebounce = setTimeout(function () {
+            loadAdminLifecycle();
+          }, 350);
+        });
+      }
     }
     if (studentView) studentView.remove();
     if (facultyView) facultyView.remove();
@@ -3296,19 +3327,25 @@ function initResults(role) {
   // =========================================================================
   window.switchAdminTab = function (tab) {
     var secLifecycle = document.getElementById("adminTabSectionLifecycle");
+    var secGazette = document.getElementById("adminTabSectionGazette");
     var secCards = document.getElementById("adminTabSectionCards");
     var secToppers = document.getElementById("adminTabSectionToppers");
     var secAnalytics = document.getElementById("adminTabSectionAnalytics");
 
     var tabLifecycle = document.getElementById("tabAdminLifecycle");
+    var tabGazette = document.getElementById("tabAdminGazette");
     var tabCards = document.getElementById("tabAdminCards");
     var tabToppers = document.getElementById("tabAdminToppers");
     var tabAnalytics = document.getElementById("tabAdminAnalytics");
 
-    [secLifecycle, secCards, secToppers, secAnalytics].forEach(function (s) { if (s) s.style.display = "none"; });
-    [tabLifecycle, tabCards, tabToppers, tabAnalytics].forEach(function (t) { if (t) t.classList.remove("active"); });
+    [secLifecycle, secGazette, secCards, secToppers, secAnalytics].forEach(function (s) { if (s) s.style.display = "none"; });
+    [tabLifecycle, tabGazette, tabCards, tabToppers, tabAnalytics].forEach(function (t) { if (t) t.classList.remove("active"); });
 
-    if (tab === "cards") {
+    if (tab === "gazette") {
+      if (secGazette) secGazette.style.display = "block";
+      if (tabGazette) tabGazette.classList.add("active");
+      loadAdminGazette();
+    } else if (tab === "cards") {
       if (secCards) secCards.style.display = "block";
       if (tabCards) tabCards.classList.add("active");
       loadAdminResultCardsList();
@@ -3327,23 +3364,41 @@ function initResults(role) {
     }
   };
 
-  function loadAdminLifecycle() {
+  window.loadAdminLifecycle = function () {
     var tbody = document.getElementById("adminResultsTableBody");
     var batchTbody = document.getElementById("adminBatchResultsTableBody");
     var countBadge = document.getElementById("adminResultCountBadge");
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading student scorecards...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading authoritative student scorecards...</td></tr>';
     if (batchTbody) {
       batchTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);"><span class="page-spinner"></span> Loading departmental course batches...</td></tr>';
     }
 
+    var deptSel = document.getElementById("adminLifecycleDeptFilter");
+    var semSel = document.getElementById("adminLifecycleSemFilter");
+    var statusSel = document.getElementById("adminLifecycleStatusFilter");
+    var searchInp = document.getElementById("adminLifecycleSearchInput");
+
+    var dept = deptSel ? deptSel.value : "all";
+    var sem = semSel ? semSel.value : "all";
+    var status = statusSel ? statusSel.value : "all";
+    var q = searchInp ? searchInp.value.trim() : "";
+
+    var params = new URLSearchParams();
+    if (dept && dept !== "all") params.set("department", dept);
+    if (sem && sem !== "all") params.set("semester", sem);
+    if (status && status !== "all") params.set("status", status);
+    if (q) params.set("q", q);
+
     Promise.all([
-      api("/api/results"),
+      api("/api/results?" + params.toString()),
       api("/api/courses")
     ]).then(function (responses) {
       var rows = responses[0].data || [];
       var courses = responses[1].data || [];
+
+      window._adminLoadedResults = rows;
 
       if (countBadge) {
         countBadge.textContent = rows.length + (rows.length === 1 ? " Student Record" : " Student Records");
@@ -3371,7 +3426,7 @@ function initResults(role) {
       if (totalEl) totalEl.textContent = rows.length.toLocaleString();
       if (rateEl) rateEl.textContent = passRate;
 
-      // Render Departmental Course Batches (Module 3 Lifecycle)
+      // Render Departmental Course Batches
       if (batchTbody) {
         if (!courses.length) {
           batchTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No academic courses configured.</td></tr>';
@@ -3393,19 +3448,19 @@ function initResults(role) {
               actionBtn = '<span style="color:var(--text-muted);font-size:12px;">Awaiting Faculty Entry</span>';
             } else if (allPub) {
               statusBadge = '<span class="badge badge-success">Published to Students</span>';
-              actionBtn = '<button class="btn btn-danger btn-sm" onclick="openReopenModal(\'' + escapeHtml(c.code) + '\', \'ALL\')">Reopen Results</button>';
+              actionBtn = '<button class="btn btn-danger btn-sm" onclick="openReopenModal(\'" + escapeHtml(c.code) + "\', \'ALL\')">Reopen Results</button>';
             } else if (anyApproved) {
               statusBadge = '<span class="badge badge-info">Approved by Exam Cell</span>';
-              actionBtn = '<button class="btn btn-success btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'published\')">Publish to Students</button>';
+              actionBtn = '<button class="btn btn-success btn-sm" onclick="transitionBatchStatus(\'" + escapeHtml(c.code) + "\', \'ALL\', \'published\')">Publish to Students</button>';
             } else if (anyUnderReview) {
               statusBadge = '<span class="badge badge-warning">Under Review</span>';
-              actionBtn = '<button class="btn btn-primary btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'approved\')">Approve Batch</button>';
+              actionBtn = '<button class="btn btn-primary btn-sm" onclick="transitionBatchStatus(\'" + escapeHtml(c.code) + "\', \'ALL\', \'approved\')">Approve Batch</button>';
             } else if (anySubmitted) {
               statusBadge = '<span class="badge badge-primary">Submitted by Faculty</span>';
-              actionBtn = '<button class="btn btn-warning btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'under_review\')">Review Batch</button>';
+              actionBtn = '<button class="btn btn-warning btn-sm" onclick="transitionBatchStatus(\'" + escapeHtml(c.code) + "\', \'ALL\', \'under_review\')">Review Batch</button>';
             } else {
               statusBadge = '<span class="badge badge-secondary">Draft</span>';
-              actionBtn = '<button class="btn btn-primary btn-sm" onclick="transitionBatchStatus(\'' + escapeHtml(c.code) + '\', \'ALL\', \'submitted\')">Submit Batch</button>';
+              actionBtn = '<button class="btn btn-primary btn-sm" onclick="transitionBatchStatus(\'" + escapeHtml(c.code) + "\', \'ALL\', \'submitted\')">Submit Batch</button>';
             }
 
             var auditInfo = anyPub
@@ -3424,9 +3479,9 @@ function initResults(role) {
         }
       }
 
-      // Render Individual Student Scorecards
+      // Render Individual Student Scorecards (11 Columns)
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);">No student scorecards recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--text-muted);">No student scorecards match the selected filter criteria.</td></tr>';
         return;
       }
 
@@ -3434,20 +3489,38 @@ function initResults(role) {
         var isPass = r.isPassed;
         var pubBadge = r.isPublished
           ? '<span class="badge badge-success">Published</span>'
-          : '<span class="badge badge-warning">Draft</span>';
+          : '<span class="badge badge-warning">Draft / Unpublished</span>';
+
+        var att = (r.attendanceStatus || "present").toLowerCase();
+        var attBadge = '<span class="badge badge-success">Present</span>';
+        if (att === "absent") {
+          attBadge = '<span class="badge badge-danger">Absent (AB)</span>';
+        } else if (att === "withheld") {
+          attBadge = '<span class="badge badge-warning">Withheld (WH)</span>';
+        } else if (att === "incomplete") {
+          attBadge = '<span class="badge badge-secondary">Incomplete</span>';
+        }
+
+        var actions = '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+          '<button class="btn btn-primary btn-sm" onclick="openAdminOverrideModal(' + r.id + ')" title="Override or moderate marks">✏️ Override</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(r.studentId || r.prn) + '\')" title="View Official Result Card">👁️ Card</button>' +
+          (r.isPublished
+            ? '<button class="btn btn-outline-danger btn-sm" onclick="toggleIndividualPublish(' + r.id + ', false)" title="Withhold individual result from student portal">🔒 Withhold</button>'
+            : '<button class="btn btn-outline-success btn-sm" onclick="toggleIndividualPublish(' + r.id + ', true)" title="Publish individual result to student portal">🔓 Publish</button>') +
+        '</div>';
 
         return '<tr>' +
-          '<td><strong>' + escapeHtml(r.studentId || r.prn) + '</strong></td>' +
-          '<td>' + escapeHtml(r.studentName || '-') + '</td>' +
-          '<td>' + escapeHtml(r.courseCode) + '</td>' +
-          '<td>' + (r.ca1 !== undefined ? r.ca1 : '-') + '</td>' +
-          '<td>' + (r.ca2 !== undefined ? r.ca2 : '-') + '</td>' +
-          '<td>' + (r.midSem !== undefined ? r.midSem : '-') + '</td>' +
-          '<td>' + (r.endSem !== undefined ? r.endSem : '-') + '</td>' +
-          '<td><strong>' + r.total + '</strong></td>' +
-          '<td><span class="badge badge-' + (isPass ? 'success' : 'danger') + '">' + escapeHtml(r.grade) + '</span></td>' +
+          '<td><strong>' + escapeHtml(r.studentId || r.prn || '-') + '</strong>' + (r.rollNumber ? '<br><small class="text-muted">Roll: ' + escapeHtml(String(r.rollNumber)) + '</small>' : '') + '</td>' +
+          '<td><strong>' + escapeHtml(r.studentName || '-') + '</strong>' + (r.division ? '<br><small class="text-muted">Div ' + escapeHtml(r.division) + '</small>' : '') + '</td>' +
+          '<td><strong>' + escapeHtml(r.courseCode || '-') + '</strong>' + (r.courseTitle ? '<br><small class="text-muted">' + escapeHtml(r.courseTitle) + '</small>' : '') + '</td>' +
+          '<td>' + (r.ca1 !== undefined && r.ca1 !== null ? r.ca1 : '-') + '</td>' +
+          '<td>' + (r.ca2 !== undefined && r.ca2 !== null ? r.ca2 : '-') + '</td>' +
+          '<td>' + (r.midSem !== undefined && r.midSem !== null ? r.midSem : '-') + '</td>' +
+          '<td>' + (r.endSem !== undefined && r.endSem !== null ? r.endSem : '-') + '</td>' +
+          '<td><strong>' + (r.total !== undefined ? r.total : '-') + '</strong> <span class="badge badge-' + (isPass ? 'success' : 'danger') + '" style="margin-left:4px;">' + escapeHtml(r.grade || (isPass ? 'P' : 'F')) + '</span></td>' +
+          '<td>' + attBadge + '</td>' +
           '<td>' + pubBadge + '</td>' +
-          '<td><button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(r.studentId || r.prn) + '\')">View Card</button></td>' +
+          '<td>' + actions + '</td>' +
           '</tr>';
       }).join("");
 
@@ -3455,7 +3528,512 @@ function initResults(role) {
       console.log("Could not load admin lifecycle:", err.message);
       tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color: var(--danger);">Failed to load student scorecards.</td></tr>';
     });
-  }
+  };
+
+  // Individual Result Publication / Withhold Toggle
+  window.toggleIndividualPublish = function (resultId, shouldPublish) {
+    if (getActiveRole() !== "admin") {
+      showToast("Restricted", "Only Administrators can modify publication state.", "warning");
+      return;
+    }
+
+    var actionUrl = shouldPublish
+      ? "/api/results/" + resultId + "/publish"
+      : "/api/results/" + resultId + "/withhold";
+
+    var defaultReason = shouldPublish
+      ? "Direct publication authorized by Controller of Examinations"
+      : "Result withheld from portal pending inspection / dues verification";
+
+    api(actionUrl, {
+      method: "POST",
+      body: { reason: defaultReason }
+    }).then(function (res) {
+      showToast(shouldPublish ? "Result Published" : "Result Withheld", res.message || "Updated successfully.", "success");
+      loadAdminLifecycle();
+    }).catch(function (err) {
+      showToast("Action Failed", err.message || "Could not update publication state.", "error");
+    });
+  };
+
+  // Direct Marks Override & Moderation Modal
+  window.openAdminOverrideModal = function (resultId) {
+    var rec = null;
+    if (window._adminLoadedResults && window._adminLoadedResults.length) {
+      rec = window._adminLoadedResults.find(function (item) { return item.id === resultId; });
+    }
+
+    var setupModal = function (r) {
+      document.getElementById("overrideResultId").value = r.id;
+      var nameEl = document.getElementById("overrideStudentName");
+      var prnEl = document.getElementById("overrideStudentPRN");
+      var courseEl = document.getElementById("overrideCourseInfo");
+      var deptSemEl = document.getElementById("overrideDeptSem");
+
+      if (nameEl) nameEl.textContent = r.studentName || "Student";
+      if (prnEl) prnEl.textContent = r.studentId || r.prn || "PRN";
+      if (courseEl) courseEl.textContent = "Course: " + (r.courseCode || "") + " - " + (r.courseTitle || "");
+      if (deptSemEl) deptSemEl.textContent = "Dept / Sem: " + (r.department || "-") + " • Sem " + (r.semester || "-");
+
+      document.getElementById("overrideCA1").value = r.ca1 !== undefined && r.ca1 !== null ? r.ca1 : 0;
+      document.getElementById("overrideCA2").value = r.ca2 !== undefined && r.ca2 !== null ? r.ca2 : 0;
+      document.getElementById("overrideMidSem").value = r.midSem !== undefined && r.midSem !== null ? r.midSem : 0;
+      document.getElementById("overrideEndSem").value = r.endSem !== undefined && r.endSem !== null ? r.endSem : 0;
+      document.getElementById("overrideAttendanceStatus").value = (r.attendanceStatus || "present").toLowerCase();
+      document.getElementById("overridePublicationStatus").value = r.isPublished ? "true" : "false";
+      document.getElementById("overrideReason").value = "";
+
+      var errEl = document.getElementById("adminOverrideError");
+      if (errEl) errEl.innerHTML = "";
+
+      recalcOverrideTotals();
+      openModal("adminOverrideMarksModal");
+    };
+
+    if (rec) {
+      setupModal(rec);
+    } else {
+      api("/api/results").then(function (res) {
+        var all = res.data || [];
+        var found = all.find(function (item) { return item.id === resultId; });
+        if (found) {
+          setupModal(found);
+        } else {
+          showToast("Not Found", "Result #" + resultId + " not found.", "error");
+        }
+      }).catch(function (err) {
+        showToast("Error", err.message || "Failed to load result details.", "error");
+      });
+    }
+  };
+
+  window.recalcOverrideTotals = function () {
+    var ca1 = parseFloat(document.getElementById("overrideCA1").value) || 0;
+    var ca2 = parseFloat(document.getElementById("overrideCA2").value) || 0;
+    var mid = parseFloat(document.getElementById("overrideMidSem").value) || 0;
+    var end = parseFloat(document.getElementById("overrideEndSem").value) || 0;
+    var att = (document.getElementById("overrideAttendanceStatus").value || "present").toLowerCase();
+
+    var internal = ca1 + ca2 + mid;
+    var grandTotal = internal + end;
+    var maxTotal = 140.0;
+    var pct = maxTotal > 0 ? (grandTotal / maxTotal) * 100 : 0;
+
+    var grade = "F";
+    var statusText = "FAIL";
+    var statusClass = "badge-danger";
+
+    if (att === "absent") {
+      grade = "F";
+      statusText = "FAIL (ABSENT)";
+      statusClass = "badge-danger";
+    } else if (att === "withheld") {
+      grade = "WH";
+      statusText = "WITHHELD";
+      statusClass = "badge-warning";
+    } else if (att === "incomplete") {
+      grade = "I";
+      statusText = "INCOMPLETE";
+      statusClass = "badge-secondary";
+    } else {
+      if (pct >= 90) grade = "A+";
+      else if (pct >= 80) grade = "A";
+      else if (pct >= 70) grade = "B+";
+      else if (pct >= 60) grade = "B";
+      else if (pct >= 50) grade = "C";
+      else if (pct >= 40) grade = "D";
+      else grade = "F";
+
+      if (pct >= 40) {
+        statusText = "PASS (" + pct.toFixed(1) + "%)";
+        statusClass = "badge-success";
+      } else {
+        statusText = "FAIL (" + pct.toFixed(1) + "%)";
+        statusClass = "badge-danger";
+      }
+    }
+
+    var prevInt = document.getElementById("overridePreviewInternal");
+    var prevEnd = document.getElementById("overridePreviewEndSem");
+    var prevTot = document.getElementById("overridePreviewTotal");
+    var prevGrd = document.getElementById("overridePreviewGrade");
+    var prevSts = document.getElementById("overridePreviewStatus");
+
+    if (prevInt) prevInt.textContent = internal.toFixed(1);
+    if (prevEnd) prevEnd.textContent = end.toFixed(1);
+    if (prevTot) prevTot.textContent = grandTotal.toFixed(1) + " / " + maxTotal + " (" + pct.toFixed(1) + "%)";
+    if (prevGrd) {
+      prevGrd.textContent = grade;
+      prevGrd.className = "badge " + statusClass;
+    }
+    if (prevSts) {
+      prevSts.textContent = statusText;
+      prevSts.className = "badge " + statusClass;
+    }
+  };
+
+  window.submitMarksOverride = function () {
+    var id = document.getElementById("overrideResultId").value;
+    var ca1 = parseFloat(document.getElementById("overrideCA1").value) || 0;
+    var ca2 = parseFloat(document.getElementById("overrideCA2").value) || 0;
+    var mid = parseFloat(document.getElementById("overrideMidSem").value) || 0;
+    var end = parseFloat(document.getElementById("overrideEndSem").value) || 0;
+    var att = document.getElementById("overrideAttendanceStatus").value;
+    var isPub = document.getElementById("overridePublicationStatus").value === "true";
+    var reason = document.getElementById("overrideReason").value.trim();
+    var errEl = document.getElementById("adminOverrideError");
+    var btn = document.getElementById("btnSaveMarksOverride");
+
+    if (!reason) {
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">A mandatory administrative audit reason is required for marks override.</div>';
+      return;
+    }
+    if (errEl) errEl.innerHTML = "";
+
+    setButtonLoading(btn, "Authorizing...");
+    api("/api/results/" + id + "/override", {
+      method: "POST",
+      body: {
+        ca1: ca1,
+        ca2: ca2,
+        midSem: mid,
+        endSem: end,
+        attendanceStatus: att,
+        isPublished: isPub,
+        reason: reason
+      }
+    }).then(function (res) {
+      resetButton(btn, "Save & Apply Override");
+      closeModal("adminOverrideMarksModal");
+      showToast("Override Authorized", res.message || "Marks updated with permanent audit record.", "success");
+      loadAdminLifecycle();
+    }).catch(function (err) {
+      resetButton(btn, "Save & Apply Override");
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">' + escapeHtml(err.message || "Failed to override marks.") + '</div>';
+      else showToast("Override Error", err.message, "error");
+    });
+  };
+
+  // Bulk Declaration & Action Modal Handlers
+  window.openBulkPublishModal = function (action) {
+    var actionVal = action || "publish";
+    var actInput = document.getElementById("bulkPublishAction");
+    if (actInput) actInput.value = actionVal;
+
+    var titleEl = document.getElementById("bulkPublishModalTitle");
+    var descEl = document.getElementById("bulkPublishDescription");
+    var reasonGroup = document.getElementById("bulkPublishReasonGroup");
+    var chk = document.getElementById("bulkPublishConfirmCheck");
+    var btn = document.getElementById("btnExecuteBulkPublish");
+    var errEl = document.getElementById("bulkPublishError");
+
+    if (errEl) errEl.innerHTML = "";
+    if (chk) chk.checked = false;
+
+    if (actionVal === "publish") {
+      if (titleEl) titleEl.textContent = "📢 Official Result Declaration & Publication";
+      if (descEl) descEl.textContent = "Publish verified examination results to student portals for the chosen cohort. Students will immediately be able to view their verified grades and download result cards.";
+      if (reasonGroup) reasonGroup.style.display = "none";
+      if (btn) btn.textContent = "Declare & Publish Results";
+    } else if (actionVal === "approve") {
+      if (titleEl) titleEl.textContent = "✅ Exam Cell Batch Approval";
+      if (descEl) descEl.textContent = "Approve all submitted batches across the selected department and semester. Approved batches can then be officially declared and published.";
+      if (reasonGroup) reasonGroup.style.display = "none";
+      if (btn) btn.textContent = "Approve Batches";
+    } else {
+      if (titleEl) titleEl.textContent = "🔒 Withhold / Recall Published Results";
+      if (descEl) descEl.textContent = "Withhold published examination results from student portals for administrative review or discrepancy resolution.";
+      if (reasonGroup) reasonGroup.style.display = "block";
+      if (btn) btn.textContent = "Withhold Results";
+    }
+
+    openModal("adminBulkPublishModal");
+  };
+
+  window.executeBulkPublish = function () {
+    var actInput = document.getElementById("bulkPublishAction");
+    var action = actInput ? actInput.value : "publish";
+    var dept = document.getElementById("bulkPublishDeptSelect") ? document.getElementById("bulkPublishDeptSelect").value : "all";
+    var sem = document.getElementById("bulkPublishSemSelect") ? document.getElementById("bulkPublishSemSelect").value : "all";
+    var reason = document.getElementById("bulkPublishReason") ? document.getElementById("bulkPublishReason").value.trim() : "";
+    var chk = document.getElementById("bulkPublishConfirmCheck");
+    var errEl = document.getElementById("bulkPublishError");
+    var btn = document.getElementById("btnExecuteBulkPublish");
+
+    if (chk && !chk.checked) {
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">Please check the authorization confirmation checkbox to proceed.</div>';
+      return;
+    }
+
+    if (action === "reopen" && !reason) {
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">A mandatory audit reason is required when reopening results.</div>';
+      return;
+    }
+
+    if (errEl) errEl.innerHTML = "";
+    setButtonLoading(btn, "Executing...");
+
+    api("/api/results/bulk-publish", {
+      method: "POST",
+      body: {
+        action: action,
+        department: dept,
+        semester: sem,
+        reason: reason || ("Controller of Examinations bulk " + action)
+      }
+    }).then(function (res) {
+      resetButton(btn, "Execute Action");
+      closeModal("adminBulkPublishModal");
+      showToast("Bulk Operation Successful", res.message || "Results cohort updated.", "success");
+      loadAdminLifecycle();
+    }).catch(function (err) {
+      resetButton(btn, "Execute Action");
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">' + escapeHtml(err.message || "Failed to execute bulk operation.") + '</div>';
+      else showToast("Operation Failed", err.message, "error");
+    });
+  };
+
+  // Moderation & Grace Marks Ordinance Handlers
+  window.openGraceMarksModal = function () {
+    var errEl = document.getElementById("graceMarksError");
+    if (errEl) errEl.innerHTML = "";
+    var maxInp = document.getElementById("graceMaxMarksInput");
+    if (maxInp) maxInp.value = "3.0";
+    var resInp = document.getElementById("graceReasonInput");
+    if (resInp) resInp.value = "Standing Committee Resolution 2026/04 Moderation";
+    openModal("adminGraceMarksModal");
+  };
+
+  window.executeGraceMarks = function () {
+    var dept = document.getElementById("graceDeptSelect") ? document.getElementById("graceDeptSelect").value : "all";
+    var sem = document.getElementById("graceSemSelect") ? document.getElementById("graceSemSelect").value : "all";
+    var maxGrace = parseFloat(document.getElementById("graceMaxMarksInput").value) || 3.0;
+    var reason = document.getElementById("graceReasonInput").value.trim();
+    var errEl = document.getElementById("graceMarksError");
+    var btn = document.getElementById("btnExecuteGraceMarks");
+
+    if (!reason) {
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">Please specify the Standing Committee resolution or authorization reference.</div>';
+      return;
+    }
+    if (errEl) errEl.innerHTML = "";
+
+    setButtonLoading(btn, "Evaluating Ordinances...");
+    api("/api/results/apply-grace", {
+      method: "POST",
+      body: {
+        department: dept,
+        semester: sem,
+        maxGraceMarks: maxGrace,
+        reason: reason
+      }
+    }).then(function (res) {
+      resetButton(btn, "Award Grace Marks");
+      closeModal("adminGraceMarksModal");
+      var count = res.awardedCount || 0;
+      if (count > 0) {
+        showToast("Grace Marks Awarded", "Moderation complete: " + count + " borderline candidate(s) awarded grace marks.", "success");
+      } else {
+        showToast("Moderation Complete", "Evaluated candidates. No borderline candidates required grace marks in this cohort.", "info");
+      }
+      loadAdminLifecycle();
+    }).catch(function (err) {
+      resetButton(btn, "Award Grace Marks");
+      if (errEl) errEl.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px; font-size:13px;">' + escapeHtml(err.message || "Failed to apply grace marks.") + '</div>';
+      else showToast("Moderation Failed", err.message, "error");
+    });
+  };
+
+  // Autonomous Broadsheet Gazette Handlers
+  window.loadAdminGazette = function () {
+    var thead = document.getElementById("gazetteMasterThead");
+    var tbody = document.getElementById("gazetteMasterTbody");
+    var dept = document.getElementById("gazetteDeptSelect") ? document.getElementById("gazetteDeptSelect").value : "all";
+    var sem = document.getElementById("gazetteSemSelect") ? document.getElementById("gazetteSemSelect").value : "all";
+
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:32px; color: #64748b;"><span class="page-spinner"></span> Generating official institutional broadsheet & gazette ledger...</td></tr>';
+
+    var params = new URLSearchParams();
+    if (dept && dept !== "all") params.set("department", dept);
+    if (sem && sem !== "all") params.set("semester", sem);
+
+    api("/api/results/gazette?" + params.toString()).then(function (res) {
+      var d = res.data || {};
+      window._gazetteData = d;
+
+      var inst = d.institution || {};
+      var stats = d.statistics || {};
+      var courses = d.courses || [];
+      var students = d.students || [];
+
+      var titleEl = document.getElementById("gazetteCohortTitle");
+      var deptEl = document.getElementById("gazetteMetaDept");
+      var semEl = document.getElementById("gazetteMetaSem");
+      var dateEl = document.getElementById("gazetteMetaDate");
+
+      if (titleEl) titleEl.textContent = (inst.gazetteTitle || "EXAMINATION RESULT GAZETTE & BROADSHEET") + " — " + (inst.semester || "ALL SEMESTERS") + " (" + (inst.academicYear || "2025-2026") + ")";
+      if (deptEl) deptEl.textContent = "Department: " + (inst.department || "All Departments");
+      if (semEl) semEl.textContent = "Semester: " + (inst.semester || "All");
+      if (dateEl) dateEl.textContent = "Generated: " + (inst.generatedAt || new Date().toLocaleString());
+
+      var appEl = document.getElementById("gazetteStatAppeared");
+      var passEl = document.getElementById("gazetteStatPassed");
+      var rateEl = document.getElementById("gazetteStatPassRate");
+      var distEl = document.getElementById("gazetteStatDistinction");
+      var failEl = document.getElementById("gazetteStatFailed");
+
+      if (appEl) appEl.textContent = stats.totalAppeared || 0;
+      if (passEl) passEl.textContent = stats.totalPassed || 0;
+      if (rateEl) rateEl.textContent = (stats.passPercentage || 0) + "%";
+      if (distEl) distEl.textContent = stats.distinctionCount || 0;
+      if (failEl) failEl.textContent = stats.totalFailed || 0;
+
+      // Build Dynamic Course Columns in Header
+      if (thead) {
+        var headCols = '<tr>' +
+          '<th style="width:110px;">PRN / Roll</th>' +
+          '<th style="min-width:140px;">Student Name</th>';
+
+        courses.forEach(function (c) {
+          headCols += '<th style="text-align:center; min-width:85px;">' +
+            '<div>' + escapeHtml(c.code) + '</div>' +
+            '<div style="font-weight:normal; font-size:10px; color:#64748b; line-height:1.2;">' + escapeHtml(c.title || '') + '<br>(' + (c.maxMarks || 140) + ' M)</div>' +
+            '</th>';
+        });
+
+        headCols += '<th style="text-align:center; min-width:75px;">Total Marks</th>' +
+          '<th style="text-align:center; min-width:60px;">%</th>' +
+          '<th style="text-align:center; min-width:60px;">SGPA</th>' +
+          '<th style="text-align:center; min-width:100px;">Classification</th>' +
+          '<th style="text-align:center; min-width:75px;">Result</th>' +
+          '</tr>';
+
+        thead.innerHTML = headCols;
+      }
+
+      // Build Student Ledger Rows
+      if (!students.length) {
+        tbody.innerHTML = '<tr><td colspan="' + (courses.length + 7) + '" style="text-align:center; padding:32px; color: #64748b;">No candidate examination records found for this cohort.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = students.map(function (s) {
+        var stu = s.student || {};
+        var isPass = s.finalResult === "PASS";
+        var resBadge = isPass
+          ? '<span class="badge badge-success">PASS</span>'
+          : (s.finalResult === "ATKT" ? '<span class="badge badge-warning">ATKT</span>' : '<span class="badge badge-danger">FAIL</span>');
+
+        var rowCols = '<td><strong>' + escapeHtml(stu.prn || stu.studentCode || '-') + '</strong>' +
+          (stu.rollNumber ? '<br><small style="color:#64748b;">Roll: ' + escapeHtml(String(stu.rollNumber)) + '</small>' : '') + '</td>' +
+          '<td><strong>' + escapeHtml(stu.name || '-') + '</strong>' +
+          (stu.division ? '<br><small style="color:#64748b;">Div ' + escapeHtml(stu.division) + '</small>' : '') + '</td>';
+
+        courses.forEach(function (c) {
+          var sc = s.courseScores ? s.courseScores[c.code] : null;
+          if (!sc) {
+            rowCols += '<td style="text-align:center; color:#94a3b8;">--</td>';
+          } else if (sc.attendance === "absent") {
+            rowCols += '<td style="text-align:center;"><span style="color:#dc2626; font-weight:700;">AB (0)</span><br><small class="badge badge-danger">F</small></td>';
+          } else if (sc.attendance === "withheld") {
+            rowCols += '<td style="text-align:center;"><span style="color:#d97706; font-weight:700;">WH</span></td>';
+          } else {
+            var passClass = sc.isPassed ? 'style="color:#15803d; font-size:10px; font-weight:bold;"' : 'style="color:#dc2626; font-size:10px; font-weight:bold;"';
+            rowCols += '<td style="text-align:center;">' +
+              '<strong>' + sc.total + '</strong> <small>(' + escapeHtml(sc.grade || '-') + ')</small>' +
+              '<br><span ' + passClass + '>' + (sc.isPassed ? 'PASS' : 'FAIL') + '</span>' +
+              '</td>';
+          }
+        });
+
+        rowCols += '<td style="text-align:center;"><strong>' + s.totalMarks + '</strong> / ' + s.maxMarks + '</td>' +
+          '<td style="text-align:center;"><strong>' + s.percentage + '%</strong></td>' +
+          '<td style="text-align:center;"><strong style="color:#2563eb;">' + s.sgpa + '</strong></td>' +
+          '<td style="text-align:center;"><small style="font-weight:600; text-transform:uppercase;">' + escapeHtml(s.classification || '-') + '</small></td>' +
+          '<td style="text-align:center;">' + resBadge + '</td>';
+
+        return '<tr>' + rowCols + '</tr>';
+      }).join("");
+
+    }).catch(function (err) {
+      console.log("Could not load gazette:", err.message);
+      tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:32px; color: var(--danger);">Failed to generate examination broadsheet.</td></tr>';
+    });
+  };
+
+  window.exportGazetteCsv = function () {
+    if (!window._gazetteData || !window._gazetteData.students || !window._gazetteData.students.length) {
+      showToast("No Data", "Please load an active examination gazette before exporting.", "warning");
+      return;
+    }
+
+    var d = window._gazetteData;
+    var courses = d.courses || [];
+    var students = d.students || [];
+
+    var headers = ["PRN", "Roll Number", "Student Name", "Division", "Department"];
+    courses.forEach(function (c) {
+      headers.push(c.code + " Total", c.code + " Grade", c.code + " Status");
+    });
+    headers.push("Grand Total", "Max Marks", "Percentage", "SGPA", "Earned Credits", "Total Credits", "Backlogs", "Classification", "Final Result");
+
+    var csvRows = [headers.join(",")];
+
+    students.forEach(function (s) {
+      var stu = s.student || {};
+      var row = [
+        '"' + (stu.prn || "").replace(/"/g, '""') + '"',
+        '"' + (stu.rollNumber || "").replace(/"/g, '""') + '"',
+        '"' + (stu.name || "").replace(/"/g, '""') + '"',
+        '"' + (stu.division || "").replace(/"/g, '""') + '"',
+        '"' + (stu.department || "").replace(/"/g, '""') + '"'
+      ];
+
+      courses.forEach(function (c) {
+        var sc = s.courseScores ? s.courseScores[c.code] : null;
+        if (sc) {
+          row.push(sc.total, '"' + (sc.grade || "") + '"', sc.isPassed ? "PASS" : "FAIL");
+        } else {
+          row.push("--", "--", "--");
+        }
+      });
+
+      row.push(
+        s.totalMarks,
+        s.maxMarks,
+        s.percentage,
+        s.sgpa,
+        s.earnedCredits,
+        s.totalCredits,
+        s.backlogs,
+        '"' + (s.classification || "").replace(/"/g, '""') + '"',
+        '"' + (s.finalResult || "").replace(/"/g, '""') + '"'
+      );
+
+      csvRows.push(row.join(","));
+    });
+
+    var blob = new Blob([csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "SITCOE_Autonomous_Gazette_" + (d.cohort ? d.cohort.department + "_Sem" + d.cohort.semester : "Export") + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Gazette Exported", "Autonomous broadsheet ledger downloaded as CSV.", "success");
+  };
+
+  window.printOfficialGazette = function () {
+    var container = document.getElementById("printableGazetteContainer");
+    if (!container) {
+      window.print();
+      return;
+    }
+    window.print();
+  };
 
   window.transitionBatchStatus = function (courseCode, division, targetStatus) {
     if (getActiveRole() !== "admin") {
