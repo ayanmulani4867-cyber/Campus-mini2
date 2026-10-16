@@ -18,6 +18,7 @@ class User(db.Model):
     phone = db.Column(db.String(20), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False)  # admin | faculty | student
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(
         db.DateTime,
@@ -38,6 +39,7 @@ class User(db.Model):
 
     def set_password(self, raw_password: str) -> None:
         self.password_hash = generate_password_hash(raw_password)
+        self._raw_password = raw_password
 
     def check_password(self, raw_password: str) -> bool:
         if check_password_hash(self.password_hash, raw_password):
@@ -97,6 +99,7 @@ class User(db.Model):
             "roleLabel": self.role_label,
             "publicId": self.public_id,
             "isActive": self.is_active,
+            "mustChangePassword": bool(getattr(self, "must_change_password", False)),
         }
         if self.student_profile:
             data.update(self.student_profile.to_profile_dict())

@@ -63,8 +63,13 @@
             <h3>🔒 Security & Password</h3>
           </div>
 
+                    <div id="firstLoginBanner" style="display:none; background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: #fff; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">?? First-Time Account Activation Required</div>
+            <div style="font-size: 13px; color: #c7d2fe; line-height: 1.5;">Welcome to Campus Connect! Please establish your personal, strong password to activate your account. Dashboard access is locked until activation is complete.</div>
+          </div>
+
           <form id="changePassForm">
-            <div class="form-group">
+            <div class="form-group" id="currentPassGroup">
               <label for="currentPass">Current Password</label>
               <div class="password-box">
                 <input type="password" id="currentPass" class="form-input" placeholder="Enter current password">

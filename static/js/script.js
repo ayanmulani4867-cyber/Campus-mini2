@@ -426,6 +426,12 @@ document.addEventListener("DOMContentLoaded", function () {
       if (res.sessionToken) {
         sessionStorage.setItem("campus_session_token", res.sessionToken);
       }
+      if (CURRENT_USER.mustChangePassword) {
+        if (currentPath !== "settings.html" && currentPath !== "settings") {
+          window.location.replace("settings.html?firstLogin=true");
+          return;
+        }
+      }
       boot(currentPath);
     })
     .catch(function (err) {
@@ -563,20 +569,62 @@ function boot(currentPath) {
 function initPasswordChange() {
   var form = document.getElementById("changePassForm");
   if (!form) return;
+
+  var isFirstLogin = false;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("firstLogin") === "true") isFirstLogin = true;
+  } catch (e) {}
+
+  if (CURRENT_USER && CURRENT_USER.mustChangePassword) {
+    isFirstLogin = true;
+  }
+
+  var banner = document.getElementById("firstLoginBanner");
+  var currPassGroup = document.getElementById("currentPassGroup") || (document.getElementById("currentPass") ? document.getElementById("currentPass").closest(".form-group") : null);
+
+  if (isFirstLogin) {
+    if (banner) banner.style.display = "block";
+    var card = form.closest(".card");
+    if (card) {
+      var heading = card.querySelector(".card-header-row h3");
+      if (heading) heading.textContent = "Security & Password (First-Time Activation)";
+    }
+    var submitBtn = form.querySelector('button[type="submit"]') || form.querySelector('.btn-primary');
+    if (submitBtn) submitBtn.textContent = "Establish Password & Activate Account";
+    if (currPassGroup) {
+      currPassGroup.style.display = "none";
+      var currPassInput = document.getElementById("currentPass");
+      if (currPassInput) currPassInput.removeAttribute("required");
+    }
+  }
+
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     clearInlineErrors(form);
-    var currentPassword = document.getElementById("currentPass").value;
-    var newPassword = document.getElementById("newPass").value;
-    var confirmPassword = document.getElementById("confirmNewPass").value;
+
+    var currentPassword = document.getElementById("currentPass") ? document.getElementById("currentPass").value : "";
+    var newPassword = (document.getElementById("newPass").value || "").trim();
+    var confirmPassword = (document.getElementById("confirmNewPass").value || "").trim();
     var submitBtn = form.querySelector('button[type="submit"]') || form.querySelector('.btn-primary');
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!isFirstLogin && !currentPassword) {
+      showInlineError(form, "Please enter your current password.");
+      return;
+    }
+    if (!newPassword || !confirmPassword) {
       showInlineError(form, "Please fill in all password fields.");
       return;
     }
-    if (newPassword.length < 6) {
-      showInlineError(form, "New password must be at least 6 characters long.");
+    if (newPassword.length < 8) {
+      showInlineError(form, "New password must be at least 8 characters long.");
+      return;
+    }
+    var hasUpper = /[A-Z]/.test(newPassword);
+    var hasLower = /[a-z]/.test(newPassword);
+    var hasSpecial = /[^A-Za-z]/.test(newPassword);
+    if (!hasUpper || !hasLower || !hasSpecial) {
+      showInlineError(form, "Password must include at least one uppercase letter, one lowercase letter, and one number or special character.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -584,20 +632,42 @@ function initPasswordChange() {
       return;
     }
 
-    setButtonLoading(submitBtn, "Updating Password...");
+    setButtonLoading(submitBtn, isFirstLogin ? "Activating Account..." : "Updating Password...");
 
-    api("/api/auth/change-password", {
+    var targetUrl = isFirstLogin ? "/api/auth/first-login-setup" : "/api/auth/change-password";
+    var payload = isFirstLogin ? {
+      newPassword: newPassword,
+      confirmPassword: confirmPassword
+    } : {
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+      confirmPassword: confirmPassword
+    };
+
+    api(targetUrl, {
       method: "POST",
-      body: { currentPassword: currentPassword, newPassword: newPassword, confirmPassword: confirmPassword }
+      body: payload
     }).then(function (res) {
       form.reset();
-      var banner = document.createElement("div");
-      banner.className = "inline-banner inline-banner-success";
-      banner.innerHTML =
-        '<span>✓ Password updated successfully! Your account credentials have been secured.</span>' +
-        '<span class="inline-banner-close" onclick="this.parentElement.remove()">&times;</span>';
-      form.prepend(banner);
-      showToast("Security Update", "Password changed successfully.", "success");
+      if (CURRENT_USER) {
+        CURRENT_USER.mustChangePassword = false;
+      }
+      var msgBanner = document.createElement("div");
+      msgBanner.className = "inline-banner inline-banner-success";
+      msgBanner.innerHTML =
+        '<span>&#10003; ' + (isFirstLogin ? 'Account activated successfully! Redirecting to your dashboard...' : 'Password updated successfully! Your account credentials have been secured.') + '</span>';
+      form.prepend(msgBanner);
+      showToast(
+        isFirstLogin ? "Account Activated!" : "Security Update",
+        res.message || "Password updated successfully.",
+        "success",
+        4000
+      );
+      if (isFirstLogin) {
+        setTimeout(function () {
+          window.location.href = "dashboard.html";
+        }, 1200);
+      }
     }).catch(function (e) {
       showInlineError(form, e.message || "Could not update password.");
       showToast("Update Failed", e.message || "Could not update password.", "error");
@@ -765,6 +835,10 @@ function initLogin() {
       }
       localStorage.removeItem("campus_session_token");
       localStorage.removeItem("campus_user_role");
+      if (res.mustChangePassword || (res.data && res.data.mustChangePassword)) {
+        window.location.href = "settings.html?firstLogin=true";
+        return;
+      }
       window.location.href = "dashboard.html";
     }).catch(function (e) {
       err.textContent = e.message || "Login failed.";

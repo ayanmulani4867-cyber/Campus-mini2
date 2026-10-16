@@ -50,6 +50,16 @@ def create_app(config_name=None):
     else:
         with app.app_context():
             db.create_all()
+            from sqlalchemy import inspect, text
+            try:
+                inspector = inspect(db.engine)
+                cols = [c["name"] for c in inspector.get_columns("users")]
+                if "must_change_password" not in cols:
+                    with db.engine.connect() as conn:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0 NOT NULL"))
+                        conn.commit()
+            except Exception as e:
+                app.logger.debug("Column check skipped: %s", e)
             from services.firebase_sync import register_firebase_rtdb_hooks, hydrate_from_firebase_rtdb
             register_firebase_rtdb_hooks(db)
             try:
@@ -229,6 +239,9 @@ def create_app(config_name=None):
                 resp.delete_cookie("session", path="/")
                 resp.delete_cookie("campus_fb_session", path="/")
                 return resp
+            # Strict first-time password setup enforcement: prevent bypass via refresh or direct dashboard URLs
+            if getattr(user, "must_change_password", False) and norm_path not in ("settings", "settings.html", "logout"):
+                return redirect("/settings.html?firstLogin=true")
 
         # Server-side RBAC gate on Admin User Directory
         if norm_path in ("users", "users.html"):

@@ -136,11 +136,27 @@ def create_student():
         code = prn
 
     import secrets
-    secure_initial_pwd = secrets.token_urlsafe(32)
-    user = User(email=email, full_name=data["name"].strip(), phone=phone, role="student")
-    user.set_password(secure_initial_pwd)
+    initial_pwd = phone if phone else secrets.token_urlsafe(16)
+    user = User(
+        email=email,
+        full_name=data["name"].strip(),
+        phone=phone,
+        role="student",
+        must_change_password=True,
+    )
+    user.set_password(initial_pwd)
     db.session.add(user)
     db.session.flush()
+
+    # Sync initial credential to Firebase Auth
+    from services.firebase_service import firebase_service
+    firebase_service.sync_user_to_firebase_auth(
+        uid=str(user.id),
+        email=user.email,
+        password=initial_pwd,
+        display_name=user.full_name,
+        role=user.role,
+    )
 
     student = Student(
         user_id=user.id,

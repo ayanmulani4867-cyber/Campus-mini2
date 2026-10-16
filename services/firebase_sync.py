@@ -79,13 +79,13 @@ def push_instance_to_rtdb(instance: Any):
         firebase_service.set_data(path, record_dict)
         logger.debug("Pushed %s to Firebase RTDB at %s", cls_name, path)
 
-        # Sync users to Firebase Auth with secure random temporary credentials
+        # Sync users to Firebase Auth
         if cls_name == "User":
-            secure_temp_pwd = secrets.token_urlsafe(32)
+            pwd_to_sync = getattr(instance, "_raw_password", None)
             firebase_service.sync_user_to_firebase_auth(
                 uid=str(instance.id),
                 email=instance.email,
-                password=secure_temp_pwd,
+                password=pwd_to_sync,
                 display_name=instance.full_name,
                 role=instance.role,
             )

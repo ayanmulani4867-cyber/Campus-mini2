@@ -10,9 +10,22 @@ DEFAULT_PASSWORD = None
 
 
 def _next_faculty_code():
-    count = Faculty.query.count() + 1
     from datetime import date
-    return f"FAC{date.today().year}{count:03d}"
+    year = date.today().year
+    prefix = f"FAC{year}"
+    facs = Faculty.query.filter(Faculty.faculty_code.like(f"{prefix}%")).all()
+    max_num = 0
+    for f in facs:
+        try:
+            num = int(f.faculty_code[len(prefix):])
+            if num > max_num:
+                max_num = num
+        except (ValueError, TypeError):
+            pass
+    candidate_num = max_num + 1
+    while Faculty.query.filter_by(faculty_code=f"{prefix}{candidate_num:03d}").first() is not None:
+        candidate_num += 1
+    return f"{prefix}{candidate_num:03d}"
 
 
 @bp.get("")
@@ -126,11 +139,27 @@ def create_faculty():
     code = (data.get("facultyId") or "").strip() or _next_faculty_code()
 
     import secrets
-    secure_initial_pwd = secrets.token_urlsafe(32)
-    user = User(email=email, full_name=data["name"].strip(), phone=phone, role="faculty")
-    user.set_password(secure_initial_pwd)
+    initial_pwd = phone if phone else secrets.token_urlsafe(16)
+    user = User(
+        email=email,
+        full_name=data["name"].strip(),
+        phone=phone,
+        role="faculty",
+        must_change_password=True,
+    )
+    user.set_password(initial_pwd)
     db.session.add(user)
     db.session.flush()
+
+    # Sync initial credential to Firebase Auth
+    from services.firebase_service import firebase_service
+    firebase_service.sync_user_to_firebase_auth(
+        uid=str(user.id),
+        email=user.email,
+        password=initial_pwd,
+        display_name=user.full_name,
+        role=user.role,
+    )
 
     fac = Faculty(
         user_id=user.id,

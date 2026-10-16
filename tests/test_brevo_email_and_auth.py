@@ -202,11 +202,13 @@ class TestBrevoEmailAndAuth(unittest.TestCase):
         self.assertEqual(data["emailDelivery"]["recipient"], email)
         self.assertTrue(data["emailDelivery"]["sent"])
 
-        # Verify password in database is NOT 9876543210 or campus@123
+        # Verify password in database is hashed temporary mobile number and requires password change
         with self.app.app_context():
             created_user = User.query.filter_by(email=email).first()
             self.assertIsNotNone(created_user)
-            self.assertFalse(created_user.check_password("9876543210"))
+            self.assertTrue(created_user.check_password("9876543210"))
+            self.assertTrue(created_user.must_change_password)
+            self.assertNotEqual(created_user.password_hash, "9876543210")
             self.assertFalse(created_user.check_password("campus@123"))
 
         # 6. Idempotent Retry: Re-submitting the same student resends the email without failing on duplicate

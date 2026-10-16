@@ -721,6 +721,10 @@ function initLogin() {
       }
       localStorage.removeItem("campus_session_token");
       localStorage.removeItem("campus_user_role");
+      if (res.mustChangePassword || (res.data && res.data.mustChangePassword)) {
+        window.location.href = "settings.html?firstLogin=true";
+        return;
+      }
       window.location.href = "dashboard.html";
     }).catch(function (e) {
       err.textContent = e.message || "Login failed.";

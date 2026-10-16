@@ -154,12 +154,36 @@ def current_user():
     return user
 
 
+def check_first_login_restriction(user):
+    """Enforces that accounts with must_change_password=True can only access
+    the first-login setup endpoints, profile verification (/api/auth/me), or logout.
+    """
+    if user and getattr(user, "must_change_password", False):
+        endpoint = request.endpoint or ""
+        allowed = (
+            "auth.first_login_setup",
+            "auth.change_password",
+            "auth.me",
+            "auth.logout",
+        )
+        if endpoint not in allowed and not request.path.startswith("/api/auth/"):
+            return jsonify({
+                "success": False,
+                "error": "First-time password setup is required before accessing workspace features.",
+                "mustChangePassword": True,
+            }), 403
+    return None
+
+
 def login_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         user = current_user()
         if not user or not user.is_active:
             return jsonify({"success": False, "error": "Authentication required."}), 401
+        err = check_first_login_restriction(user)
+        if err:
+            return err
         return fn(*args, **kwargs)
     return wrapper
 
@@ -172,6 +196,9 @@ def roles_required(*allowed_roles):
             user = current_user()
             if not user or not user.is_active:
                 return jsonify({"success": False, "error": "Authentication required."}), 401
+            err = check_first_login_restriction(user)
+            if err:
+                return err
             if user.role not in allowed_roles:
                 return jsonify({
                     "success": False,

@@ -93,6 +93,7 @@ def login():
         "success": True,
         "data": user.to_dict(),
         "user": user.to_dict(),
+        "mustChangePassword": bool(getattr(user, "must_change_password", False)),
         "sessionToken": session_token,
         "firebaseCustomToken": fb_token,
     })
@@ -145,7 +146,69 @@ def firebase_login():
         "success": True,
         "data": user.to_dict(),
         "user": user.to_dict(),
+        "mustChangePassword": bool(getattr(user, "must_change_password", False)),
         "sessionToken": session_token,
+    })
+
+
+@bp.post("/first-login-setup")
+@login_required
+def first_login_setup():
+    """First-time password setup for accounts requiring password activation.
+    Validates strong password requirements, confirms matching confirmation,
+    rejects reusing the initial temporary phone credential, updates the authoritative hash,
+    syncs to Firebase Authentication, and clears the must_change_password flag.
+    """
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    require_fields(data, ["newPassword", "confirmPassword"])
+
+    new_password = str(data["newPassword"]).strip()
+    confirm_password = str(data["confirmPassword"]).strip()
+
+    if new_password != confirm_password:
+        raise ValidationError("New password and confirmation do not match.")
+
+    # Disallow reusing temporary mobile number as new password
+    if user.phone and new_password == str(user.phone).strip():
+        raise ValidationError("New password cannot be your mobile number. Choose a secure, personalized password.")
+
+    # Disallow unchanged current password
+    if user.check_password(new_password):
+        raise ValidationError("New password cannot be the same as your initial temporary password.")
+
+    if len(new_password) < 8:
+        raise ValidationError("New password must be at least 8 characters long.")
+
+    has_upper = any(c.isupper() for c in new_password)
+    has_lower = any(c.islower() for c in new_password)
+    has_digit_or_punct = any(not c.isalpha() for c in new_password)
+    if not (has_upper and has_lower and has_digit_or_punct):
+        raise ValidationError(
+            "Password must contain at least one uppercase letter, one lowercase letter, and one number or special character."
+        )
+
+    user.set_password(new_password)
+    user.must_change_password = False
+
+    # Authoritative sync with Firebase Authentication
+    from services.firebase_service import firebase_service
+    firebase_service.sync_user_to_firebase_auth(
+        uid=str(user.id),
+        email=user.email,
+        password=new_password,
+        display_name=user.full_name,
+        role=user.role,
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Password setup successfully completed. Your account is now active.",
+        "user": user.to_dict(),
+        "data": user.to_dict(),
+        "mustChangePassword": False,
     })
 
 
@@ -156,21 +219,40 @@ def change_password():
     data = request.get_json(silent=True) or {}
     require_fields(data, ["currentPassword", "newPassword", "confirmPassword"])
     current_password = str(data["currentPassword"])
-    new_password = str(data["newPassword"])
-    confirm_password = str(data["confirmPassword"])
+    new_password = str(data["newPassword"]).strip()
+    confirm_password = str(data["confirmPassword"]).strip()
 
     if not user.check_password(current_password):
         return jsonify({"success": False, "error": "Current password is incorrect."}), 400
-    if len(new_password) < 6:
-        raise ValidationError("New password must be at least 6 characters long.")
+    if len(new_password) < 8:
+        raise ValidationError("New password must be at least 8 characters long.")
+    has_upper = any(c.isupper() for c in new_password)
+    has_lower = any(c.islower() for c in new_password)
+    has_digit_or_punct = any(not c.isalpha() for c in new_password)
+    if not (has_upper and has_lower and has_digit_or_punct):
+        raise ValidationError("Password must contain at least one uppercase letter, one lowercase letter, and one number or special character.")
     if new_password != confirm_password:
         raise ValidationError("New password and confirmation do not match.")
     if new_password == current_password:
         raise ValidationError("New password must be different from the current password.")
 
     user.set_password(new_password)
+    user.must_change_password = False
+    from services.firebase_service import firebase_service
+    firebase_service.sync_user_to_firebase_auth(
+        uid=str(user.id),
+        email=user.email,
+        password=new_password,
+        display_name=user.full_name,
+        role=user.role,
+    )
     db.session.commit()
-    return jsonify({"success": True, "message": "Password updated successfully."})
+    return jsonify({
+        "success": True,
+        "message": "Password updated successfully.",
+        "user": user.to_dict(),
+        "mustChangePassword": False,
+    })
 
 
 @bp.post("/logout")
