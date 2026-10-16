@@ -304,27 +304,72 @@ def resend_faculty_welcome_email(faculty_code):
 @roles_required("admin")
 def update_faculty(faculty_code):
     from models import Course, FacultyAssignment
-    fac = Faculty.query.filter_by(faculty_code=faculty_code).first()
+    q = Faculty.query.filter_by(faculty_code=faculty_code)
+    if str(faculty_code).isdigit():
+        q = Faculty.query.filter(
+            db.or_(Faculty.id == int(faculty_code), Faculty.user_id == int(faculty_code), Faculty.faculty_code == faculty_code)
+        )
+    fac = q.first()
     if not fac:
         return jsonify({"success": False, "error": "Faculty member not found."}), 404
 
     data = request.get_json(silent=True) or {}
+
+    # 1. Update Full Name
     if "name" in data and data["name"].strip():
         fac.user.full_name = data["name"].strip()
+
+    # 2. Update Email Address
+    if "email" in data and data["email"].strip():
+        new_email = validate_email(data["email"].strip().lower())
+        if new_email != fac.user.email.lower():
+            dup_user = User.query.filter(User.email.ilike(new_email), User.id != fac.user.id).first()
+            if dup_user:
+                return jsonify({"success": False, "error": f"Email '{new_email}' is already in use by another user."}), 400
+            fac.user.email = new_email
+            from services.firebase_service import firebase_service
+            if firebase_service.is_live:
+                try:
+                    firebase_service.sync_user_to_firebase_auth(
+                        uid=str(fac.user.id),
+                        email=new_email,
+                        display_name=fac.user.full_name,
+                        role="faculty"
+                    )
+                except Exception as ex:
+                    logger.warning("Could not sync email update to Firebase Auth: %s", ex)
+
+    # 3. Update Phone Number
     if "phone" in data:
         phone = validate_phone(str(data["phone"]).strip())
         if not phone:
             raise ValidationError("Phone number cannot be empty.")
         fac.user.phone = phone
+
+    # 4. Update Faculty ID / Code
+    new_code = (data.get("faculty_code") or data.get("facultyCode") or data.get("code") or "").strip()
+    if new_code and new_code != fac.faculty_code:
+        dup_faculty = Faculty.query.filter(Faculty.faculty_code == new_code, Faculty.id != fac.id).first()
+        if dup_faculty:
+            return jsonify({"success": False, "error": f"Faculty ID / Code '{new_code}' is already assigned to another faculty member."}), 400
+        fac.faculty_code = new_code
+
+    # 5. Update Department
     if "department" in data:
         dept = Department.resolve(data["department"])
         if not dept:
             raise ValidationError(f"Unknown department: {data['department']}")
         fac.department_id = dept.id
-    if "designation" in data:
-        fac.designation = data["designation"]
-    if "status" in data:
-        fac.status = data["status"]
+
+    # 6. Update Designation
+    if "designation" in data and data["designation"].strip():
+        fac.designation = data["designation"].strip()
+
+    # 7. Update Status
+    if "status" in data and data["status"].strip():
+        st_val = data["status"].strip().lower()
+        fac.status = "active" if st_val in ("active", "true", "1") else "inactive"
+        fac.user.is_active = (fac.status == "active")
 
     if "assignments" in data:
         # Replace assignments: delete instances explicitly so session.deleted triggers RTDB hook

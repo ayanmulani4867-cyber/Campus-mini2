@@ -4760,6 +4760,10 @@ function fetchUsersFromAPI(role) {
         : '<span class="badge badge-danger">Inactive</span>';
 
       var actionsHtml = '<button class="btn btn-secondary btn-sm" onclick="viewDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(m.id) + '\')">View</button> ';
+      if (m.role === 'student' || m.role === 'faculty') {
+        var editRef = (m.role === 'faculty') ? (m.facultyCode || m.employeeId || m.id) : (m.prn || m.studentId || m.id);
+        actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="editDirectoryMember(\'' + m.role + '\', \'' + encodeURIComponent(editRef) + '\')" title="Edit all member details">Edit</button> ';
+      }
       if (m.role === 'student') {
         actionsHtml += '<button class="btn btn-secondary btn-sm" onclick="openStudentResultCard(\'' + encodeURIComponent(m.publicId || m.id) + '\')" title="View official student result card">Grade Card</button> ';
       }
@@ -5000,6 +5004,11 @@ window.viewDirectoryMember = function (type, code) {
       document.getElementById("directoryDetailCloseBtn").onclick = function () { existing.classList.remove("active"); };
     }
     document.getElementById("directoryDetailBody").innerHTML = html;
+    var detailFooter = existing.querySelector(".modal-footer");
+    if (detailFooter) {
+      detailFooter.innerHTML = (type !== "admin" ? '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\'directoryDetailModal\').classList.remove(\'active\'); editDirectoryMember(\'' + type + '\', \'' + encodeURIComponent(code) + '\');">✏️ Edit Details</button> ' : '') +
+        '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'directoryDetailModal\').classList.remove(\'active\')">Close</button>';
+    }
     existing.classList.add("active");
   }).catch(function (e) {
     showToast("Load Failed", e.message || "Could not load member details.", "error");
@@ -5023,7 +5032,7 @@ window.editDirectoryMember = function (type, code) {
 
     clearInlineErrors(body);
 
-    if (heading) heading.textContent = "Edit " + (type === "faculty" ? "Faculty" : "Student") + " Details";
+    if (heading) heading.textContent = "Edit " + (type === "faculty" ? "Faculty Member" : "Student") + " Details";
 
     var currentDeptName = d.dept || d.department || "";
     var deptOptions = depts.map(function(dept) {
@@ -5031,63 +5040,81 @@ window.editDirectoryMember = function (type, code) {
       return '<option value="' + escapeHtml(dept.name) + '"' + sel + '>' + escapeHtml(dept.name) + '</option>';
     }).join("");
 
+    var currentStatus = (d.status || "Active").toLowerCase();
+
     if (type === "student") {
       body.innerHTML =
-        '<div class="form-group"><label>Full Name *</label><input type="text" class="form-input" id="editMemberName" value="' + escapeHtml(d.name) + '" required></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-          '<div class="form-group"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
-          '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept">' + deptOptions + '</select></div>' +
+        '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">' +
+          '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">👤 Personal & Contact Details</div>' +
+          '<div class="form-group" style="margin-bottom:8px;"><label>Full Name *</label><input type="text" class="form-input" id="editMemberName" value="' + escapeHtml(d.name || '') + '" required></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>College Email *</label><input type="email" class="form-input" id="editMemberEmail" value="' + escapeHtml(d.email || '') + '" required></div>' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
+          '</div>' +
         '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
-          '<div class="form-group"><label>Academic Year</label><select class="form-select" id="editMemberYear">' +
-            ['1st Year', '2nd Year', '3rd Year', '4th Year'].map(function(y){return '<option value="' + y + '"' + (d.year === y ? ' selected' : '') + '>' + y + '</option>';}).join('') +
-          '</select></div>' +
-          '<div class="form-group"><label>Semester</label><select class="form-select" id="editMemberSem">' +
-            [1,2,3,4,5,6,7,8].map(function(s){return '<option value="' + s + '"' + (Number(d.semester) === s ? ' selected' : '') + '>Sem ' + s + '</option>';}).join('') +
-          '</select></div>' +
-          '<div class="form-group"><label>Division</label><select class="form-select" id="editMemberDiv">' +
-            ['A', 'B', 'C', 'D'].map(function(dv){return '<option value="' + dv + '"' + (d.division === dv ? ' selected' : '') + '>Div ' + dv + '</option>';}).join('') +
-          '</select></div>' +
+        '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">' +
+          '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">🎓 Academic Identifiers</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>PRN / Student ID *</label><input type="text" class="form-input" id="editMemberPRN" value="' + escapeHtml(d.prn || d.studentCode || '') + '" required></div>' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>Roll Number</label><input type="text" class="form-input" id="editMemberRollNumber" value="' + escapeHtml(d.rollNumber || '') + '" placeholder="e.g. 05"></div>' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>Account Status</label><select class="form-select" id="editMemberStatus">' +
+              '<option value="active"' + (currentStatus === "active" ? ' selected' : '') + '>Active</option>' +
+              '<option value="inactive"' + (currentStatus === "inactive" ? ' selected' : '') + '>Inactive</option>' +
+            '</select></div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;">' +
+          '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">🏫 Academic Cohort & Class</div>' +
+          '<div class="form-group" style="margin-bottom:8px;"><label>Department</label><select class="form-select" id="editMemberDept">' + deptOptions + '</select></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
+            '<div class="form-group" style="margin-bottom:0;"><label>Academic Year</label><select class="form-select" id="editMemberYear">' +
+              ['1st Year', '2nd Year', '3rd Year', '4th Year'].map(function(y){return '<option value="' + y + '"' + (d.year === y ? ' selected' : '') + '>' + y + '</option>';}).join('') +
+            '</select></div>' +
+            '<div class="form-group" style="margin-bottom:0;"><label>Semester</label><select class="form-select" id="editMemberSem">' +
+              [1,2,3,4,5,6,7,8].map(function(s){return '<option value="' + s + '"' + (Number(d.semester) === s ? ' selected' : '') + '>Sem ' + s + '</option>';}).join('') +
+            '</select></div>' +
+            '<div class="form-group" style="margin-bottom:0;"><label>Division</label><select class="form-select" id="editMemberDiv">' +
+              ['A', 'B', 'C', 'D'].map(function(dv){return '<option value="' + dv + '"' + (d.division === dv ? ' selected' : '') + '>Div ' + dv + '</option>';}).join('') +
+            '</select></div>' +
+          '</div>' +
         '</div>';
 
       saveBtn.onclick = function () {
-        var payload = {
-          name: document.getElementById("editMemberName").value.trim(),
-          phone: document.getElementById("editMemberPhone").value.trim(),
-          year: document.getElementById("editMemberYear").value,
-          semester: document.getElementById("editMemberSem").value,
-          division: document.getElementById("editMemberDiv").value
-        };
+        var nameVal = document.getElementById("editMemberName").value.trim();
+        var emailVal = document.getElementById("editMemberEmail").value.trim();
+        var phoneVal = document.getElementById("editMemberPhone").value.trim();
+        var prnVal = document.getElementById("editMemberPRN").value.trim();
+        var rollVal = document.getElementById("editMemberRollNumber") ? document.getElementById("editMemberRollNumber").value.trim() : "";
+        var statusVal = document.getElementById("editMemberStatus") ? document.getElementById("editMemberStatus").value : "active";
+        var yearVal = document.getElementById("editMemberYear").value;
+        var semVal = document.getElementById("editMemberSem").value;
+        var divVal = document.getElementById("editMemberDiv").value;
         var deptEl = document.getElementById("editMemberDept");
-        if (deptEl && deptEl.value) {
-          payload.department = deptEl.value;
-        }
+        var deptVal = deptEl ? deptEl.value : "";
 
-        if (!payload.name || !payload.phone) {
-          showInlineError(body, "Please fill in all required fields.");
+        if (!nameVal || !emailVal || !phoneVal || !prnVal) {
+          showInlineError(body, "Please fill in all required fields (Name, Email, Phone, PRN).");
           return;
         }
+
+        var payload = {
+          name: nameVal,
+          email: emailVal,
+          phone: phoneVal,
+          prn: prnVal,
+          rollNumber: rollVal,
+          status: statusVal,
+          department: deptVal,
+          year: yearVal,
+          semester: semVal,
+          division: divVal
+        };
 
         setButtonLoading(saveBtn, "Saving Changes...");
 
         api(endpoint + encodeURIComponent(code), { method: "PUT", body: payload }).then(function (updateRes) {
           closeModal("editUserModal");
-
-          var row = document.getElementById("member-row-" + code);
-          if (row) {
-            var nameEl = row.querySelector(".col-member-name");
-            if (nameEl) nameEl.textContent = payload.name;
-            if (payload.department) {
-              var deptCol = row.querySelector(".col-member-dept");
-              if (deptCol) deptCol.textContent = payload.department;
-            }
-            var classEl = row.querySelector(".col-member-class");
-            if (classEl) {
-              classEl.innerHTML = '<span class="badge badge-secondary">' + escapeHtml(payload.year) + ' • Sem ' + payload.semester + ' • Div ' + escapeHtml(payload.division) + '</span>';
-            }
-            highlightRow(row, "update");
-          }
-
+          fetchUsersFromAPI(getActiveRole());
           showToast("Profile Updated", "Student details for " + payload.name + " updated successfully.", "success");
         }).catch(function (e) {
           showInlineError(body, e.message || "Could not update student.");
@@ -5124,18 +5151,34 @@ window.editDirectoryMember = function (type, code) {
       _currentFacultyAssignedSubjects = existingAssignments;
 
       body.innerHTML =
-        '<div class="form-group"><label>Full Name *</label><input type="text" class="form-input" id="editMemberName" value="' + escapeHtml(d.name) + '" required></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-          '<div class="form-group"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
-          '<div class="form-group"><label>Designation *</label><select class="form-select" id="editMemberDesignation">' +
-            ['Assistant Professor', 'Associate Professor', 'Professor', 'Head of Department'].map(function(des){return '<option value="' + des + '"' + (d.designation === des ? ' selected' : '') + '>' + des + '</option>';}).join('') +
-          '</select></div>' +
+        '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">' +
+          '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">👤 Personal & Contact Details</div>' +
+          '<div class="form-group" style="margin-bottom:8px;"><label>Full Name *</label><input type="text" class="form-input" id="editMemberName" value="' + escapeHtml(d.name || '') + '" required></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>College Email *</label><input type="email" class="form-input" id="editMemberEmail" value="' + escapeHtml(d.email || '') + '" required></div>' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
+          '</div>' +
         '</div>' +
-        '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept" onchange="populateFacultySubjectDropdown(this.value, \'edit_\')">' + deptOptions + '</select></div>' +
-        '<div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 10px;">' +
+        '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">' +
+          '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">💼 Professional Position & Department</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>Faculty ID / Employee Code *</label><input type="text" class="form-input" id="editMemberFacultyCode" value="' + escapeHtml(d.facultyCode || d.id || '') + '" required></div>' +
+            '<div class="form-group" style="margin-bottom:8px;"><label>Account Status</label><select class="form-select" id="editMemberStatus">' +
+              '<option value="active"' + (currentStatus === "active" ? ' selected' : '') + '>Active</option>' +
+              '<option value="inactive"' + (currentStatus === "inactive" ? ' selected' : '') + '>Inactive</option>' +
+            '</select></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+            '<div class="form-group" style="margin-bottom:0;"><label>Department</label><select class="form-select" id="editMemberDept" onchange="populateFacultySubjectDropdown(this.value, \'edit_\')">' + deptOptions + '</select></div>' +
+            '<div class="form-group" style="margin-bottom:0;"><label>Designation *</label><select class="form-select" id="editMemberDesignation">' +
+              ['Assistant Professor', 'Associate Professor', 'Professor', 'Head of Department'].map(function(des){return '<option value="' + des + '"' + (d.designation === des ? ' selected' : '') + '>' + des + '</option>';}).join('') +
+            '</select></div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">' +
           '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
-            '<div style="font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase; display:flex; align-items:center; gap:6px;">' +
-              '<span>📚 Assigned Subjects</span>' +
+            '<div style="font-size:11.5px; font-weight:700; color:var(--primary); text-transform:uppercase; display:flex; align-items:center; gap:6px;">' +
+              '<span>📚 Assigned Subjects & Teaching Portfolio</span>' +
               '<span id="edit_facultyAssignedCountBadge" class="badge badge-primary" style="font-size:10px; padding:1px 6px;">' + existingAssignments.length + ' Selected</span>' +
             '</div>' +
             '<button type="button" class="btn btn-secondary btn-sm" id="edit_btnClearAllFacultySubjects" onclick="clearAllFacultySubjectChips(\'edit_\')" style="font-size:11px; padding:2px 8px; color:var(--danger);' + (existingAssignments.length ? '' : 'display:none;') + '">Clear All</button>' +
@@ -5176,50 +5219,37 @@ window.editDirectoryMember = function (type, code) {
           });
         });
 
-        if (assignments.length === 0) {
-          showInlineError(body, "Please assign at least one subject to the faculty member.");
+        var nameVal = document.getElementById("editMemberName").value.trim();
+        var emailVal = document.getElementById("editMemberEmail").value.trim();
+        var phoneVal = document.getElementById("editMemberPhone").value.trim();
+        var facCodeVal = document.getElementById("editMemberFacultyCode") ? document.getElementById("editMemberFacultyCode").value.trim() : "";
+        var desigVal = document.getElementById("editMemberDesignation").value;
+        var statusVal = document.getElementById("editMemberStatus") ? document.getElementById("editMemberStatus").value : "active";
+        var deptEl = document.getElementById("editMemberDept");
+        var deptVal = deptEl ? deptEl.value : "";
+
+        if (!nameVal || !emailVal || !phoneVal || !facCodeVal) {
+          showInlineError(body, "Please fill in all required fields (Name, Email, Phone, Faculty Code).");
           return;
         }
 
         var payload = {
-          name: document.getElementById("editMemberName").value.trim(),
-          phone: document.getElementById("editMemberPhone").value.trim(),
-          designation: document.getElementById("editMemberDesignation").value,
+          name: nameVal,
+          email: emailVal,
+          phone: phoneVal,
+          faculty_code: facCodeVal,
+          designation: desigVal,
+          status: statusVal,
+          department: deptVal,
           assignments: assignments
         };
-        var deptEl = document.getElementById("editMemberDept");
-        if (deptEl && deptEl.value) {
-          payload.department = deptEl.value;
-        }
-
-        if (!payload.name || !payload.phone) {
-          showInlineError(body, "Please fill in all required fields.");
-          return;
-        }
 
         setButtonLoading(saveBtn, "Saving Changes...");
 
         api(endpoint + encodeURIComponent(code), { method: "PUT", body: payload }).then(function (updateRes) {
           closeModal("editUserModal");
-
-          var row = document.getElementById("member-row-" + code);
-          if (row) {
-            var nameEl = row.querySelector(".col-member-name");
-            if (nameEl) nameEl.textContent = payload.name;
-            if (payload.department) {
-              var deptCol = row.querySelector(".col-member-dept");
-              if (deptCol) deptCol.textContent = payload.department;
-            }
-            var classEl = row.querySelector(".col-member-class");
-            if (classEl) {
-              var updatedSubjs = assignments.map(function(a){ return a.subject; });
-              var subSummary = updatedSubjs.length ? ('<small style="display:block;color:var(--text-muted);margin-top:2px;">' + escapeHtml(updatedSubjs.join(', ')) + '</small>') : '';
-              classEl.innerHTML = '<span class="badge badge-secondary">' + escapeHtml(payload.designation) + '</span>' + subSummary;
-            }
-            highlightRow(row, "update");
-          }
-
-          showToast("Profile Updated", "Faculty details and teaching subjects for " + payload.name + " updated successfully.", "success");
+          fetchUsersFromAPI(getActiveRole());
+          showToast("Profile Updated", "Faculty details and teaching portfolio for " + payload.name + " updated successfully.", "success");
         }).catch(function (e) {
           showInlineError(body, e.message || "Could not update faculty member.");
           showToast("Update Failed", e.message || "Could not update faculty member.", "error");

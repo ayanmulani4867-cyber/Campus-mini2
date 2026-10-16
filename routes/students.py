@@ -263,37 +263,89 @@ def update_student(student_code):
     student = Student.query.filter(
         db.or_(Student.student_code == student_code, Student.prn == student_code)
     ).first()
+    if not student and str(student_code).isdigit():
+        student = Student.query.filter(
+            db.or_(Student.id == int(student_code), Student.user_id == int(student_code))
+        ).first()
     if not student:
         return jsonify({"success": False, "error": "Student not found."}), 404
 
     data = request.get_json(silent=True) or {}
+
+    # 1. Update Full Name
     if "name" in data and data["name"].strip():
         student.user.full_name = data["name"].strip()
+
+    # 2. Update Email Address
+    if "email" in data and data["email"].strip():
+        new_email = validate_email(data["email"].strip().lower())
+        if new_email != student.user.email.lower():
+            dup_user = User.query.filter(User.email.ilike(new_email), User.id != student.user.id).first()
+            if dup_user:
+                return jsonify({"success": False, "error": f"Email '{new_email}' is already in use by another user."}), 400
+            student.user.email = new_email
+            from services.firebase_service import firebase_service
+            if firebase_service.is_live:
+                try:
+                    firebase_service.sync_user_to_firebase_auth(
+                        uid=str(student.user.id),
+                        email=new_email,
+                        display_name=student.user.full_name,
+                        role="student"
+                    )
+                except Exception as ex:
+                    logger.warning("Could not sync email update to Firebase Auth: %s", ex)
+
+    # 3. Update Phone Number
     if "phone" in data:
         phone = validate_phone(str(data["phone"]).strip())
         if not phone:
             raise ValidationError("Phone number cannot be empty.")
         student.user.phone = phone
+
+    # 4. Update PRN / Student Code
+    new_prn = (data.get("prn") or data.get("studentCode") or data.get("student_code") or "").strip()
+    if new_prn and new_prn != student.prn:
+        dup_student = Student.query.filter(
+            db.or_(Student.prn == new_prn, Student.student_code == new_prn),
+            Student.id != student.id
+        ).first()
+        if dup_student:
+            return jsonify({"success": False, "error": f"PRN / Student ID '{new_prn}' is already in use."}), 400
+        student.prn = new_prn
+        student.student_code = new_prn
+
+    # 5. Update Roll Number
+    if "rollNumber" in data or "roll_number" in data:
+        student.roll_number = str(data.get("rollNumber") or data.get("roll_number") or "").strip() or None
+
+    # 6. Update Department
     if "department" in data:
         dept = Department.resolve(data["department"])
         if not dept:
             raise ValidationError(f"Unknown department: {data['department']}")
         student.department_id = dept.id
+
+    # 7. Update Academic Year
     if "year" in data and data["year"].strip():
         student.year_label = data["year"].strip()
+
+    # 8. Update Semester
     if "semester" in data:
         try:
             student.semester = int(data["semester"])
         except (ValueError, TypeError):
             pass
+
+    # 9. Update Division
     if "division" in data and data["division"].strip():
         student.division = data["division"].strip().upper()
-    if "rollNumber" in data or "roll_number" in data:
-        student.roll_number = str(data.get("rollNumber") or data.get("roll_number") or "").strip()
-    if "prn" in data and data["prn"].strip():
-        student.prn = data["prn"].strip()
-    if "status" in data:
-        student.status = data["status"]
+
+    # 10. Update Status
+    if "status" in data and data["status"].strip():
+        st_val = data["status"].strip().lower()
+        student.status = "active" if st_val in ("active", "true", "1") else "inactive"
+        student.user.is_active = (student.status == "active")
 
     # Re-sync enrollments for new semester/department if any
     from models import Course, Enrollment
