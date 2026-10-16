@@ -2350,7 +2350,7 @@ function renderSubjectChipsAndCards(containerPrefix) {
         (sub.courseCode ? '<span class="subject-chip-code">' + escapeHtml(sub.courseCode) + '</span>' : '') +
         '<span>' + escapeHtml(sub.courseTitle) + '</span>' +
         '<span style="font-size:10px; opacity:0.8;">(Sem ' + sub.semester + ')</span>' +
-        '<button type="button" class="subject-chip-remove" title="Remove ' + escapeHtml(sub.courseTitle) + '" onclick="removeFacultySubjectChip(' + sub.courseId + ', '' + prefix + '')">&times;</button>' +
+        '<button type="button" class="subject-chip-remove" title="Remove ' + escapeHtml(sub.courseTitle) + '" onclick="removeFacultySubjectChip(' + sub.courseId + ', \'' + prefix + '\')">&times;</button>' +
       '</div>'
     );
   }).join('');
@@ -2373,9 +2373,9 @@ function renderSubjectChipsAndCards(containerPrefix) {
           '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
             (sub.courseCode ? '<span class="badge badge-primary" style="font-family:monospace;font-size:11px;">' + escapeHtml(sub.courseCode) + '</span>' : '') +
             '<strong style="font-size:12.5px;color:var(--text-main);">' + escapeHtml(sub.courseTitle) + '</strong>' +
-            '<span style="font-size:11px;color:var(--text-muted);">(' + escapeHtml(sub.department || 'Curriculum') + ' • Sem ' + sub.semester + ')</span>' +
+            '<span style="font-size:11px;color:var(--text-muted);">(' + escapeHtml(sub.department || 'Curriculum') + ' - Sem ' + sub.semester + ')</span>' +
           '</div>' +
-          '<button type="button" class="btn btn-danger btn-sm" onclick="removeFacultySubjectChip(' + sub.courseId + ', '' + prefix + '')" style="padding:2px 7px;font-size:11px;">🗑️ Remove</button>' +
+          '<button type="button" class="btn btn-danger btn-sm" onclick="removeFacultySubjectChip(' + sub.courseId + ', \'' + prefix + '\')" style="padding:2px 7px;font-size:11px;">🗑️ Remove</button>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;align-items:center;">' +
           '<div>' +
@@ -3258,22 +3258,22 @@ window.editDirectoryMember = function (type, code) {
             ['Assistant Professor', 'Associate Professor', 'Professor', 'Head of Department'].map(function(des){return '<option value="' + des + '"' + (d.designation === des ? ' selected' : '') + '>' + des + '</option>';}).join('') +
           '</select></div>' +
         '</div>' +
-        '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept" onchange="populateFacultySubjectDropdown(this.value, 'edit_')">' + deptOptions + '</select></div>' +
+        '<div class="form-group"><label>Department</label><select class="form-select" id="editMemberDept" onchange="populateFacultySubjectDropdown(this.value, \'edit_\')">' + deptOptions + '</select></div>' +
         '<div style="background-color: var(--bg-subtle); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 10px;">' +
           '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
             '<div style="font-size:12px; font-weight:700; color:var(--primary); text-transform:uppercase; display:flex; align-items:center; gap:6px;">' +
               '<span>📚 Assigned Subjects</span>' +
               '<span id="edit_facultyAssignedCountBadge" class="badge badge-primary" style="font-size:10px; padding:1px 6px;">' + existingAssignments.length + ' Selected</span>' +
             '</div>' +
-            '<button type="button" class="btn btn-secondary btn-sm" id="edit_btnClearAllFacultySubjects" onclick="clearAllFacultySubjectChips('edit_')" style="font-size:11px; padding:2px 8px; color:var(--danger);' + (existingAssignments.length ? '' : 'display:none;') + '">Clear All</button>' +
+            '<button type="button" class="btn btn-secondary btn-sm" id="edit_btnClearAllFacultySubjects" onclick="clearAllFacultySubjectChips(\'edit_\')" style="font-size:11px; padding:2px 8px; color:var(--danger);' + (existingAssignments.length ? '' : 'display:none;') + '">Clear All</button>' +
           '</div>' +
           '<div class="form-group" style="margin-bottom:8px;">' +
-            '<input type="text" class="form-input" id="edit_facultySubjectSearchInput" placeholder="🔍 Search subjects to add..." style="font-size:12px; padding:5px 8px; margin-bottom:4px;" oninput="filterFacultySubjectDropdown('edit_')">' +
+            '<input type="text" class="form-input" id="edit_facultySubjectSearchInput" placeholder="🔍 Search subjects to add..." style="font-size:12px; padding:5px 8px; margin-bottom:4px;" oninput="filterFacultySubjectDropdown(\'edit_\')">' +
             '<div style="display:flex; gap:6px;">' +
               '<select class="form-select" id="edit_newFacultySubjectSelect" style="font-size:12px; padding:6px 8px; flex:1;">' +
                 '<option value="">-- Choose Subject to Add --</option>' +
               '</select>' +
-              '<button type="button" class="btn btn-primary btn-sm" onclick="addSelectedSubjectFromDropdown('edit_')" style="font-size:11.5px; padding:6px 12px; white-space:nowrap;">+ Add</button>' +
+              '<button type="button" class="btn btn-primary btn-sm" onclick="addSelectedSubjectFromDropdown(\'edit_\')" style="font-size:11.5px; padding:6px 12px; white-space:nowrap;">+ Add</button>' +
             '</div>' +
           '</div>' +
           '<div id="edit_facultySubjectChipsContainer" style="display:flex; flex-wrap:wrap; gap:6px; min-height:36px; padding:6px 8px; background:var(--bg-card); border:1px dashed var(--border); border-radius:var(--radius-sm); align-items:center; margin-bottom:8px;"></div>' +
