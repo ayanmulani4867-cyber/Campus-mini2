@@ -513,6 +513,44 @@ def hydrate_from_firebase_rtdb(app, db):
                     )
                     db.session.add(us)
             db.session.commit()
+
+            # 14. Prune local records that no longer exist in Firebase RTDB
+            if users_data:
+                # A. Prune faculty assignments not in RTDB
+                fa_map = _normalize_node_dict(rtdb_root.get('faculty_assignments', {}))
+                valid_fa_ids = {int(fa_dict.get('id') or k) for k, fa_dict in fa_map.items() if fa_dict and (fa_dict.get('id') or k)}
+                for fa in models.FacultyAssignment.query.all():
+                    if fa.id not in valid_fa_ids:
+                        db.session.delete(fa)
+                db.session.commit()
+
+                # B. Prune faculty not in RTDB
+                valid_fac_ids = {int(f_dict.get('id') or k) for k, f_dict in fac_data.items() if f_dict and (f_dict.get('id') or k)}
+                for f in models.Faculty.query.all():
+                    if f.id not in valid_fac_ids:
+                        db.session.delete(f)
+                db.session.commit()
+
+                # C. Prune students not in RTDB
+                valid_stu_ids = {int(s_dict.get('id') or k) for k, s_dict in stu_data.items() if s_dict and (s_dict.get('id') or k)}
+                for st in models.Student.query.all():
+                    if st.id not in valid_stu_ids:
+                        db.session.delete(st)
+                db.session.commit()
+
+                # D. Prune users not in RTDB (preserve default admin user 1)
+                valid_user_ids = {int(u_dict.get('id') or k) for k, u_dict in users_data.items() if u_dict and (u_dict.get('id') or k)}
+                valid_user_ids.add(1)
+                for u in models.User.query.all():
+                    if u.id not in valid_user_ids:
+                        db.session.delete(u)
+                db.session.commit()
+
+                # E. Clean course instructor pointers if instructor does not exist in faculty
+                for crs in models.Course.query.filter(models.Course.instructor_id.isnot(None)).all():
+                    if not db.session.get(models.Faculty, crs.instructor_id):
+                        crs.instructor_id = None
+                db.session.commit()
     finally:
         _IS_HYDRATING = False
 

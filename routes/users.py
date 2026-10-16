@@ -318,3 +318,12 @@ def resend_user_welcome_email(user_id):
         }
     }), (200 if email_res.get("success") else 500)
 
+
+@bp.post("/sync-firebase")
+@roles_required("admin")
+def sync_firebase_directory():
+    """Admin endpoint to force synchronization and pruning of the local database from live Firebase RTDB."""
+    from services.firebase_sync import hydrate_from_firebase_rtdb
+    from flask import current_app
+    hydrate_from_firebase_rtdb(current_app, db)
+    return jsonify({"success": True, "message": "Directory synchronized with Firebase Realtime Database."})

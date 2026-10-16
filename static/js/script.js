@@ -5507,3 +5507,19 @@ window.addEventListener("beforeunload", function () {
   }
 });
 
+
+window.syncUsersWithFirebase = function () {
+  var btn = document.getElementById("btnSyncFirebase");
+  if (btn) setButtonLoading(btn, "Syncing...");
+  api("/api/users/sync-firebase", { method: "POST" })
+    .then(function (res) {
+      showToast("Firebase Synchronized", res.message || "Directory synchronized with Firebase.", "success");
+      fetchUsersFromAPI(getActiveRole());
+    })
+    .catch(function (err) {
+      showToast("Sync Error", err.message || "Could not sync with Firebase.", "error");
+    })
+    .finally(function () {
+      if (btn) resetButton(btn, "🔄 Sync with Firebase");
+    });
+};
