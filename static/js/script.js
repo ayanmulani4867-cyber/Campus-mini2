@@ -5048,6 +5048,7 @@ window.editDirectoryMember = function (type, code) {
             '<div class="form-group" style="margin-bottom:8px;"><label>College Email *</label><input type="email" class="form-input" id="editMemberEmail" value="' + escapeHtml(d.email || '') + '" required></div>' +
             '<div class="form-group" style="margin-bottom:8px;"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
           '</div>' +
+          '<div class="form-group" style="margin-bottom:0;"><label>Set New Password (leave blank to keep current)</label><input type="password" class="form-input" id="editMemberPassword" placeholder="Enter new password to change..."></div>' +
         '</div>' +
         '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">' +
           '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">🎓 Academic Identifiers</div>' +
@@ -5094,6 +5095,8 @@ window.editDirectoryMember = function (type, code) {
           return;
         }
 
+        var passVal = document.getElementById("editMemberPassword") ? document.getElementById("editMemberPassword").value.trim() : "";
+        var facPassVal = document.getElementById("editFacultyPassword") ? document.getElementById("editFacultyPassword").value.trim() : "";
         var payload = {
           name: nameVal,
           email: emailVal,
@@ -5106,6 +5109,7 @@ window.editDirectoryMember = function (type, code) {
           semester: semVal,
           division: divVal
         };
+        if (passVal) payload.password = passVal;
 
         setButtonLoading(saveBtn, "Saving Changes...");
 
@@ -5155,6 +5159,7 @@ window.editDirectoryMember = function (type, code) {
             '<div class="form-group" style="margin-bottom:8px;"><label>College Email *</label><input type="email" class="form-input" id="editMemberEmail" value="' + escapeHtml(d.email || '') + '" required></div>' +
             '<div class="form-group" style="margin-bottom:8px;"><label>Phone Number *</label><input type="tel" class="form-input" id="editMemberPhone" value="' + escapeHtml(d.phone || '') + '" required></div>' +
           '</div>' +
+          '<div class="form-group" style="margin-bottom:0;"><label>Set New Password (leave blank to keep current)</label><input type="password" class="form-input" id="editFacultyPassword" placeholder="Enter new password to change..."></div>' +
         '</div>' +
         '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">' +
           '<div style="font-size:11.5px;font-weight:700;color:var(--primary);text-transform:uppercase;margin-bottom:8px;">💼 Professional Position & Department</div>' +
@@ -5240,6 +5245,7 @@ window.editDirectoryMember = function (type, code) {
           department: deptVal,
           assignments: assignments
         };
+        if (facPassVal) payload.password = facPassVal;
 
         setButtonLoading(saveBtn, "Saving Changes...");
 

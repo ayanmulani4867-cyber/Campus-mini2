@@ -58,39 +58,38 @@ class SessionIsolationTestCase(unittest.TestCase):
             cls.admin_name = admin.full_name
             cls.admin_password = "admin"
 
-            # Ensure Faculty account
-            fac = User.query.filter_by(role="faculty").first()
-            if fac:
-                fac.set_password("faculty123")
-                cls.faculty_id = fac.id
-                cls.faculty_email = fac.email
-                cls.faculty_name = fac.full_name
-            else:
-                cls.faculty_id = None
-                cls.faculty_email = None
+            # Ensure Faculty account (use dedicated test email)
+            fac = User.query.filter_by(email="test.isolation.fac@campus.edu").first()
+            if not fac:
+                fac = User(email="test.isolation.fac@campus.edu", full_name="Isolation Faculty", role="faculty", is_active=True)
+                db.session.add(fac)
+                db.session.flush()
+            fac.set_password("faculty123")
+            cls.faculty_id = fac.id
+            cls.faculty_email = fac.email
+            cls.faculty_name = fac.full_name
 
-            # Ensure Student account 1
-            stu1 = User.query.filter_by(role="student").first()
-            if stu1:
-                stu1.set_password("student123")
-                cls.student1_id = stu1.id
-                cls.student1_email = stu1.email
-                cls.student1_name = stu1.full_name
-            else:
-                cls.student1_id = None
-                cls.student1_email = None
+            # Ensure Student account 1 (use dedicated test email to avoid mutating real users)
+            stu1 = User.query.filter_by(email="test.isolation.stu1@campus.edu").first()
+            if not stu1:
+                stu1 = User(email="test.isolation.stu1@campus.edu", full_name="Isolation Student 1", role="student", is_active=True)
+                db.session.add(stu1)
+                db.session.flush()
+            stu1.set_password("student123")
+            cls.student1_id = stu1.id
+            cls.student1_email = stu1.email
+            cls.student1_name = stu1.full_name
 
-            # Ensure Student account 2
-            students = User.query.filter_by(role="student").all()
-            if len(students) > 1:
-                stu2 = students[1]
-                stu2.set_password("student456")
-                cls.student2_id = stu2.id
-                cls.student2_email = stu2.email
-                cls.student2_name = stu2.full_name
-            else:
-                cls.student2_id = None
-                cls.student2_email = None
+            # Ensure Student account 2 (use dedicated test email)
+            stu2 = User.query.filter_by(email="test.isolation.stu2@campus.edu").first()
+            if not stu2:
+                stu2 = User(email="test.isolation.stu2@campus.edu", full_name="Isolation Student 2", role="student", is_active=True)
+                db.session.add(stu2)
+                db.session.flush()
+            stu2.set_password("student456")
+            cls.student2_id = stu2.id
+            cls.student2_email = stu2.email
+            cls.student2_name = stu2.full_name
 
             db.session.commit()
 

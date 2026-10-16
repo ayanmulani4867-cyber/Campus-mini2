@@ -346,6 +346,26 @@ def update_faculty(faculty_code):
             raise ValidationError("Phone number cannot be empty.")
         fac.user.phone = phone
 
+    # 3b. Update Password if provided
+    new_pw = (data.get("password") or data.get("new_password") or "").strip()
+    if new_pw:
+        if len(new_pw) < 6:
+            return jsonify({"success": False, "error": "Password must be at least 6 characters long."}), 400
+        fac.user.set_password(new_pw)
+        fac.user.must_change_password = False
+        from services.firebase_service import firebase_service
+        if firebase_service.is_live:
+            try:
+                firebase_service.sync_user_to_firebase_auth(
+                    uid=str(fac.user.id),
+                    email=fac.user.email,
+                    password=new_pw,
+                    display_name=fac.user.full_name,
+                    role="faculty"
+                )
+            except Exception as ex:
+                logger.warning("Could not sync faculty password update to Firebase Auth: %s", ex)
+
     # 4. Update Faculty ID / Code
     new_code = (data.get("faculty_code") or data.get("facultyCode") or data.get("code") or "").strip()
     if new_code and new_code != fac.faculty_code:

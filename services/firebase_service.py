@@ -22,7 +22,7 @@ class FirebaseService:
         self._is_live = False
         self._local_store: Dict[str, Any] = {}
         self.database_url = os.environ.get("FIREBASE_DATABASE_URL", DEFAULT_DATABASE_URL)
-        self._web_api_key = os.environ.get("FIREBASE_WEB_API_KEY")
+        self._web_api_key = os.environ.get("FIREBASE_WEB_API_KEY", "AIzaSyBYdM020b-YMkImbnAAOIX_D5rfAf4Q6g8")
         self._init_sdk()
 
     def _init_sdk(self):
